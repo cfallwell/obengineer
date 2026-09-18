@@ -191,6 +191,16 @@ def check(md: Path, docx: Path, section_level: int) -> list[str]:
     if leaked_code:
         failures.append(f"literal backticks in rendered prose: {leaked_code[:3]}")
 
+    # A bare `*` is legitimate inside an identifier (`cart.item.*`), which the
+    # renderer emits as a monospace run. Anywhere else it is an unrendered marker.
+    leaked_italic = [
+        p.text[:70]
+        for p in prose_paragraphs()
+        if any("*" in r.text and r.font.name != "Consolas" for r in p.runs)
+    ]
+    if leaked_italic:
+        failures.append(f"literal '*' in rendered prose: {leaked_italic[:3]}")
+
     # ---- secrets ---------------------------------------------------------
     everything = "\n".join(p.text for p in doc.paragraphs)
     for t in doc.tables:

@@ -51,15 +51,16 @@ verify: ## Verify an existing .docx against its Markdown source
 	@test -n "$(FILE)" -a -n "$(DOCX)" || { echo "usage: make verify FILE=<path.md> DOCX=<path.docx>"; exit 2; }
 	$(PY) skills/customer-doc-render/scripts/verify_render.py "$(FILE)" "$(DOCX)"
 
-# make preview DOCX=../docs/observability/Guide.docx [PAGES=4]
+# make preview DOCX=../docs/observability/Guide.docx [PAGES=4] [START=92]
 .PHONY: preview
-preview: ## Rasterise the first pages of a .docx to check the layout by eye
+preview: ## Rasterise pages of a .docx to check the layout by eye
 	@test -n "$(DOCX)" || { echo "usage: make preview DOCX=<path.docx> [PAGES=4]"; exit 2; }
 	@command -v soffice >/dev/null || { echo "soffice not installed; see SKILL.md"; exit 2; }
 	@out=$${PREVIEW:-/tmp/doc-preview}; rm -rf "$$out"; mkdir -p "$$out"; \
 	  soffice --headless --convert-to pdf --outdir "$$out" "$(DOCX)" >/dev/null 2>&1; \
 	  $(PY) skills/customer-doc-render/scripts/preview_pages.py \
-	    "$$out"/*.pdf --pages $${PAGES:-4} -o "$$out/contact-sheet.png"
+	    "$$out"/*.pdf --pages $${PAGES:-4} --start $${START:-1} \
+	    -o "$$out/contact-sheet.png"
 
 .PHONY: deps
 deps: ## Install the one runtime dependency

@@ -94,7 +94,7 @@ the prompts point here rather than restating it. A second copy drifts, and then 
 documents both claim to be the authority on what a deliverable contains.
 
 The document has three movements: **what is there and what is wrong with it** (1–5),
-**what to build** (6–17), **the catalogue the build works from** (18–24), then appendices.
+**what to build** (6–18), **the catalogue the build works from** (19–25), then appendices.
 
 | # | Heading | Level |
 |---|---|---|
@@ -451,6 +451,15 @@ and `start` as a complete workflow list means nobody read the application.
 State the naming rule once, here, and state that every later section draws its
 `workflow.name` strings from this table rather than restating them.
 
+**At scale** — beyond roughly a hundred workflows — a full table here would be section 22
+transcribed, which is a fact with two homes. In that case this section carries the naming rule,
+the bounded verb vocabulary, a coverage table of counts per BT with the evidence each count came
+from, and the full row treatment for every workflow whose columns carry information: those that
+cross an account, traverse a bus, or are candidates for the APM Business Workflow. Say
+explicitly that the exhaustive enumeration is section 22 and why it is not repeated. The
+coverage counts are the part that cannot be dropped — they are what makes an under-analysed BT
+visible.
+
 ## 21. Custom Metrics
 
 Two tables, and the split matters: **business meters** answer "did the outcome happen" and
@@ -481,6 +490,13 @@ list is a finding, not a formatting problem — say which evidence would fill it
 One consolidated table, every detector in the document, with the threshold made explicit:
 `Detector | Signal | Condition | Threshold | Window | Severity | Group by | Arm now? |
 Runbook`.
+
+**Beyond roughly fifty detectors**, `Signal` and `Runbook` may be stated once as conventions
+instead of per row — the signal is implied by the condition, and the runbook path follows a
+rule such as `runbooks/<workflow-name>`. `Threshold`, `Window`, `Severity`, `Group by`, and
+`Arm now?` stay per row, because those five differ per detector and are the five a responder
+needs at 03:00. Severity may be derived by a rule as long as the rule is written down above
+the table, so a reader can check a row rather than trust it.
 
 The threshold column is what distinguishes this from a wish list. Every row is one of:
 

@@ -80,10 +80,12 @@ DEFAULT_FORMAT = {
 TITLE_PAGE_FIELDS = ("subtitle", "tagline", "author", "audience", "date",
                      "version", "header")
 
-# Code spans win over every other marker: their contents are literal.
+# Code spans win over every other marker: their contents are literal. Bold is
+# tried before italic so `**x**` is not read as an empty italic around `*x*`.
 INLINE = re.compile(
     r"(`[^`]+`"
     r"|\*\*(?:[^*]|\*(?!\*))+\*\*"
+    r"|(?<!\*)\*(?!\*)(?:\*\*[^*]+\*\*|[^*])+?\*(?!\*)"
     r"|\[[^\]]+\]\([^)]+\))"
 )
 
@@ -180,11 +182,12 @@ def has_page_break_before(paragraph) -> bool:
     return el.get(qn("w:val")) not in ("false", "0", "off")
 
 
-def write_inline(paragraph, text: str, base_size=None, bold=False, _unescape=True):
-    """Emit runs for `code`, **bold**, and [links](url) inside one paragraph.
+def write_inline(paragraph, text: str, base_size=None, bold=False, italic=False,
+                 _unescape=True):
+    """Emit runs for `code`, **bold**, *italic*, and [links](url) in one paragraph.
 
-    Recurses into bold spans so **`code`** keeps both the weight and the
-    monospace face instead of printing literal backticks.
+    Recurses into bold and italic spans so **`code`** keeps both the weight and
+    the monospace face instead of printing literal backticks.
     """
     if _unescape:
         text = text.replace("\\|", "|").replace("\\_", "_").replace("\\*", "*")
@@ -197,7 +200,11 @@ def write_inline(paragraph, text: str, base_size=None, bold=False, _unescape=Tru
             shade(run._element.get_or_add_rPr(), INLINE_CODE_SHADE)
         elif token.startswith("**") and token.endswith("**"):
             write_inline(paragraph, token[2:-2], base_size=base_size, bold=True,
-                         _unescape=False)
+                         italic=italic, _unescape=False)
+            continue
+        elif token.startswith("*") and token.endswith("*") and len(token) > 2:
+            write_inline(paragraph, token[1:-1], base_size=base_size, bold=bold,
+                         italic=True, _unescape=False)
             continue
         elif token.startswith("[") and "](" in token:
             label, url = token[1:-1].split("](", 1)
@@ -207,6 +214,8 @@ def write_inline(paragraph, text: str, base_size=None, bold=False, _unescape=Tru
             run = paragraph.add_run(token)
         if bold:
             run.bold = True
+        if italic:
+            run.italic = True
         if base_size:
             run.font.size = Pt(base_size)
         if run.font.name is None:

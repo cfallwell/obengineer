@@ -30,22 +30,27 @@ verify = _load("verify_render")
 Document = pytest.importorskip("docx").Document
 qn = pytest.importorskip("docx.oxml.ns").qn
 
-FIXTURE = """# Implementation Recommendations — Acme Storefront — 2026-01-01 — v1
+FIXTURE = """# Application Analysis — Acme Storefront — 2026-01-01 — v1
 
 <!-- title-page
-subtitle: Instrumentation, Attribution, and Dashboarding Best Practices
+subtitle: Observed architecture, findings, and instrumentation recommendations
 tagline: Splunk Observability Cloud • OpenTelemetry • RUM
 author: A. Engineer, Technical Account Manager
 audience: Acme storefront engineering
 date: 2026-01-01
 version: v1
-header: Implementation Recommendations
+header: Application Analysis
 -->
 
 ## Purpose and Scope
 
 This specifies instrumentation for the **Acme** storefront. Money is in minor units.
 See the [Splunk RUM docs](https://docs.splunk.com/observability/) for the agent.
+
+Severity follows a rule: *Critical* means a customer cannot finish, *Minor* means a
+ticket. The `acme.market` wildcard `cart.item.*` is an identifier, not emphasis.
+
+- `checkout.review.load` *(`reviewOrder` — **today returns 400 in production**)*
 
 1. First numbered item
 2. Second numbered item
@@ -141,7 +146,7 @@ def test_title_page_is_simple_and_precedes_the_contents(rendered):
     toc = next(i for i, p in enumerate(paragraphs)
                if p.text.strip() == "Table of Contents")
     lines = [p.text.strip() for p in paragraphs[:toc] if p.text.strip()]
-    assert lines[0].startswith("Implementation Recommendations — Acme Storefront")
+    assert lines[0].startswith("Application Analysis — Acme Storefront")
     assert "Author: A. Engineer, Technical Account Manager" in lines
     assert "Version: v1" in lines
     assert len(lines) <= verify.MAX_TITLE_PAGE_LINES
@@ -155,7 +160,7 @@ def test_first_page_header_and_footers(rendered):
     assert section.different_first_page_header_footer
     header = section.first_page_header
     assert "graphic" in header.paragraphs[0]._p.xml, "banner image missing"
-    assert any("Implementation Recommendations" in p.text for p in header.paragraphs)
+    assert any("Application Analysis" in p.text for p in header.paragraphs)
     assert "Confidential" in section.first_page_footer.paragraphs[0].text
     assert "Page" in section.footer.paragraphs[0].text
 
@@ -190,6 +195,33 @@ def test_bold_wrapping_code_keeps_both_and_prints_no_backticks(rendered):
     doc = Document(docx)
     for para in doc.paragraphs:
         assert "**" not in para.text, f"literal bold marker survived: {para.text[:60]}"
+
+
+def test_italics_render_as_italics_and_not_as_asterisks(rendered):
+    """The defect this guards: *Critical* shipping as literal *Critical*, which
+    happened on a 145-page deliverable because nothing checked single markers."""
+    _, docx, _ = rendered
+    doc = Document(docx)
+    runs = [r for p in doc.paragraphs for r in p.runs]
+
+    emphasised = {r.text for r in runs if r.italic}
+    assert {"Critical", "Minor"} <= emphasised
+
+    # A wildcard inside an identifier is monospace, not emphasis, and the two
+    # must not be confused: `cart.item.*` … `acme.market` would otherwise read
+    # as one italic span swallowing the text between them.
+    wildcard = next(r for r in runs if r.text == "cart.item.*")
+    assert wildcard.font.name == "Consolas" and not wildcard.italic
+
+    # Italic wrapping a code span and a bold span at once.
+    nested = next(r for r in runs if r.text == "reviewOrder")
+    assert nested.italic and nested.font.name == "Consolas"
+    assert any(r.italic and r.bold and "returns 400" in r.text for r in runs)
+
+    for para in doc.paragraphs:
+        literal = [r.text for r in para.runs
+                   if "*" in r.text and r.font.name != "Consolas"]
+        assert not literal, f"literal italic marker survived: {literal}"
 
 
 def test_bold_and_code_spans_may_wrap_across_source_lines(tmp_path):
