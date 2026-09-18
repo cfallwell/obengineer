@@ -278,6 +278,17 @@ def check(md: Path, docx: Path, section_level: int) -> list[str]:
             f"{len(unmarked)} heading(s) carry no bookmark, so nothing can link "
             f"to them: {unmarked[:3]}")
 
+    # WordprocessingML puts w:pPr first in a paragraph. Word repairs a file that
+    # does not, and LibreOffice renders it happily — so the defect surfaces on
+    # the customer's machine and nowhere earlier.
+    misordered = [p.text[:50] for p in paragraphs
+                  if p._p.find(qn("w:pPr")) is not None
+                  and p._p.index(p._p.find(qn("w:pPr"))) != 0]
+    if misordered:
+        failures.append(
+            f"{len(misordered)} paragraph(s) carry content before w:pPr, which "
+            f"Word treats as a damaged file: {misordered[:3]}")
+
     # ---- toc -------------------------------------------------------------
     if "TOC" not in document_xml:
         failures.append("no Table of Contents field found")

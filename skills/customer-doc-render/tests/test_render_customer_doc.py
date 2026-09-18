@@ -337,6 +337,29 @@ def test_headings_are_destinations_and_never_link_to_themselves(rendered):
         assert not links(para), f"a heading links out of itself: {para.text}"
 
 
+def test_a_bookmark_never_lands_in_front_of_the_paragraph_properties(rendered):
+    """WordprocessingML wants `w:pPr` first. A bookmark inserted before it renders
+    correctly in LibreOffice and makes Word offer to repair the file, so the
+    defect would only ever be found by the customer opening it."""
+    md, docx, _ = rendered
+    doc = Document(docx)
+    for para in doc.paragraphs:
+        ppr = para._p.find(qn("w:pPr"))
+        if ppr is not None:
+            assert para._p.index(ppr) == 0, (
+                f"content precedes w:pPr in {para.text[:40]!r}")
+
+    # And the verifier says so if it ever regresses.
+    para = next(p for p in doc.paragraphs if p._p.findall(qn("w:bookmarkStart")))
+    mark = para._p.findall(qn("w:bookmarkStart"))[0]
+    para._p.remove(mark)
+    para._p.insert(0, mark)
+    damaged = docx.with_name("misordered.docx")
+    doc.save(damaged)
+    failures = verify.check(md, damaged, 2)
+    assert any("before w:pPr" in f for f in failures), failures
+
+
 def test_a_reference_to_a_section_that_does_not_exist_is_refused(tmp_path):
     """What a renumbering leaves behind: text that still reads and a link that
     goes nowhere. In Word it is invisible until a customer clicks it."""

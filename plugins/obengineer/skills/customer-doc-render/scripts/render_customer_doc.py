@@ -224,13 +224,23 @@ def set_mono(run, size: float = 8.5) -> None:
 
 
 def add_bookmark(paragraph, name: str, bookmark_id: int) -> None:
-    """Wrap a heading in a bookmark so an internal link has somewhere to land."""
+    """Wrap a heading in a bookmark so an internal link has somewhere to land.
+
+    The mark goes *after* `w:pPr`: WordprocessingML requires paragraph
+    properties to be the paragraph's first child, and Word repairs — or refuses
+    — a file that puts content in front of them, where LibreOffice quietly
+    renders it and gives no warning that the customer's copy will not open.
+    """
     start = OxmlElement("w:bookmarkStart")
     start.set(qn("w:id"), str(bookmark_id))
     start.set(qn("w:name"), name)
     end = OxmlElement("w:bookmarkEnd")
     end.set(qn("w:id"), str(bookmark_id))
-    paragraph._p.insert(0, start)
+    ppr = paragraph._p.find(qn("w:pPr"))
+    if ppr is None:
+        paragraph._p.insert(0, start)
+    else:
+        ppr.addnext(start)
     paragraph._p.append(end)
 
 
