@@ -2,7 +2,7 @@
   "name": "obengineer",
   "displayName": "obengineer",
   "version": "0.1.0",
-  "description": "Instrumentation architecture workflows for Claude Code: analyze a target, write the full instrumentation contract, and render it for customer review.",
+  "description": "Instrumentation architecture workflows for Claude Code: analyze a target, write the one customer document, lay the wiki the agents retrieve from, and configure the tenant as Terraform.",
   "author": {
     "name": "Splunk Observability Practice"
   },

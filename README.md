@@ -150,8 +150,7 @@ pipeline possible at all. See
 | Skill | Purpose |
 |---|---|
 | `$engagement-intake` | Collect and validate the inputs no scan can reach — artifacts, tenancy, entitlement, privacy regime, who deploys what — into one file, asking only for what is missing |
-| `$instrumentation-analyze` | Deep-scan the front end (script order, competing agents, where the agent initialises, router, CSP, consent, status-versus-content), map backends and buses, inventory the existing portfolio footprint, enumerate business transactions from evidence |
-| `$instrumentation-analyze` (document) | Write the customer document in canonical template order — findings at section 4, the catalogue closing the body — and emit all three artifacts |
+| `$instrumentation-analyze` | Deep-scan the front end (script order, competing agents, where the agent initialises, router, CSP, consent, status-versus-content), map backends and buses, inventory the existing portfolio footprint, enumerate business transactions from evidence — then write the customer document in canonical template order, findings at section 4 and the catalogue closing the body, and emit all three artifacts |
 | `$instrumentation-wiki` | Turn the accepted analysis into one note per subject, with work orders, tracked versions, and the host memory pointers |
 | `$baggage-propagation` | The cross-cutting attribute set and W3C Baggage contract: set once, propagate, stamp on every span via `SpanProcessor.onStart` — and the byte budget that decides which keys earn a place in the header |
 | `$cardinality-budget` | Dimension versus attribute-only as arithmetic against entitlement: MTS cost per promotion, MMS and TMS sizing, and the classifiers that replace raw URLs and topic names |

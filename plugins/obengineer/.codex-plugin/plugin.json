@@ -1,7 +1,7 @@
 {
   "name": "obengineer",
   "version": "0.1.0",
-  "description": "Instrumentation architecture workflows for Codex: analyze a target, write the full instrumentation contract, and render it for customer review.",
+  "description": "Instrumentation architecture workflows for Codex: analyze a target, write the one customer document, lay the wiki the agents retrieve from, and configure the tenant as Terraform.",
   "author": {
     "name": "Splunk Observability Practice"
   },
@@ -22,7 +22,7 @@
   "interface": {
     "displayName": "obengineer",
     "shortDescription": "Instrumentation contracts for Splunk Observability Cloud, Enterprise, and ThousandEyes.",
-    "longDescription": "obengineer turns an application into an instrumentation contract a team can implement and a TAM can configure.\n\nIt scans the target for what is actually there — which agent initialises and when, what else is collecting the same events, where the account and bus boundaries fall — then writes the full contract: cross-cutting attributes and W3C Baggage propagation, the business-transaction and workflow registry, Collector configuration, per-flow dashboards and detectors, and the attribute dictionary. Every guide ships twice: Markdown for the implementers and a Word document for customer architecture review, rendered from the same source so the two cannot disagree.\n\nHow to get started:\n1. Install the obengineer plugin.\n2. Review and trust the SessionStart hook when Codex prompts you.\n3. Try: analyze a target with $instrumentation-analyze, write the contract with $instrumentation-guide, design the baggage contract with $baggage-propagation, or render a deliverable for review with $customer-doc-render.",
+    "longDescription": "obengineer turns an application into an instrumentation contract a team can implement, CI can enforce, and a TAM can configure.\n\nIt scans the target for what is actually there \u2014 which agent initialises and when, what else is collecting the same events, where the account and bus boundaries fall \u2014 then writes one customer document: observed architecture, critical findings with remediation, cross-cutting attributes and W3C Baggage propagation, the business-transaction and workflow registry, Collector configuration, dashboards, detectors with thresholds, objectives in the customer's voice, and the attribute dictionary. That document ships as Markdown and as a Word document rendered from the same source, so the two cannot disagree.\n\nUnderneath it, the agents work from a wiki \u2014 one note per subject under wiki/<Customer>/<app>/ \u2014 which is what makes a repeat run a delta rather than a rewrite, and a CI pipeline possible at all.\n\nHow to get started:\n1. Install the obengineer plugin.\n2. Review and trust the SessionStart hook when Codex prompts you.\n3. Try: collect the inputs with $engagement-intake, analyze a target and write the document with $instrumentation-analyze, lay the agent wiki with $instrumentation-wiki, or emit Terraform with $observability-as-code.",
     "developerName": "Splunk Observability Practice",
     "category": "Productivity",
     "capabilities": [
@@ -30,9 +30,9 @@
       "Write"
     ],
     "defaultPrompt": [
-      "Analyze this application for an instrumentation contract.",
-      "Write the instrumentation guide from the accepted analysis.",
-      "Render the guide as a customer-review Word document."
+      "Analyze this application and write the instrumentation document.",
+      "Build the agent wiki from the accepted analysis.",
+      "Render the document as a customer-review Word document."
     ],
     "brandColor": "#0B3D5C"
   }
