@@ -75,6 +75,7 @@ exactly one copy and it is the copy under review — nothing is pasted into a ch
 | `/obengineer-guide` | Writes the full contract, renders it for the customer, emits the schema | `INSTRUMENTATION-GUIDE.md`, a `.docx`, `attribute-schema.json` |
 | `/obengineer-implement` | Lands one contract slice with the CI check that keeps it enforced | A single-concern PR |
 | `/obengineer-as-code` | Generates Terraform for the contract at three persona levels | A `terraform/` tree and a plan |
+| `/obengineer-review` | Grades a deliverable against the completeness bar before a human sees it | A pass, or numbered defects with lines |
 | `/obengineer-render` | Re-renders any deliverable and proves the render matches its source | A verified `.docx` |
 
 ```
@@ -140,6 +141,7 @@ cannot disagree.
 | `$customer-doc-render` | Render Markdown to a customer-review `.docx` — simple title page, Table of Contents, one section per page, `Confidential` footer — then prove the render matches its source |
 | `$instrumentation-implement` | Land the contract as ordered PRs, with the CI checks that keep it enforced |
 | `$observability-as-code` | Emit the contract as Terraform across the three Splunk providers — executive, SRE, and engineer modules — importing what the tenant already has and refusing any grouping the schema cannot support |
+| `$deliverable-review` | Grade a finished deliverable against the completeness bar, separately from whoever wrote it, and report defects by rubric row with line numbers |
 
 ## Working on this repo
 
@@ -153,8 +155,16 @@ make render FILE=../docs/observability/INSTRUMENTATION-GUIDE.md
 `skills/` is the single source. The plugin carries copies so an installed bundle is
 self-contained; refresh them with `make sync-plugin-skills` and never edit them
 directly. See [`AGENTS.md`](AGENTS.md) for the review rules,
-[`CONTRIBUTING.md`](CONTRIBUTING.md) for the workflow, and
-[`docs/design.md`](docs/design.md) for why the layout is shaped this way.
+[`CONTRIBUTING.md`](CONTRIBUTING.md) for the workflow,
+[`docs/design.md`](docs/design.md) for why the layout is shaped this way, and
+[`docs/reviews/`](docs/reviews/) for the standing architecture reviews — including what
+is deliberately not built yet and why.
+
+One rule underpins the rest: **one authority per fact.** The section list lives only in
+`skills/references/document-template.md`, the platform decision rules only in
+`portfolio-decision-engine.md`, the layout only in `document-format.json`. Agent files
+route to them and never restate them, capped at 2,500 words and tested. A second copy
+drifts, and then two files both claim to say what a deliverable contains.
 
 ## Three references do the heavy lifting
 
