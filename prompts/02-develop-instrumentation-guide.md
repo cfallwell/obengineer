@@ -1,11 +1,14 @@
 # Prompt 02 — Develop the instrumentation guide
 
 **Agent:** [`../agents/instrumentation-architect.agent.md`](../agents/instrumentation-architect.agent.md)  
-**Skills:** `instrumentation-guide`, `baggage-propagation`, `customer-doc-render`  
+**Skills:** `instrumentation-guide`, `baggage-propagation`, `cardinality-budget`, `customer-doc-render`  
+**Inputs:** `docs/observability/engagement-inputs.yaml` + the accepted Prompt 01 analysis  
 **Depends on:** completed Prompt 01 analysis, accepted by the human.  
 **Output:** PR 0 — documentation only. **Three artifacts:** the Markdown guide, the customer `.docx`, and `attribute-schema.json`.
 
-Copy below the line. Attach the analysis memo and diagrams again.
+**Invoke it, do not paste it.** `/obengineer-guide` reads this file in place. Inputs come
+from `engagement-inputs.yaml`, so nothing is re-attached and nothing is re-typed; the
+analysis memo and diagram paths are already in that file from run 1.
 
 ---
 
@@ -63,14 +66,34 @@ workspace for other documents.
 
 ## Inputs
 
-- Analysis memo: [path or paste]
-- Architecture diagrams: [attached]
-- Front-end scan notes: [path or “no browser”]
-- Percentile standard: **[p90 unless specified]**
-- In-scope languages (from analysis): [ ]
-- In-scope clouds/buses: [ ]
-- Attribute prefix `<org>`: [from evidence, or propose one]
-- Author / audience line for the customer document: [ ]
+From `docs/observability/engagement-inputs.yaml` — one file, filled once, read by every
+run. Run `$engagement-intake` if it is absent or incomplete rather than asking for
+values inline.
+
+| Field | Used for |
+|---|---|
+| `artifacts.prior_contract`, `.prior_schema` | Names and keys to **reuse and extend**, never rename for taste |
+| `artifacts.house_style_docx` | The layout the `.docx` must match, if the customer has an approved one |
+| `backends.languages`, `.buses` | Which shared-library and bus inject/extract subsections must exist |
+| `standards.percentile` | The one percentile used in every chart and detector |
+| `standards.workflow_naming` | The dotted-kebab shape every `workflow.name` follows |
+| `standards.baggage_header_budget_bytes`, `.baggage_value_ceiling_bytes` | The ceilings the cross-cutting section is written against |
+| `entitlement.*` | The MTS, MMS-slot, and TMS-ceiling arithmetic behind every promotion |
+| `constraints.privacy_regimes`, `.pii_deny_list_additions` | The deny list, identical in the guide and the schema |
+| `engagement.customer`, `.scope`, `.date`, `.document_version` | The title page and the filenames |
+
+Two things are **not** inputs, because the analysis measured them: the front-end scan
+notes and the architecture map. Read them from the accepted memo. If the memo and the
+inputs file disagree, the measurement wins, and the disagreement is a finding about the
+customer's own documentation — record it.
+
+If `entitlement` is `unknown`, apply the conservative defaults in
+`skills/cardinality-budget/SKILL.md` and say in the deliverable that the budget is
+assumed rather than measured. Do not stall the run on a procurement question, and do not
+let an assumed number appear as a measured one.
+
+The attribute prefix `<org>` comes from evidence; propose one if nothing in the estate
+already establishes it.
 
 ## Task
 

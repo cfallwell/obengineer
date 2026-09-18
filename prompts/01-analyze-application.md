@@ -1,9 +1,14 @@
 # Prompt 01 — Analyze the application
 
 **Agent:** [`../agents/instrumentation-architect.agent.md`](../agents/instrumentation-architect.agent.md)  
+**Skills:** `engagement-intake`, `instrumentation-analyze`  
+**Inputs:** `docs/observability/engagement-inputs.yaml`  
 **Human:** TAM + customer architect. Docs-only. No application code changes.
 
-Copy everything below the line into the agent chat. Replace the bracketed sections. Redact tokens.
+**Invoke it, do not paste it.** `/obengineer-analyze` reads this file in place, so
+there is one copy of the run contract and it is the copy under review. If your host
+has no commands installed, run [`../install.sh`](../install.sh) or tell the agent to
+read this file.
 
 ---
 
@@ -15,37 +20,35 @@ Choose the course of action from **how Splunk Observability Cloud, Splunk Enterp
 
 Do not search the workspace for unrelated documents. If an existing schema or guide is attached below, extend that taxonomy.
 
-## Context
-
-We are preparing an Observability-Driven Design contract for **[application identifier]**.
-
-Environment(s): **[prod / stage / …]**. Realm or region if known: **[ ]**.
-
 ## Inputs
 
-**Architecture**
+Everything the human supplies lives in **one file**, not in this prompt:
+`docs/observability/engagement-inputs.yaml`, from
+[`../inputs/engagement-inputs.template.yaml`](../inputs/engagement-inputs.template.yaml).
 
-- [Attach diagrams: C4, sequence, MFE map, account/VPC diagram, etc.]
-- Narrative (if any): [paste]
+Load it first. If it is absent or incomplete, run `$engagement-intake` and ask for the
+gaps in **one** message. Do not re-ask for anything the file already answers, and do
+not ask for anything this scan can measure — composition, router, load order, competing
+agents, CSP, and consent gating are all evidence, and asking about them converts
+evidence into opinion.
 
-**Front-end surfaces to deep-scan** (omit this block if there is no browser)
+The fields this run depends on:
 
-- Production URL(s): [ ]
-- Non-prod URL(s): [ ]
-- Known host vs remotes / MFEs: [ ]
-- Edge / CDN: [ ]
+| Field | Used for |
+|---|---|
+| `engagement.application`, `.customer`, `.scope`, `.date` | Filenames and headings |
+| `artifacts.diagrams`, `.narrative` | The diagram-driven backend map |
+| `artifacts.prior_contract`, `.prior_schema` | An existing taxonomy to **extend**, never rename for taste |
+| `surfaces.*` | Whether there is a front-end deep scan, and whether authenticated journeys are reachable |
+| `backends.languages`, `.buses`, `.cloud_accounts`, `.gateway` | Which SDK and bus subsections must exist |
+| `tenancy.o11y_realm`, `.environments` | Whether exit criteria can be phrased as queries |
+| `entitlement.*` | The cardinality budget every dimension recommendation is charged against |
+| `constraints.*` | What is vetoed regardless of technical merit |
+| `standards.percentile` | One percentile, in every chart and detector |
+| `outcomes.*` | Ranking when several journeys are equally instrumentable |
 
-**Backends (if known)**
-
-- Languages and deploy targets: [ ]
-- Buses: [ ]
-- Cloud accounts / subscription boundaries: [ ]
-
-**Constraints**
-
-- Consent / overlapping EUM or RUM tools: [observed or unknown]
-- Percentile standard: [default p90 if unspecified]
-- Do not request or display ingest tokens.
+Never request or display an ingest token. The inputs file records who holds a
+credential, not its value.
 
 ## Task
 

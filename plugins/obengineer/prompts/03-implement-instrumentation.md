@@ -1,12 +1,15 @@
 # Prompt 03 — Implement the instrumentation
 
 **Agent:** [`../agents/instrumentation-implementer.agent.md`](../agents/instrumentation-implementer.agent.md)  
+**Skills:** `instrumentation-implement`  
+**Inputs:** `docs/observability/engagement-inputs.yaml` + the accepted guide and schema  
 **Depends on:** merged (or explicitly approved) Instrumentation Guide + `attribute-schema.json`.  
 **Output:** small code PRs. No deploys. No secrets.
 
 Run **once per slice**. If the human does not pick a slice, follow the guide’s phase plan: trust the signal first, then the highest-ranked journey, then meters.
 
-Copy below the line. Set the slice variables.
+**Invoke it, do not paste it.** `/obengineer-implement <slice>` reads this file in place.
+The only thing this run needs from the human is which slice.
 
 ---
 
@@ -20,11 +23,13 @@ PII deny list is enforced. If you see tokens in the repo, stop and report. Do no
 
 ## Inputs
 
-- Guide: `docs/observability/INSTRUMENTATION-GUIDE.md` (or [path])
+- Guide: `docs/observability/INSTRUMENTATION-GUIDE.md`
 - Schema: `docs/observability/attribute-schema.json`
-- Additional files attached this session (optional): [ ]
-- Repos in scope: [ ]
-- **Slice (pick one, or “follow guide phase plan”):**
+- Engagement inputs: `docs/observability/engagement-inputs.yaml` — `backends.languages` and
+  `.deploy_targets` for which SDK, `constraints.who_deploys_front_end` and
+  `.who_deploys_collector` for whether this slice is deployable at all, and
+  `constraints.change_windows` for when.
+- **Slice (the one thing the human supplies — pick one, or “follow guide phase plan”):**
   - [ ] Phase 0 — signal trust (RUM/APM bootstrap as specified: early load, kill switch, allowlist, classifier, app name, replay policy, **no** journey spans)
   - [ ] Shared libraries only (`@<org>/otel-common` or guide names + stamp processor + baggage boot + message inject/extract)
   - [ ] Workflow: `[name from guide]` steps: `[list]`
