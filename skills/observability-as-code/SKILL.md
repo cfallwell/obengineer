@@ -131,7 +131,7 @@ The handover states, in this order:
 3. **What was refused**, with the contract section and the missing key for each.
 4. **What has no Terraform support** and must be configured in the tenant: APM MetricSets, APM Business Workflows, RUM application settings, and the Log Observer Connect connection itself. The contract's promotion list is a TAM task and Terraform cannot take it — say so rather than leaving a gap the customer discovers during configuration.
 5. **Which thresholds are placeholders** awaiting a baseline.
-6. **Cost implications**: Synthetics run frequency times locations, and any metric ruleset that raises MTS rather than lowering it.
+6. **Cost implications**: Synthetics run frequency times locations, and any metric ruleset that raises MTS rather than lowering it. Consumption against entitlement is not priced here — that is the account team's document at [`../references/entitlement-exposure.md`](../references/entitlement-exposure.md), and a third home for those numbers is how the three end up disagreeing. State what this plan adds; point at that document for what it costs.
 
 ## Warning signs
 
