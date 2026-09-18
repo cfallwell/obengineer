@@ -81,6 +81,10 @@ so "every section starts on a new page" is a guarantee. Layout details live in
 
 Numbered here for reference only; do not number the headings in the output.
 
+**This table is the only section list in the bundle.** The agent files, the skills, and
+the prompts point here rather than restating it. A second copy drifts, and then two
+documents both claim to be the authority on what a deliverable contains.
+
 | # | Heading | Level |
 |---|---|---|
 | 1 | Purpose and Scope | H1 |
@@ -88,19 +92,26 @@ Numbered here for reference only; do not number the headings in the output.
 | 2a | Splunk documentation (primary) | H2 |
 | 2b | OpenTelemetry upstream (secondary) | H2 |
 | 3 | **\<Frontend\> and Backend Architecture (Observed)** | H1 |
-| 4 | **Cross-Cutting Attributes and Baggage Propagation** | H1 |
-| 5 | RUM Ad Attribution Capture | H1 |
-| 6 | OTel Collector Configuration | H1 |
-| 7 | Metrics Pipeline Management (Index-as-Dimension) | H1 |
-| 8 | Business Transactions and Workflows (Recommendations) | H1 |
-| 9 | Messaging Observability | H1 |
-| 10 | Use Case: \<flow\> — one H1 per ranked flow | H1 |
-| 11 | Release Events via the O11y Events API | H1 |
-| 12 | Log Observer Connect | H1 |
-| 13 | Dashboards Overview | H1 |
-| 14 | Detectors Catalog | H1 |
-| 15 | Appendix A: Master Attribute Dictionary | H1 |
-| 16 | Appendix B: Open Items and Assumptions | H1 |
+| 4 | Course of action | H1 |
+| 5 | Missing portfolio components | H1 |
+| 6 | **Cross-Cutting Attributes and Baggage Propagation** | H1 |
+| 7 | RUM SPA / client route changes | H1 |
+| 8 | RUM Ad Attribution Capture | H1 |
+| 9 | OTel Collector Configuration | H1 |
+| 10 | Metrics Pipeline Management (Index-as-Dimension) | H1 |
+| 11 | Business Transactions and Workflows (Recommendations) | H1 |
+| 12 | Messaging Observability | H1 |
+| 13 | Use Case: \<flow\> — one H1 per ranked flow | H1 |
+| 14 | Custom meters (business vs developer/execution) | H1 |
+| 15 | Release Events via the O11y Events API | H1 |
+| 16 | Log Observer Connect | H1 |
+| 17 | Splunk portfolio mapping | H1 |
+| 18 | Dashboards Overview | H1 |
+| 19 | Detectors Catalog | H1 |
+| 20 | Phased plan and exit criteria (portfolio-verifiable) | H1 |
+| 21 | Bootstrap vs non-goals | H1 |
+| 22 | Appendix A: Master Attribute Dictionary | H1 |
+| 23 | Appendix B: Open Items and Assumptions | H1 |
 
 Rules that are easy to get wrong:
 
@@ -146,7 +157,31 @@ Prose first, then bullets. Every claim carries its evidence.
 Call out gaps inline as gaps (a missing pixel in the CSP allowlist, an overlapping
 agent with no decommission plan) rather than saving them for the appendix.
 
-## 4. Cross-Cutting Attributes and Baggage Propagation
+## 4. Course of action
+
+What is reconstructable today versus what has to be emitted. The decision-engine result
+per question, from [`portfolio-decision-engine.md`](portfolio-decision-engine.md). Phase 0
+yes or no, with the blockers **proven from the scan** rather than assumed. The first
+journey, and why. Three bullets on why auto-instrumentation alone will fail on this
+target specifically — generic reasons are a sign nobody looked.
+
+This section comes **after** the architecture section, never before it. A course of action
+that precedes the evidence reads as a product pitch.
+
+## 5. Missing portfolio components
+
+Present, partial, or absent for each of: RUM, APM, Infrastructure, Synthetics, Splunk
+platform with Log Observer Connect, and ThousandEyes.
+
+For every gap, one paragraph: the question this target has that the missing component
+answers, and the benefit of adding it. Recommend a component **only** when the evidence
+creates such a question — a recommendation with no question behind it is a line item, and
+it is the first thing a customer strikes.
+
+Do not silently omit ThousandEyes, platform log correlation, or Synthetics when the
+evidence shows an off-box hop, logs with no `trace_id`, or a route with no canary.
+
+## 6. Cross-Cutting Attributes and Baggage Propagation
 
 **This section is mandatory on every run and is the one most often omitted. A
 guide without it is rejected.** It is what makes every later dashboard variable,
@@ -169,7 +204,25 @@ If a piece genuinely does not exist in the target (no bus, no IdP), keep the H3
 and write **Not in evidence — do not deploy** with the pattern shown anyway, so
 the team has it the day the bus lands.
 
-## 5. RUM Ad Attribution Capture
+## 7. RUM SPA / client route changes
+
+Required whenever the scan shows a client-side router. `document-load` and the first-paint
+web vitals fire on the **first HTML document only**: React Router, the Next.js App Router,
+Remix, Vue Router, Angular Router, and any other `history.pushState` navigation create no
+new document span, so without this section every business transaction after the landing
+page is invisible in RUM.
+
+Contains: the **host-owned** listener as real code, the bounded `page.type` classifier and
+its refresh on navigation, `SplunkRum.setGlobalAttributes`, and a `route.change` (or
+`page.view`) span per client navigation. State plainly that remotes and micro-frontends must
+not add a second listener or a second `init`.
+
+Raw path is never the dimension. Classify.
+
+MPA with full document loads, or no browser at all: keep the heading and write
+**Not in evidence**, with the one line of evidence that would change the answer.
+
+## 8. RUM Ad Attribution Capture
 
 Only when a browser exists. Subsections: `Trigger logic (runs once per session)`,
 `Span event: <org>.session.ad_attribution` (attribute table with a `Dimension?`
@@ -183,7 +236,7 @@ are attribute-only and travel on the order record, not in baggage.
 If no campaigns are in evidence, still ship the section; the classifier returns
 `direct` / `organic` / `unknown` so a later campaign cannot land unattributed.
 
-## 6. OTel Collector Configuration
+## 9. OTel Collector Configuration
 
 Real YAML. Two responsibilities minimum: **deriving** the low-cardinality
 tenant/market/route class with the transform processor (OTTL) so no service has
@@ -202,7 +255,7 @@ For regulated markets, gate the browser SDK on the consent platform's decision
 and say why: the browser should not have sent the data, so server-side filtering
 is not sufficient.
 
-## 7. Metrics Pipeline Management (Index-as-Dimension)
+## 10. Metrics Pipeline Management (Index-as-Dimension)
 
 Two bulleted lists under H2 headings: `Dimension-eligible list (add to MPM)` and
 `Attribute-only (never a dimension by default)`. Open with the cardinality budget
@@ -210,7 +263,7 @@ sentence and the escape hatch: a high-cardinality key becomes queryable through 
 dedicated, bounded MetricSet for one troubleshooting dashboard, never as a global
 dimension.
 
-## 8. Business Transactions and Workflows (Recommendations)
+## 11. Business Transactions and Workflows (Recommendations)
 
 Open by separating the two concepts in one short paragraph: a **Business
 Transaction** (`<org>.bt`) is the page, bundle, or surface the user is in; a
@@ -227,7 +280,7 @@ list. Platform-only artifacts (the boot bundle) get a heading that states they o
 
 This is not a restatement of the architecture section's index table.
 
-## 9. Messaging Observability
+## 12. Messaging Observability
 
 Subsections: `Topic naming convention` (the pattern, then real examples),
 `Producer/consumer span attributes` (table: `Attribute | Example | Notes`, aligned
@@ -237,7 +290,7 @@ destination name as high-cardinality/not-a-dimension while the destination
 which boundary is crossed, that context does not travel automatically, and what
 breaks without it.
 
-## 10. Use Case: `<flow>`
+## 13. Use Case: `<flow>`
 
 One H1 per ranked flow. Fixed sub-shape, every time:
 
@@ -250,7 +303,17 @@ One H1 per ranked flow. Fixed sub-shape, every time:
 - `Detectors` — bullets, each with a trigger condition and a group-by.
 - Close with the cross-workflow join: what propagates into the next flow's span, and which Related-Content link exists.
 
-## 11. Release Events via the O11y Events API
+## 14. Custom meters (business vs developer/execution)
+
+Two tables, and the split matters: business meters answer "did the outcome happen" and are
+what an executive view is built from; developer and execution meters answer "why was it
+slow or wrong" and belong to the engineer view.
+
+Every meter: instrument type, and three to six **bounded** dimensions. An identity key is
+marked attribute-only, never a meter dimension. Only meters justified by evidence — a meter
+nobody named a question for will never be read, and it costs metric time series forever.
+
+## 15. Release Events via the O11y Events API
 
 Why: every RED chart carries a release overlay so a regression is attributable to
 a deploy. Subsections: `CD job POST` (the real `curl` with `service.name` and
@@ -260,7 +323,7 @@ and `CD pipeline placement` (fire after the deploy is healthy, one event per
 service per environment, include the commit SHA, and use a separate browser-agent
 release event so agent releases overlay distinctly from backend deploys).
 
-## 12. Log Observer Connect
+## 16. Log Observer Connect
 
 Name the platform indexes. State that every dashboard's raw-event table becomes an
 LOC panel joined to traces by `trace_id`. Subsections:
@@ -269,7 +332,20 @@ LOC panel joined to traces by `trace_id`. Subsections:
 redaction rule) and `LOC dashboard panel shape` (a real SPL search bound to the
 dashboard variables, with a `trace_id` column rendered as a deep link).
 
-## 13. Dashboards Overview
+## 17. Splunk portfolio mapping
+
+The section a TAM configures from, so it is written as instructions rather than as
+description. Per product: what to configure and **the UI path to get there**.
+
+Must state, unambiguously:
+
+- Which span tag becomes the **APM Business Workflow**. One tag, named, with its value shape.
+- Which tags are promoted to **Monitoring MetricSets**, which stay **Troubleshooting MetricSets**, and which are attribute-only — with the cardinality arithmetic from [`../cardinality-budget/SKILL.md`](../cardinality-budget/SKILL.md), not an assertion.
+- Which **Related Content** joins exist, and the key each one travels on.
+- Which **ThousandEyes** test type covers each off-box hop.
+- Which parts have **no Terraform support** and are therefore tenant configuration: APM MetricSets, APM Business Workflows, RUM application settings.
+
+## 18. Dashboards Overview
 
 Three layers, in this order: `Workflows Overview` (one row per `workflow.name`
 with rate, error %, p90/p95 latency, last deploy; filter bar; click-through),
@@ -278,7 +354,7 @@ with rate, error %, p90/p95 latency, last deploy; filter bar; click-through),
 least two real snippets, and the percentile stated explicitly rather than left to
 the chart UI default.
 
-## 14. Detectors Catalog
+## 19. Detectors Catalog
 
 One consolidated table: `Detector | Trigger | Group by`. Every detector from every
 use case appears here. State the routing and runbook convention once.
@@ -288,20 +364,81 @@ configuration-safety detectors) versus which stay **drafts until the signal is
 trusted**, and why — a detector built on an untrustworthy attribute trains people
 to ignore alerts.
 
-## 15. Appendix A: Master Attribute Dictionary
+## 20. Phased plan and exit criteria (portfolio-verifiable)
+
+Phase 0 first, and **only** if blockers were proven from the scan, then the journeys in
+ranked order.
+
+Every exit criterion is a **query a TAM can run**, not a statement someone can assert:
+Tag Spotlight shows the tag; the MetricSet cardinality dialog is acceptable; a test trace
+crosses every bus with one `trace_id`; a detector could be built on the MetricSet; a
+platform search by `trace_id` returns the log; a ThousandEyes test covers the public path
+the real users take.
+
+An exit criterion that cannot be checked is a hope with a deadline attached.
+
+## 21. Bootstrap vs non-goals
+
+What auto-instrumentation gives — library spans, a service map, host and container metrics
+— and what it does not: identity, journeys, business meters, MetricSets, CI enforcement.
+Zero-code appears **here and in Phase 0 only**, never as the definition of done.
+
+Then the explicit non-goals for this delivery, so scope is settled in writing rather than in
+the review meeting: no application code, no token values, no dashboard JSON unless it was
+asked for, no "enable all instrumentations", and no always-on session replay unless the
+human accepted the cost and the Core Web Vitals risk in writing.
+
+## 22. Appendix A: Master Attribute Dictionary
 
 Alphabetical. Columns: `Attribute | Type | Dim? | Source`. `Dim?` is
 dimension-eligibility in Metrics Pipeline Management. Every attribute named
 anywhere in the document appears exactly once. This appendix and
 `attribute-schema.json` are generated from each other; they may not disagree.
 
-## 16. Appendix B: Open Items and Assumptions
+## 23. Appendix B: Open Items and Assumptions
 
 Bullets, each an answerable question with the decision it blocks. Unidentified
 bundles, unconfirmed cardinality, gaps flagged in the architecture section, the
 decommission timeline for overlapping agents, and the consent-gated tracker list.
 
 ---
+
+## Completeness bar — fail the deliverable if any row is true
+
+A document titled as an instrumentation, RUM, APM, or backend-observability guide **fails
+review** when any of these hold. This table is the review, so read it before writing rather
+than after.
+
+| Defect | What "good" looks like |
+|---|---|
+| **No `Cross-Cutting Attributes and Baggage Propagation` section** | Section 6 exists with the attribute-set table (`Attribute \| Type \| Set at \| Dimension? \| Notes`) and all five code subsections: provider bootstrap, the `SpanProcessor`, login write, backend composite propagator, bus inject/extract |
+| Stamp processor loops over all baggage entries | `onStart` iterates an **explicit key allowlist**, so a future caller cannot leak an unbounded value or a token into telemetry |
+| A baggage key with no named consumer | Every key names the dashboard variable, detector `group by`, or pivot that reads it. See [`baggage-budget.md`](baggage-budget.md) |
+| Markdown shipped without a customer `.docx` | Both artifacts, the `.docx` rendered from the committed Markdown, `verify_render.py` exiting 0 |
+| Metadata dumped on the title page | A simple title page from the `<!-- title-page ... -->` block; identifiers, realm, percentile standard, and evidence basis in `### Document control and evidence basis` |
+| Sections render as Word `Heading 2`, or flow onto the previous page | Markdown `##` renders as `Heading 1` with `w:pageBreakBefore`; the contents list shows sections at level 1 |
+| Architecture buried in an appendix | Section 3 is a body section near the front; the attribute dictionary is Appendix A at the back |
+| No `References` section | Real, resolvable Splunk-primary and OTel-secondary URLs for every recommendation class |
+| Course of action placed before the architecture section | Evidence first. A course of action that precedes it reads as a product pitch |
+| Bus in evidence but no `Messaging Observability` section | Topic convention, producer/consumer attribute table with the destination **template** as the dimension, and cross-account propagation |
+| Dashboards with no release overlay or Log Observer Connect panel | Sections 15 and 16 present, and every use-case dashboard names both |
+| BT registry is only a summary table | After section 3's BT index, section 11 has one heading per BT with **exhaustive** dotted-kebab workflows |
+| Workflows are three generic verbs per BT (`view`, `click`, `start`) | Workflows match UI copy, analytics events, and feature flags (`*.item.add`, `*.promo.apply`, `*.payment.tokenize`, …) |
+| No monitoring use cases | Ranked flows each have identity, span events, metrics, **dashboard**, and **detectors** |
+| "Analysis only" used to omit the contract | Inventory still leads; use cases still ship in the same file. A later run deepens span trees and the schema — it does not introduce BTs or use cases for the first time |
+| Meters without dimensions | Every meter lists three to six bounded dimensions; identity keys marked attribute-only |
+| A dimension list with no cardinality arithmetic | MTS cost per promotion, against the entitlement headroom. See [`../cardinality-budget/SKILL.md`](../cardinality-budget/SKILL.md) |
+| "Use baggage" with no code | Host `init`, `SpanProcessor.onStart`, identity write, backend propagator, bus inject/extract — or `Not in evidence` under each heading |
+| No ad/first-touch section on a browser application | Classifier function, `session.ad_attribution`, bounded baggage subset; `direct` when no campaigns were seen |
+| A client router in evidence, only `document-load` in the guide | Section 7: host listener, classifier, `setGlobalAttributes`, and a `route.change` span on **every** client navigation |
+| Joins described as "via traceparent and an id" with no join type | Every use-case join labelled **continue trace** \| **span link** \| **attribute pivot** |
+| The APM Business Workflow tag is described but never named | Section 17 names one tag and its value shape. A TAM cannot configure a description |
+| Cookie dump into RUM attributes | Forbidden. Bounded allowlist only |
+| Checklist skipped | Every row below marked yes or no in Appendix B |
+
+If the human names a **prior guide as the quality bar**, match that guide's section shape and
+reuse its BT and `workflow.name` strings where they are in evidence. Extend from the new
+scan; do not rename for taste.
 
 ## Pre-delivery checklist
 
@@ -311,6 +448,11 @@ Appendix B.
 - [ ] Both artifacts exist: markdown and a `.docx` rendered from that markdown
 - [ ] Table of Contents present in the `.docx`, field-driven, auto-updating
 - [ ] Every H1 starts on a new page in the `.docx`
+- [ ] Course of action and Missing portfolio components follow the architecture section
+- [ ] `RUM SPA / client route changes` present if a client router exists (or `Not in evidence`)
+- [ ] `Splunk portfolio mapping` names the one span tag that becomes the APM Business Workflow
+- [ ] Phase plan exit criteria are each a query a TAM can run
+- [ ] Bootstrap appears only in non-goals and Phase 0, never as the definition of done
 - [ ] `<Frontend> and Backend Architecture (Observed)` is a body section near the front, not an appendix
 - [ ] `Cross-Cutting Attributes and Baggage Propagation` present, with the attribute-set table and all five code subsections
 - [ ] Stamp processor shown as `SpanProcessor.onStart` over an explicit key allowlist
