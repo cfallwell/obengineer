@@ -80,17 +80,25 @@ jobs:
           fi
 
       # ---------------------------------------------------------------- #
-      # 3. Workflow registry: no workflow.name literal that the wiki has
-      #    no note for. Dashboards and detectors are built on these
-      #    strings, so an unregistered one is telemetry nobody can chart.
+      # 3. Workflow registry: no workflow.name literal the contract does
+      #    not enumerate. Dashboards, detectors, and MetricSets are built
+      #    on these strings, so an unregistered one is telemetry nobody
+      #    can chart.
+      #
+      #    The registry is the schema, not the wiki's workflows/ folder:
+      #    a workflow earns a note only once it carries spans or a
+      #    threshold, so most legal names have no file of their own.
       # ---------------------------------------------------------------- #
       - name: workflow names are registered
         run: |
           python3 - <<'PY'
-          import pathlib, re, sys, os
+          import json, pathlib, re, sys, os
 
-          wiki = pathlib.Path(os.environ["WIKI"]) / "workflows"
-          registered = {p.stem for p in wiki.glob("*.md")}
+          schema = json.loads(pathlib.Path(os.environ["SCHEMA"]).read_text())
+          bts = schema["businessTransactions"]
+          registered = set(bts.get("crossCuttingWorkflows", []))
+          for bt in bts["items"].values():
+              registered.update(bt.get("workflows", []))
           used = {}
           pattern = re.compile(r'workflow\.name[\'"]?\s*[:,=]\s*[\'"]([a-z0-9.\-]+)[\'"]')
           for path in pathlib.Path("src").rglob("*.[jt]s"):
@@ -100,7 +108,7 @@ jobs:
 
           unknown = {k: v for k, v in used.items() if k not in registered}
           if unknown:
-              print("workflow.name values with no wiki note:")
+              print("workflow.name values the contract does not register:")
               for name, where in sorted(unknown.items()):
                   print(f"  {where}: {name}")
               sys.exit(1)

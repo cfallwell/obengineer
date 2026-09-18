@@ -606,6 +606,20 @@ def test_ci_layers_are_ordered_and_have_runnable_examples():
                 f"{workflow.name} must read tokens from the secret store"
             )
 
+    # The registry a layer-1 check reads is the schema, which enumerates every
+    # legal workflow name. The wiki's workflows/ folder holds only the promoted
+    # ones, so checking against it would fail every registered name that has
+    # not yet earned a note.
+    checks = (examples / "contract-checks.yml").read_text()
+    registry = checks[checks.index("workflow names are registered"):]
+    registry = registry[:registry.index("\n      # ---")]
+    assert "businessTransactions" in registry and "crossCuttingWorkflows" in registry, (
+        "the workflow-registry check must read the schema's enumeration"
+    )
+    assert "workflows\"" not in registry.replace('bt.get("workflows", [])', ""), (
+        "the registry check must not be scoped to the wiki's promoted notes"
+    )
+
 
 # --------------------------------------------------------------------------- #
 # the approved layout: simple title page, contents, one section per page
