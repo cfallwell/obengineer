@@ -7,16 +7,19 @@ plugins; the customer deliverables they produce live under `../docs/observabilit
 
 ## Project Map
 
-- `agents/` — agent definitions used as system prompts. `instrumentation-architect.agent.md` owns the doctrine and the mandatory section list; `instrumentation-implementer.agent.md` owns the PR rules.
-- `prompts/` — the three-run workflow: analyze, guide, implement. Copy-paste blocks for a human to hand to an agent.
+- `agents/` — agent definitions used as system prompts. Each is doctrine plus a routing table, capped at 2,500 words and tested; depth belongs in `skills/references/`. `instrumentation-architect.agent.md` owns the design doctrine, `instrumentation-implementer.agent.md` the PR rules, `observability-as-code.agent.md` the Terraform rules.
+- `prompts/` — the run contracts: analyze, guide, implement, configure. Read in place by the installed commands, never pasted into a chat.
+- `commands/` — installable host commands (`/obengineer-*`). Each is a short invocation carrying `{{OBENGINEER_ROOT}}`; the run contract stays in `prompts/`.
+- `inputs/` — the engagement inputs template. One file per engagement, written only by `$engagement-intake`.
 - `skills/` — canonical skill sources. One directory per skill with `SKILL.md`, plus `references/`, `scripts/`, `tests/` as needed.
 - `skills/references/` — shared references loaded by more than one skill. `document-template.md` and `cross-cutting-attributes.md` are load-bearing; see below.
+- `scripts/install.py`, `install.sh` — install skills and commands into Cursor, Claude Code, or Codex.
 - `plugins/obengineer/` — the distributable bundle for Claude Code and Codex. Contains its own copy of `skills/`, `agents/`, and `prompts/` so an installed plugin is self-contained.
 - `.cursor/skills/`, `.agents/skills/` — symlinks to canonical skills for Cursor and repo-scoped Codex use.
 - `.claude-plugin/marketplace.json`, `.agents/plugins/marketplace.json` — marketplace manifests pointing at the plugin.
 - `scripts/` — repo maintenance. `sync_plugin_skills.py` is the only way plugin copies get updated.
 - `tests/` — deterministic contract tests over the agentry itself.
-- `docs/` — design notes for this agentry, not customer deliverables.
+- `docs/` — design notes and standing architecture reviews for this agentry, not customer deliverables.
 
 ## Working Rules
 
@@ -30,6 +33,33 @@ plugins; the customer deliverables they produce live under `../docs/observabilit
 - Use `python3` and `pytest`; the only runtime dependency is `python-docx`.
 - Avoid drive-by refactors and narration comments.
 
+## One authority per fact
+
+Every fact has exactly one home, and everything else points at it. This is not tidiness;
+it is the only way a disagreement becomes visible.
+
+| Fact | Sole authority |
+|---|---|
+| The document section list, the completeness bar, the pre-delivery checklist | `skills/references/document-template.md` |
+| Which platform answers which question, the course-of-action algorithm, the pitfalls | `skills/references/portfolio-decision-engine.md` |
+| SDKs per language, front-end routers, clouds, platform log contract, ThousandEyes design | `skills/references/platform-expertise.md` |
+| The cross-cutting section and its five code subsections | `skills/references/cross-cutting-attributes.md` |
+| Baggage byte and key budget | `skills/references/baggage-budget.md` |
+| Terraform resource names across the three Splunk providers | `skills/references/splunk-terraform-providers.md` |
+| The `.docx` layout | `skills/customer-doc-render/references/document-format.json` |
+| What the human must supply | `inputs/engagement-inputs.template.yaml` |
+
+The architect agent once carried the decision engine, the platform expertise, and a full
+output template inline — 7,214 words loaded on every run — while also linking to the
+references that held the same material. That duplication hid a real defect: the agent
+required 23 document sections and the template listed 16, and nobody noticed because
+nobody diffs two long prescriptive files.
+
+`test_section_list_has_exactly_one_authority` and
+`test_agent_files_route_rather_than_duplicate` exist to stop it regrowing. Do not
+summarize a reference into an agent file for convenience; that is how the 7,214 words
+accumulated, one convenience at a time.
+
 ## The section that must never be dropped
 
 `Cross-Cutting Attributes and Baggage Propagation` was once missing from the
@@ -42,7 +72,7 @@ It is now mandatory in four places, and
 `tests/test_skill_contracts.py::test_cross_cutting_section_is_mandatory_everywhere`
 fails if any of them stops requiring it:
 
-- `agents/instrumentation-architect.agent.md` — doctrine 12a and the contract table
+- `agents/instrumentation-architect.agent.md` — doctrine 15
 - `prompts/02-develop-instrumentation-guide.md`
 - `skills/references/document-template.md`
 - `skills/instrumentation-guide/SKILL.md`
@@ -121,3 +151,7 @@ run `pip install python-docx` before trusting a green run.
 | `$baggage-propagation` | Design the cross-cutting attribute set and the baggage propagation contract |
 | `$customer-doc-render` | Render a Markdown deliverable as a verified customer-review Word document |
 | `$instrumentation-implement` | Land an accepted guide as small reviewable PRs, with the CI checks that keep it enforced |
+| `$engagement-intake` | Collect the inputs no scan can measure into one `engagement-inputs.yaml`, asking only for what is missing |
+| `$cardinality-budget` | Decide dimension versus attribute-only as arithmetic against the customer's entitlement |
+| `$observability-as-code` | Emit the accepted contract as Terraform across the three Splunk providers, at three persona levels |
+| `$deliverable-review` | Grade a finished deliverable against the completeness bar, separately from whoever wrote it |

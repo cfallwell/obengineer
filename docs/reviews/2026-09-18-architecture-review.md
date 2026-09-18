@@ -42,7 +42,7 @@ There is now a test asserting the section list appears in exactly one file.
 
 ## Baggage: how to decide what to carry
 
-Full treatment in [`../skills/references/baggage-budget.md`](../skills/references/baggage-budget.md).
+Full treatment in [`../skills/references/baggage-budget.md`](../../skills/references/baggage-budget.md).
 The reasoning, briefly, because it is the question with the most expensive wrong answer.
 
 Baggage is paid for in four places simultaneously: bytes on every hop of every request, a
@@ -180,7 +180,7 @@ There is no fine-tuning loop available here, and proposing one would be the wron
 What *is* available is everything RL needs before it becomes possible, and each piece is
 useful on its own — which is the only honest reason to build it.
 
-**1. An executable rubric.** Done: [`../skills/deliverable-review/SKILL.md`](../skills/deliverable-review/SKILL.md).
+**1. An executable rubric.** Done: [`../skills/deliverable-review/SKILL.md`](../../skills/deliverable-review/SKILL.md).
 The completeness bar was already a rubric; it was just being applied by the author, from
 memory. A grader separate from the author is the reward function, and it has value with or
 without any learning attached.
