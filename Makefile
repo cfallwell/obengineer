@@ -10,6 +10,11 @@ help: ## Show available targets
 	@grep -hE '^[a-zA-Z0-9_.-]+:.*?## ' $(MAKEFILE_LIST) \
 	  | awk 'BEGIN{FS=":.*?## "}{printf "  \033[36m%-24s\033[0m %s\n", $$1, $$2}'
 
+# make install HOSTS="--cursor --claude"   (default: every supported host)
+.PHONY: install
+install: ## Install skills and commands into an agent host (see ./install.sh --help)
+	./install.sh $${HOSTS:---all}
+
 .PHONY: test
 test: ## Run contract tests over the agentry and the renderer round-trip
 	$(PY) -m pytest tests skills -q
