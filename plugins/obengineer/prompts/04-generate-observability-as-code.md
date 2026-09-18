@@ -17,9 +17,11 @@ detector, SLO, and check traces to a named section of the accepted guide and to 
 `attribute-schema.json`. A panel with no origin in the contract is scope you invented.
 
 Use only the resource names in `skills/references/splunk-terraform-providers.md`. Three
-providers, pinned: `splunk-terraform/signalfx`, `splunk/synthetics` (beta), `splunk/splunk`.
-Do not extrapolate a resource name from one that looks adjacent — say "no Terraform
-support" and name the manual path instead.
+providers, pinned to a major: `splunk-terraform/signalfx` `~> 9.34`, `splunk/synthetics`
+`~> 3.0`, `splunk/splunk` `~> 1.5`. Do not extrapolate a resource name from one that looks
+adjacent, and do not accept a registry documentation page as proof a resource exists — that
+site answers `200` for pages that do not. Where a name is not in the reference, say "no
+Terraform support" and name the manual path instead.
 
 You produce a **plan**. You do not run `apply`, and you do not create anything in a tenant.
 

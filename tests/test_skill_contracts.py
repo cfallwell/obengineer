@@ -227,6 +227,44 @@ def test_budgets_are_numbers_not_adjectives():
 
 
 # --------------------------------------------------------------------------- #
+# generated Terraform names a real resource or refuses
+# --------------------------------------------------------------------------- #
+def test_terraform_reference_pins_versions_and_records_the_hard_negatives():
+    """A resource type that does not exist fails as what looks like a provider bug.
+
+    The expensive half of this reference is the negative half: the names that read
+    as though they must exist, and do not. Losing those lines costs a plan cycle
+    each time, so they are asserted rather than trusted.
+    """
+    ref = (SKILLS / "references" / "splunk-terraform-providers.md").read_text()
+
+    for pin in ("~> 9.34", "~> 3.0", "~> 1.5"):
+        assert pin in ref, (
+            f"every provider needs a major pin; missing {pin}. An unpinned provider "
+            "turns an unrelated init into an unplanned upgrade"
+        )
+
+    for absent in ("APM MetricSets", "APM Business Workflows", "Log Observer Connect"):
+        assert absent in ref, (
+            f"{absent} has no Terraform resource; the reference must say so and name "
+            "the manual path, or a generator will invent a resource for it"
+        )
+
+    assert "no `splunk_acl` resource" in ref, (
+        "splunk_acl has a documentation page and no resource behind it — the single "
+        "most inviting wrong name in the platform provider"
+    )
+    assert "synthetics_create_http_check_v2" in ref and "`_v2`" in ref, (
+        "synthetics 3.0.0 removed the non-_v2 resources; generating a legacy name "
+        "fails at init"
+    )
+    assert "200" in ref, (
+        "the registry answers 200 for pages that do not exist, so a link check is "
+        "not verification; the reference must say what is"
+    )
+
+
+# --------------------------------------------------------------------------- #
 # inputs are collected once, by reference
 # --------------------------------------------------------------------------- #
 def test_inputs_template_captures_what_no_scan_can_measure():

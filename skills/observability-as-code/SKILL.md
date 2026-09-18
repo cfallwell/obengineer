@@ -34,10 +34,16 @@ Two references do the load-bearing work, and both should be read before writing 
 ## Three providers, not one
 
 This is the first thing people get wrong: `splunk-terraform/signalfx` for Observability
-Cloud, `splunk/synthetics` (beta) for checks, `splunk/splunk` for the platform. Pin all
-three. Read the reference for the resource names — do not extrapolate from a name that
-looks adjacent, because a resource type that does not exist fails with an error that reads
-like a provider bug.
+Cloud, `splunk/synthetics` for checks, `splunk/splunk` for the platform. Pin all three to a
+major — `~> 9.34`, `~> 3.0`, `~> 1.5` — because `signalfx` currently publishes a `10.0.0`
+pre-release, so `latest` resolves to documentation describing resources the
+general-availability provider does not have.
+
+Read the reference for the resource names. Do not extrapolate from a name that looks
+adjacent, and do not treat a registry documentation page that loaded as evidence the resource
+exists — the registry answers `200` for pages that do not. The only mechanical check is
+`terraform providers schema -json` against the pinned version. A resource type that does not
+exist fails with an error that reads like a provider bug.
 
 ## Process
 
@@ -113,12 +119,17 @@ inherits, and explicitness beats cleverness in inherited code.
 Run `terraform fmt`, `terraform validate`, and `terraform plan`. Untested Terraform is a
 proposal wearing the costume of an implementation.
 
+Where the environment has no credentials to plan against, `terraform providers schema -json`
+still runs offline after `init` and proves every resource type and argument name is real.
+That is the minimum; report it as schema-checked rather than planned, and do not describe an
+unplanned configuration as validated.
+
 The handover states, in this order:
 
 1. **What `apply` will change**, in resource counts by type and by persona.
 2. **What was imported** rather than created, and what is still `TODO`.
 3. **What was refused**, with the contract section and the missing key for each.
-4. **What has no Terraform support** and must be configured in the tenant: APM MetricSets, APM Business Workflows, and RUM application settings. The contract's promotion list is a TAM task and Terraform cannot take it — say so rather than leaving a gap the customer discovers during configuration.
+4. **What has no Terraform support** and must be configured in the tenant: APM MetricSets, APM Business Workflows, RUM application settings, and the Log Observer Connect connection itself. The contract's promotion list is a TAM task and Terraform cannot take it — say so rather than leaving a gap the customer discovers during configuration.
 5. **Which thresholds are placeholders** awaiting a baseline.
 6. **Cost implications**: Synthetics run frequency times locations, and any metric ruleset that raises MTS rather than lowering it.
 
