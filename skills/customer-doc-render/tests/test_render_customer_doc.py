@@ -47,6 +47,13 @@ header: Application Analysis
 This specifies instrumentation for the **Acme** storefront. Money is in minor units.
 See the [Splunk RUM docs](https://docs.splunk.com/observability/) for the agent.
 
+The attribute dictionary is Appendix A, the processor is described in section 2, and
+sections 1 and 3 carry the scope and the detectors. Naming follows
+[**Detectors Catalog**](#detectors-catalog) and the code in
+[the SpanProcessor](#the-spanprocessor).
+
+A literal `section 3` inside a query is a string, not a reference.
+
 Severity follows a rule: *Critical* means a customer cannot finish, *Minor* means a
 ticket. The `acme.market` wildcard `cart.item.*` is an identifier, not emphasis.
 
@@ -94,11 +101,34 @@ export class BaggageStampProcessor {
 | Detector | Trigger | Group by |
 |---|---|---|
 | Order error rate | > 2% for 5 min | `acme.market` |
+| Cardinality guard | promoted keys per Appendix A | `acme.market` |
+
+## Appendix A: Master Attribute Dictionary
+
+Every key the document promotes, with the section that introduced it (section 2).
 """
 
 
 def has_break(paragraph) -> bool:
     return render.has_page_break_before(paragraph)
+
+
+def links(container) -> list[tuple[str, str]]:
+    """Every internal link in a paragraph or table cell, as (anchor, text)."""
+    out = []
+    for el in container._element.iter(qn("w:hyperlink")):
+        anchor = el.get(qn("w:anchor"))
+        if anchor:
+            out.append((anchor, "".join(t.text or "" for t in el.iter(qn("w:t")))))
+    return out
+
+
+def bookmark_of(docx, heading: str) -> str:
+    para = next(p for p in Document(docx).paragraphs
+                if p.style.name.startswith("Heading") and p.text == heading)
+    start = para._p.findall(qn("w:bookmarkStart"))
+    assert start, f"{heading!r} carries no bookmark"
+    return start[0].get(qn("w:name"))
 
 
 @pytest.fixture
@@ -112,7 +142,7 @@ def rendered(tmp_path):
 
 def test_counts_match_source(rendered):
     _, _, counts = rendered
-    assert counts["sections"] == 3          # three H2 sections
+    assert counts["sections"] == 4          # three body sections and one appendix
     assert counts["tables"] == 3
     assert counts["code_blocks"] == 1
 
@@ -244,6 +274,125 @@ def test_bold_and_code_spans_may_wrap_across_source_lines(tmp_path):
     assert any(r.bold for r in prose[0].runs)
     assert any(r.font.name == "Consolas" for r in prose[0].runs)
     assert verify.check(md, docx, 2) == []
+
+
+def test_an_appendix_and_a_numbered_section_are_clickable(rendered):
+    """A reader in Word clicks `Appendix A` and lands on Appendix A."""
+    _, docx, counts = rendered
+    doc = Document(docx)
+    prose = next(p for p in doc.paragraphs if "attribute dictionary is" in p.text)
+    found = dict((text, anchor) for anchor, text in links(prose))
+
+    assert found["Appendix A"] == bookmark_of(docx, "Appendix A: Master Attribute Dictionary")
+    assert found["section 2"] == bookmark_of(
+        docx, "Cross-Cutting Attributes and Baggage Propagation")
+    # A phrase carrying one number links whole; several numbers link one by one,
+    # so "sections 1 and 3" reaches both rather than only the first.
+    assert found["1"] == bookmark_of(docx, "Purpose and Scope")
+    assert found["3"] == bookmark_of(docx, "Detectors Catalog")
+    assert "and sections 1 and 3 carry the scope" in prose.text
+    assert counts["xrefs"] == 8
+
+
+def test_a_named_reference_is_an_anchor_link_that_keeps_its_formatting(rendered):
+    """Section titles are also ordinary vocabulary, so naming one is an explicit
+    link in the source — and the label keeps its bold rather than printing it."""
+    _, docx, _ = rendered
+    doc = Document(docx)
+    prose = next(p for p in doc.paragraphs if "Naming follows" in p.text)
+    found = dict((text, anchor) for anchor, text in links(prose))
+    assert found["Detectors Catalog"] == bookmark_of(docx, "Detectors Catalog")
+    assert found["the SpanProcessor"] == bookmark_of(docx, "The SpanProcessor")
+    assert "**" not in prose.text
+    bold = [el for el in prose._element.iter(qn("w:hyperlink"))
+            if el.findall(".//" + qn("w:b"))]
+    assert bold, "a bold link label lost its weight"
+
+
+def test_a_reference_inside_a_table_cell_is_clickable(rendered):
+    _, docx, _ = rendered
+    cell = next(c for t in Document(docx).tables for row in t.rows for c in row.cells
+                if "promoted keys per" in c.text)
+    assert links(cell) == [
+        (bookmark_of(docx, "Appendix A: Master Attribute Dictionary"), "Appendix A")]
+
+
+def test_a_reference_in_a_code_span_stays_a_string(rendered):
+    """`section 3` in a query is a literal, and linking it would be wrong."""
+    _, docx, _ = rendered
+    prose = next(p for p in Document(docx).paragraphs if "inside a query" in p.text)
+    assert [text for _, text in links(prose)] == []
+    literal = next(r for r in prose.runs if r.text == "section 3")
+    assert literal.font.name == "Consolas"
+
+
+def test_headings_are_destinations_and_never_link_to_themselves(rendered):
+    _, docx, _ = rendered
+    for para in Document(docx).paragraphs:
+        if not para.style.name.startswith("Heading") or not para.text:
+            continue
+        if para.text == "Table of Contents":
+            continue
+        assert para._p.findall(qn("w:bookmarkStart")), f"no bookmark: {para.text}"
+        assert not links(para), f"a heading links out of itself: {para.text}"
+
+
+def test_a_reference_to_a_section_that_does_not_exist_is_refused(tmp_path):
+    """What a renumbering leaves behind: text that still reads and a link that
+    goes nowhere. In Word it is invisible until a customer clicks it."""
+    md = tmp_path / "stale.md"
+    md.write_text("# Title\n\n## Only Section\n\nDetail is in section 4.\n")
+    with pytest.raises(render.TemplateError) as exc:
+        render.build(md, tmp_path / "stale.docx")
+    assert "points at nothing" in str(exc.value)
+    assert "1 sections" in str(exc.value)
+
+
+def test_an_anchor_link_with_no_heading_is_refused_with_the_near_miss(tmp_path):
+    md = tmp_path / "dead.md"
+    md.write_text(
+        "# Title\n\n## Detectors Catalog\n\nSee [the catalogue](#detectors).\n")
+    with pytest.raises(render.TemplateError) as exc:
+        render.build(md, tmp_path / "dead.docx")
+    assert "matches no heading" in str(exc.value)
+    assert "#detectors-catalog" in str(exc.value)
+
+
+def test_verifier_catches_a_reference_that_stopped_being_a_link(rendered):
+    md, docx, _ = rendered
+    doc = Document(docx)
+    para = next(p for p in doc.paragraphs if "attribute dictionary is" in p.text)
+    link = next(el for el in para._element.iter(qn("w:hyperlink")))
+    link.getparent().remove(link)
+    damaged = docx.with_name("unlinked.docx")
+    doc.save(damaged)
+    failures = verify.check(md, damaged, 2)
+    assert any("cross-reference count" in f for f in failures), failures
+
+
+def test_verifier_catches_a_link_that_lands_nowhere(rendered):
+    md, docx, _ = rendered
+    doc = Document(docx)
+    para = next(p for p in doc.paragraphs if "attribute dictionary is" in p.text)
+    link = next(el for el in para._element.iter(qn("w:hyperlink")))
+    link.set(qn("w:anchor"), "_appendix_z_that_was_deleted")
+    damaged = docx.with_name("dangling.docx")
+    doc.save(damaged)
+    failures = verify.check(md, damaged, 2)
+    assert any("point at no bookmark" in f for f in failures), failures
+
+
+def test_verifier_catches_a_heading_with_no_bookmark(rendered):
+    md, docx, _ = rendered
+    doc = Document(docx)
+    para = next(p for p in doc.paragraphs
+                if p.style.name == "Heading 1" and p.text == "Detectors Catalog")
+    for el in para._p.findall(qn("w:bookmarkStart")):
+        para._p.remove(el)
+    damaged = docx.with_name("unbookmarked.docx")
+    doc.save(damaged)
+    failures = verify.check(md, damaged, 2)
+    assert any("carry no bookmark" in f for f in failures), failures
 
 
 def test_verifier_passes_on_a_clean_render(rendered):

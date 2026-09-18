@@ -13,6 +13,7 @@ headings:
   fidelity    no literal Markdown markers leaked into prose runs
   secrets     no credential-shaped value reached the document
   toc         a Table of Contents field exists and Word will refresh it
+  xrefs       every section and appendix reference is a working internal link
 
 Exit code 0 when every check passes, 1 otherwise.
 """
@@ -20,10 +21,24 @@ Exit code 0 when every check passes, 1 otherwise.
 from __future__ import annotations
 
 import argparse
+import importlib.util
 import re
 import sys
 import zipfile
 from pathlib import Path
+
+
+def _renderer():
+    """The renderer owns the cross-reference grammar; read it from there.
+
+    Two copies of "what counts as a reference" is how a verifier ends up
+    approving a document the renderer did not link.
+    """
+    path = Path(__file__).resolve().parent / "render_customer_doc.py"
+    spec = importlib.util.spec_from_file_location("_obengineer_render", path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
 
 try:
     from docx import Document
@@ -58,11 +73,28 @@ def has_page_break_before(paragraph) -> bool:
     return el.get(qn("w:val")) not in ("false", "0", "off")
 
 
-def parse_markdown(path: Path, section_level: int) -> dict:
+def count_xrefs(prose: str, render) -> int:
+    """How many links the renderer owes this source, counted its own way.
+
+    A phrase naming one section is one link; `sections 5 and 6` is two, because
+    each number is its own destination. Link labels are excluded: a label is
+    rendered as text, not rescanned, so `[Appendix E](#...)` is one link and not
+    two.
+    """
+    total = len(re.findall(r"\]\(#", prose))
+    prose = re.sub(r"\[[^\]]*\]\([^)]*\)", " ", prose)
+    prose = re.sub(r"`[^`]*`", " ", prose)
+    for m in render.XREF.finditer(prose):
+        total += max(1, len(render.NUMBER.findall(m.group())))
+    return total
+
+
+def parse_markdown(path: Path, section_level: int, render=None) -> dict:
     """Fence-aware structural census of the Markdown source."""
     headings: list[tuple[int, str]] = []
     tables = code_blocks = 0
     in_fence = in_table = False
+    prose: list[str] = []
 
     for line in path.read_text().split("\n"):
         if line.startswith("```"):
@@ -76,11 +108,15 @@ def parse_markdown(path: Path, section_level: int) -> dict:
             if not in_table:
                 tables += 1
                 in_table = True
+            prose.append(line)
             continue
         in_table = False
         m = re.match(r"^(#{1,6}) +(.*)$", line)
         if m:
             headings.append((len(m.group(1)), m.group(2)))
+            continue
+        if not line.startswith("<!--"):
+            prose.append(line)
 
     # The leading H1 becomes the title page, so it is not a body heading and
     # does not get a page break of its own.
@@ -91,13 +127,20 @@ def parse_markdown(path: Path, section_level: int) -> dict:
         "sections": [h for h in body if h[0] <= section_level],
         "tables": tables,
         "code_blocks": code_blocks,
+        # The renderer joins wrapped prose before parsing, so a reference split
+        # across two source lines is one reference here as well.
+        "xrefs": count_xrefs(" ".join(prose), render) if render else 0,
     }
 
 
 def check(md: Path, docx: Path, section_level: int) -> list[str]:
     failures: list[str] = []
-    src = parse_markdown(md, section_level)
+    render = _renderer()
+    src = parse_markdown(md, section_level, render)
     doc = Document(docx)
+    with zipfile.ZipFile(docx) as z:
+        document_xml = z.read("word/document.xml").decode("utf-8", "replace")
+        settings_xml = z.read("word/settings.xml").decode("utf-8", "replace")
 
     # python-docx builds a fresh proxy on every access, so materialise once and
     # compare the underlying XML elements rather than the wrappers.
@@ -212,10 +255,30 @@ def check(md: Path, docx: Path, section_level: int) -> list[str]:
         if hits:
             failures.append(f"possible {label} in document ({len(hits)} match(es))")
 
+    # ---- cross-references ------------------------------------------------
+    # Every heading is a destination, every reference is a link, and every link
+    # lands. A reference that reads correctly and clicks nowhere is invisible
+    # in Word until a customer tries it.
+    anchors = re.findall(r'w:anchor="([^"]+)"', document_xml)
+    bookmarks = set(re.findall(r'<w:bookmarkStart[^>]*w:name="([^"]+)"',
+                              document_xml))
+    dangling = sorted({a for a in anchors if a not in bookmarks})
+    if dangling:
+        failures.append(
+            f"{len(dangling)} internal link(s) point at no bookmark: {dangling[:3]}")
+    if len(anchors) != src["xrefs"]:
+        failures.append(
+            f"cross-reference count: markdown refers to sections or appendices "
+            f"{src['xrefs']} time(s), docx has {len(anchors)} internal link(s)"
+        )
+    unmarked = [p.text[:50] for p in body_rendered
+                if not p._p.findall(qn("w:bookmarkStart"))]
+    if unmarked:
+        failures.append(
+            f"{len(unmarked)} heading(s) carry no bookmark, so nothing can link "
+            f"to them: {unmarked[:3]}")
+
     # ---- toc -------------------------------------------------------------
-    with zipfile.ZipFile(docx) as z:
-        document_xml = z.read("word/document.xml").decode("utf-8", "replace")
-        settings_xml = z.read("word/settings.xml").decode("utf-8", "replace")
     if "TOC" not in document_xml:
         failures.append("no Table of Contents field found")
     if "updateFields" not in settings_xml:

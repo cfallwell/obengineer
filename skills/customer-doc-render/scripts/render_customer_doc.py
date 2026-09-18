@@ -89,9 +89,115 @@ INLINE = re.compile(
     r"|\[[^\]]+\]\([^)]+\))"
 )
 
+# Cross-references a reader expects to click, recognised in prose without the
+# author writing a link: an appendix by letter, a body section by its number,
+# and the same reference written with a section sign. A reference naming a
+# section instead of numbering it is written as a Markdown anchor link, because
+# a section title is also ordinary vocabulary — "Workflows" and "Business
+# Transactions" are Splunk concepts as often as they are headings here, and a
+# renderer guessing between the two would link the wrong half.
+XREF = re.compile(
+    r"(Appendix\s+[A-Z](?![A-Za-z])"
+    r"|§\s?\d+(?:\.\d+)?"
+    r"|(?<![A-Za-z])[Ss]ections?\s+\d+(?:\s*(?:,|and|to|–|-)\s*\d+)*)"
+)
+NUMBER = re.compile(r"\d+")
+LINK_COLOR = "0563C1"
+
 
 class TemplateError(RuntimeError):
     """The Markdown cannot be rendered onto the approved template."""
+
+
+class Targets:
+    """Every heading a cross-reference can point at, and how each is addressed.
+
+    Three addresses per document, all resolved from the headings themselves so
+    the source never repeats a number the renderer can count:
+
+        anchor    ``[Appendix E](#appendix-e-open-items-and-assumptions)``
+        ordinal   ``section 4`` — the fourth top-level section, in order
+        appendix  ``Appendix E`` — the heading that opens with that letter
+    """
+
+    def __init__(self) -> None:
+        self.order: list[dict] = []
+        self.by_slug: dict[str, str] = {}
+        self.by_ordinal: dict[int, str] = {}
+        self.by_appendix: dict[str, str] = {}
+        self.sections = 0
+        self.links = 0
+
+    def add(self, level: int, text: str, is_section: bool, taken: set[str]) -> dict:
+        slug = slugify(text)
+        target = {"level": level, "text": text, "slug": slug,
+                  "bookmark": bookmark_name(slug, taken)}
+        self.order.append(target)
+        # A duplicated heading keeps the first slug, matching how a Markdown
+        # renderer resolves `#slug` when two headings collide.
+        self.by_slug.setdefault(slug, target["bookmark"])
+        if is_section:
+            self.sections += 1
+            self.by_ordinal[self.sections] = target["bookmark"]
+            m = re.match(r"Appendix\s+([A-Z])(?![A-Za-z])", text)
+            if m:
+                self.by_appendix.setdefault(m.group(1), target["bookmark"])
+        return target
+
+    def resolve_anchor(self, slug: str) -> str | None:
+        return self.by_slug.get(slug.lstrip("#").lower())
+
+    def resolve(self, phrase: str) -> str | None:
+        m = re.match(r"Appendix\s+([A-Z])", phrase)
+        if m:
+            return self.by_appendix.get(m.group(1))
+        n = NUMBER.search(phrase)
+        return self.by_ordinal.get(int(n.group())) if n else None
+
+    def require(self, phrase: str) -> str:
+        """Resolve a cross-reference, or refuse to render.
+
+        A reference to a section that does not exist is what a renumbering
+        leaves behind, and it is invisible once the document is a `.docx`:
+        the text still reads plausibly and the link goes nowhere.
+        """
+        bookmark = self.resolve(phrase)
+        if bookmark is None:
+            raise TemplateError(
+                f"cross-reference {phrase!r} points at nothing: the document has "
+                f"{self.sections} sections and appendices "
+                f"{', '.join(sorted(self.by_appendix)) or '(none)'}"
+            )
+        self.links += 1
+        return bookmark
+
+    def require_anchor(self, url: str, label: str) -> str:
+        bookmark = self.resolve_anchor(url)
+        if bookmark is None:
+            near = [s for s in self.by_slug if url.lstrip("#").lower() in s]
+            hint = f"; did you mean #{near[0]}" if near else ""
+            raise TemplateError(
+                f"anchor link [{label}]({url}) matches no heading in this "
+                f"document{hint}"
+            )
+        self.links += 1
+        return bookmark
+
+
+def collect_targets(lines: list[str], body_start: int, section_level: int) -> Targets:
+    """Read the headings before rendering, so a forward reference still resolves."""
+    targets, taken, in_fence = Targets(), set(), False
+    for line in lines[body_start:]:
+        if line.startswith("```"):
+            in_fence = not in_fence
+            continue
+        if in_fence:
+            continue
+        m = re.match(r"^(#{1,6}) +(.*)$", line)
+        if m:
+            level = len(m.group(1))
+            targets.add(level, m.group(2), level <= section_level, taken)
+    return targets
 
 
 # --------------------------------------------------------------------------- #
@@ -117,28 +223,36 @@ def set_mono(run, size: float = 8.5) -> None:
         rfonts.set(qn(attr), CODE_FONT)
 
 
-def add_hyperlink(paragraph, text: str, url: str) -> None:
-    r_id = paragraph.part.relate_to(
-        url,
-        "http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink",
-        is_external=True,
-    )
-    link = OxmlElement("w:hyperlink")
-    link.set(qn("r:id"), r_id)
-    run = OxmlElement("w:r")
-    rpr = OxmlElement("w:rPr")
-    color = OxmlElement("w:color")
-    color.set(qn("w:val"), "0563C1")
-    underline = OxmlElement("w:u")
-    underline.set(qn("w:val"), "single")
-    rpr.append(color)
-    rpr.append(underline)
-    run.append(rpr)
-    t = OxmlElement("w:t")
-    t.text = text
-    run.append(t)
-    link.append(run)
-    paragraph._p.append(link)
+def add_bookmark(paragraph, name: str, bookmark_id: int) -> None:
+    """Wrap a heading in a bookmark so an internal link has somewhere to land."""
+    start = OxmlElement("w:bookmarkStart")
+    start.set(qn("w:id"), str(bookmark_id))
+    start.set(qn("w:name"), name)
+    end = OxmlElement("w:bookmarkEnd")
+    end.set(qn("w:id"), str(bookmark_id))
+    paragraph._p.insert(0, start)
+    paragraph._p.append(end)
+
+
+def slugify(text: str) -> str:
+    """GitHub's heading slug, so the same anchor works in Markdown and in Word."""
+    text = re.sub(r"`([^`]*)`", r"\1", text)
+    text = re.sub(r"\*+", "", text)
+    text = re.sub(r"\[([^\]]*)\]\([^)]*\)", r"\1", text)
+    text = text.lower().strip()
+    text = re.sub(r"[^\w\s-]", "", text)
+    return re.sub(r"[\s]+", "-", text).strip("-")
+
+
+def bookmark_name(slug: str, taken: set[str]) -> str:
+    """Word bookmarks allow letters, digits and underscores, and stop at 40."""
+    base = "_" + re.sub(r"\W", "_", slug)[:38]
+    name, n = base, 2
+    while name in taken:
+        suffix = f"_{n}"
+        name, n = base[: 39 - len(suffix)] + suffix, n + 1
+    taken.add(name)
+    return name
 
 
 def field(run, instruction: str) -> None:
@@ -182,12 +296,90 @@ def has_page_break_before(paragraph) -> bool:
     return el.get(qn("w:val")) not in ("false", "0", "off")
 
 
+def wrap_as_link(paragraph, label: str, *, anchor: str | None = None,
+                 url: str | None = None, base_size=None, bold=False,
+                 italic=False) -> None:
+    """Render a label's own runs, then move them inside a `w:hyperlink`.
+
+    Rendering first means a link label keeps its `code`, **bold**, and *italic*
+    formatting instead of printing the markers, which matters because the
+    document links section titles and several of those titles are identifiers.
+    """
+    before = list(paragraph._p)
+    write_inline(paragraph, label, base_size=base_size, bold=bold, italic=italic,
+                 _unescape=False, _link=True)
+    moved = [el for el in list(paragraph._p) if el not in before]
+
+    link = OxmlElement("w:hyperlink")
+    if anchor is not None:
+        link.set(qn("w:anchor"), anchor)
+    else:
+        link.set(qn("r:id"), paragraph.part.relate_to(
+            url,
+            "http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink",
+            is_external=True,
+        ))
+    for el in moved:
+        paragraph._p.remove(el)
+        link.append(el)
+    paragraph._p.append(link)
+
+
+def write_xref_text(paragraph, text: str, targets: "Targets", base_size=None,
+                    bold=False, italic=False) -> None:
+    """Link `Appendix E`, `section 4`, and `sections 5 and 6` where they appear.
+
+    A phrase carrying one number links whole, so the click target is the words a
+    reader recognises. A phrase carrying several links each number, so
+    "sections 5 and 6" reaches both rather than only the first.
+    """
+    for token in XREF.split(text):
+        if not token:
+            continue
+        if not XREF.fullmatch(token):
+            plain(paragraph, token, base_size, bold, italic)
+            continue
+        numbers = NUMBER.findall(token)
+        if len(numbers) <= 1:
+            bookmark = targets.require(token)
+            wrap_as_link(paragraph, token, anchor=bookmark, base_size=base_size,
+                         bold=bold, italic=italic)
+            continue
+        for part in re.split(r"(\d+)", token):
+            if not part:
+                continue
+            if part.isdigit():
+                wrap_as_link(paragraph, part,
+                             anchor=targets.require(f"section {part}"),
+                             base_size=base_size, bold=bold, italic=italic)
+            else:
+                plain(paragraph, part, base_size, bold, italic)
+
+
+def plain(paragraph, text: str, base_size, bold, italic, link=False) -> None:
+    run = paragraph.add_run(text)
+    if bold:
+        run.bold = True
+    if italic:
+        run.italic = True
+    if base_size:
+        run.font.size = Pt(base_size)
+    run.font.name = BODY_FONT
+    if link:
+        run.font.color.rgb = RGBColor.from_string(LINK_COLOR)
+        run.font.underline = True
+    if text != text.strip():
+        run._element.findall(qn("w:t"))[0].set(qn("xml:space"), "preserve")
+
+
 def write_inline(paragraph, text: str, base_size=None, bold=False, italic=False,
-                 _unescape=True):
+                 targets: "Targets | None" = None, _unescape=True, _link=False):
     """Emit runs for `code`, **bold**, *italic*, and [links](url) in one paragraph.
 
     Recurses into bold and italic spans so **`code`** keeps both the weight and
-    the monospace face instead of printing literal backticks.
+    the monospace face instead of printing literal backticks. When `targets` is
+    supplied, plain text is also scanned for cross-references and each one
+    becomes a link into the document.
     """
     if _unescape:
         text = text.replace("\\|", "|").replace("\\_", "_").replace("\\*", "*")
@@ -200,24 +392,44 @@ def write_inline(paragraph, text: str, base_size=None, bold=False, italic=False,
             shade(run._element.get_or_add_rPr(), INLINE_CODE_SHADE)
         elif token.startswith("**") and token.endswith("**"):
             write_inline(paragraph, token[2:-2], base_size=base_size, bold=True,
-                         italic=italic, _unescape=False)
+                         italic=italic, targets=targets, _unescape=False,
+                         _link=_link)
             continue
         elif token.startswith("*") and token.endswith("*") and len(token) > 2:
             write_inline(paragraph, token[1:-1], base_size=base_size, bold=bold,
-                         italic=True, _unescape=False)
+                         italic=True, targets=targets, _unescape=False,
+                         _link=_link)
             continue
         elif token.startswith("[") and "](" in token:
             label, url = token[1:-1].split("](", 1)
-            add_hyperlink(paragraph, label, url)
+            if url.startswith("#"):
+                if targets is None:
+                    raise TemplateError(
+                        f"anchor link {token!r} cannot be resolved here; "
+                        "anchor links belong in body content")
+                wrap_as_link(paragraph, label,
+                             anchor=targets.require_anchor(url, label),
+                             base_size=base_size, bold=bold, italic=italic)
+            else:
+                wrap_as_link(paragraph, label, url=url, base_size=base_size,
+                             bold=bold, italic=italic)
+            continue
+        elif targets is not None and XREF.search(token):
+            write_xref_text(paragraph, token, targets, base_size=base_size,
+                            bold=bold, italic=italic)
             continue
         else:
-            run = paragraph.add_run(token)
+            plain(paragraph, token, base_size, bold, italic, link=_link)
+            continue
         if bold:
             run.bold = True
         if italic:
             run.italic = True
         if base_size:
             run.font.size = Pt(base_size)
+        if _link:
+            run.font.color.rgb = RGBColor.from_string(LINK_COLOR)
+            run.font.underline = True
         if run.font.name is None:
             run.font.name = BODY_FONT
 
@@ -281,7 +493,7 @@ def split_row(line: str) -> list[str]:
     return [c.strip() for c in cells]
 
 
-def add_table(doc, rows: list[list[str]]) -> None:
+def add_table(doc, rows: list[list[str]], targets: "Targets | None" = None) -> None:
     header, body = rows[0], rows[2:]
     cols = max(len(r) for r in rows)
     table = doc.add_table(rows=1, cols=cols)
@@ -318,7 +530,8 @@ def add_table(doc, rows: list[list[str]]) -> None:
             para = cells[i].paragraphs[0]
             para.paragraph_format.space_before = Pt(1)
             para.paragraph_format.space_after = Pt(1)
-            write_inline(para, raw[i] if i < len(raw) else "", base_size=8.5)
+            write_inline(para, raw[i] if i < len(raw) else "", base_size=8.5,
+                         targets=targets)
     doc.add_paragraph().paragraph_format.space_after = Pt(4)
 
 
@@ -549,6 +762,9 @@ def build(md_path: Path, out_path: Path, *, section_level: int = 2,
         len(lines),
     )
     fields = parse_title_page(lines, body_start)
+    # Read every heading first: a reference to Appendix E resolves from
+    # page 3, which it cannot do if the targets are discovered as they arrive.
+    targets = collect_targets(lines, body_start, section_level)
 
     section = doc.sections[0]
     add_first_page_header(section, spec, fields.get("header", ""), banner)
@@ -564,8 +780,10 @@ def build(md_path: Path, out_path: Path, *, section_level: int = 2,
     force_field_update(doc)
 
     # ---- body -------------------------------------------------------------
-    counts = {"sections": 0, "headings": 0, "tables": 0, "code_blocks": 0}
+    counts = {"sections": 0, "headings": 0, "tables": 0, "code_blocks": 0,
+              "xrefs": 0}
     section_headings = []
+    heading_index = 0
     i = body_start
     while i < len(lines):
         line = lines[i]
@@ -588,7 +806,7 @@ def build(md_path: Path, out_path: Path, *, section_level: int = 2,
                 rows.append(split_row(lines[i]))
                 i += 1
             if len(rows) >= 2:
-                add_table(doc, rows)
+                add_table(doc, rows, targets)
                 counts["tables"] += 1
             continue
 
@@ -613,7 +831,13 @@ def build(md_path: Path, out_path: Path, *, section_level: int = 2,
                 force_page_break_before(para)
                 section_headings.append(para)
                 counts["sections"] += 1
+            # Headings are link destinations, not link sources: a bookmark, and
+            # no cross-reference scan, so a heading named "Appendix B" does not
+            # link to itself.
             write_inline(para, m.group(2))
+            add_bookmark(para, targets.order[heading_index]["bookmark"],
+                         heading_index + 1)
+            heading_index += 1
             counts["headings"] += 1
             continue
 
@@ -629,7 +853,7 @@ def build(md_path: Path, out_path: Path, *, section_level: int = 2,
             para.paragraph_format.left_indent = Inches(0.3)
             para.paragraph_format.space_before = Pt(6)
             shade(para._p.get_or_add_pPr(), NOTE_SHADE)
-            write_inline(para, " ".join(quote), base_size=10)
+            write_inline(para, " ".join(quote), base_size=10, targets=targets)
             continue
 
         # Prose wraps across source lines, and a **bold span** or `code span`
@@ -656,7 +880,8 @@ def build(md_path: Path, out_path: Path, *, section_level: int = 2,
                 style="List Bullet 2" if nested else "List Bullet")
             para.paragraph_format.space_after = Pt(3)
             write_inline(para, " ".join(filter(None,
-                                              [m.group(2), take_continuation()])))
+                                              [m.group(2), take_continuation()])),
+                         targets=targets)
             continue
 
         m = re.match(r"^(\s*)(\d+)\. +(.*)$", line)
@@ -672,17 +897,20 @@ def build(md_path: Path, out_path: Path, *, section_level: int = 2,
             run.bold = True
             run.font.name = BODY_FONT
             write_inline(para, " ".join(filter(None,
-                                              [m.group(3), take_continuation()])))
+                                              [m.group(3), take_continuation()])),
+                         targets=targets)
             continue
 
         write_inline(doc.add_paragraph(),
-                     " ".join(filter(None, [line.strip(), take_continuation()])))
+                     " ".join(filter(None, [line.strip(), take_continuation()])),
+                     targets=targets)
 
     # ---- the guarantee ----------------------------------------------------
     missing = [p.text[:60] for p in section_headings if not has_page_break_before(p)]
     if missing:
         raise TemplateError(
             "section headings would not start on a new page: " + repr(missing))
+    counts["xrefs"] = targets.links
 
     doc.save(out_path)
     return counts
