@@ -1,7 +1,7 @@
 # Prompt 01 — Analyze the application
 
 **Agent:** [`../agents/instrumentation-architect.agent.md`](../agents/instrumentation-architect.agent.md)  
-**Skills:** `engagement-intake`, `instrumentation-analyze`  
+**Skills:** `engagement-intake`, `instrumentation-analyze`, `baggage-propagation`, `cardinality-budget`, `customer-doc-render`, `deliverable-review`  
 **Inputs:** `docs/observability/engagement-inputs.yaml`  
 **Human:** TAM + customer architect. Docs-only. No application code changes.
 
@@ -14,11 +14,15 @@ read this file.
 
 ## System reminder
 
-Follow `instrumentation-architect.agent.md`. You are analyzing, not opening application PRs. Auto-instrumentation is a bootstrap, never a complete design. The deliverable is still the **full Always-on contract** (BT catalog, use cases, baggage/attribution/span-link/SPA-route-change **code with placeholders**, Collector/MPM). “Analysis” does not mean inventory-only.
+Follow `instrumentation-architect.agent.md`. You are analyzing, not opening application PRs. Auto-instrumentation is a bootstrap, never a complete design. **"Analysis" does not mean inventory-only** — this document carries the full contract: the business-transaction and workflow catalogue, custom metrics, detectors with thresholds, SLIs and SLOs, composite use cases, and the enablement code with token placeholders.
+
+**This is the only customer-facing document.** There is no separate instrumentation-recommendations deliverable; the lower-layer, per-note detail the coding agents work from is built by Prompt 02 as a wiki, not as a second document.
 
 Choose the course of action from **how Splunk Observability Cloud, Splunk Enterprise, and Cisco ThousandEyes work** (RUM, APM, Infrastructure, Log Observer Connect, Synthetics, MetricSets, APM Business Workflows, Related Content, Events API, MPM, Enterprise indexes/`trace_id`, ThousandEyes path tests) plus the evidence in this session. Do not assume an industry, a storefront, named journeys, a cloud, or a prior customer document. Discover journeys from the diagrams and scan. Assign each question to one platform: journeys/code → Observability Cloud; durable logs/audit → Enterprise; internet/CDN/SaaS path → ThousandEyes.
 
-Do not search the workspace for unrelated documents. If an existing schema or guide is attached below, extend that taxonomy.
+Do not search the workspace for unrelated documents. If an existing schema or wiki is present for this customer and application, extend that taxonomy.
+
+**The Word artifact opens the way a review expects:** a simple title page, then the Table of Contents on its own page, then one section per page. Declare the title page in a `<!-- title-page ... -->` block (subtitle, tagline, author, audience, date, version, header) and put nothing else above the first `##`. Application identifier, environment scanned, realm, percentile standard, in-scope languages and buses, evidence basis, recorded tool versions, and token handling go in **`### Document control and evidence basis`** at the end of Purpose and Scope. Markdown `##` renders as Word `Heading 1` and starts a new page; `###` becomes `Heading 2`. The renderer rejects prose above the first section heading and refuses to save a document whose sections would not break, so run `verify_render.py` and expect exit 0. Layout spec: `skills/customer-doc-render/references/document-format.md`.
 
 ## Inputs
 
@@ -36,7 +40,7 @@ The fields this run depends on:
 
 | Field | Used for |
 |---|---|
-| `engagement.application`, `.customer`, `.scope`, `.date` | Filenames and headings |
+| `engagement.application`, `.customer`, `.scope`, `.date` | Filenames, headings, and the wiki path |
 | `artifacts.diagrams`, `.narrative` | The diagram-driven backend map |
 | `artifacts.prior_contract`, `.prior_schema` | An existing taxonomy to **extend**, never rename for taste |
 | `surfaces.*` | Whether there is a front-end deep scan, and whether authenticated journeys are reachable |
@@ -50,33 +54,35 @@ The fields this run depends on:
 Never request or display an ingest token. The inputs file records who holds a
 credential, not its value.
 
+## First: is this a first run or a delta?
+
+Check for `wiki/<Customer>/<app>/index.md`.
+
+- **Absent** — first run. Full analysis.
+- **Present with entries in `meta/run-log.md`** — **delta run**. Read `meta/versions.md`, `meta/decisions.md`, the accepted BT and workflow names, and the finding frontmatter *before* scanning. Reuse every accepted name and every finding id. Section 3 gains `### Changes since v<N-1>`, and the document reports what changed rather than reproducing itself. Rules: [`../skills/references/incremental-runs.md`](../skills/references/incremental-runs.md).
+- **Present but the application has been rebuilt** — declare a **re-baseline** explicitly, archive the old wiki, and say in the document why the baseline was reset.
+
 ## Task
 
-If URLs were provided, **deep-scan** the front end (HTML, script order, competing agents, bundle placement of RUM, CSP, 404 shells, consent, third-party pixels). Combine with a **diagram-driven** backend map.
+If URLs were provided, **deep-scan** the front end (HTML, script order, competing agents, bundle placement of RUM, CSP, 404 shells, consent, third-party pixels, and anything reachable that should not be). Combine with a **diagram-driven** backend map.
 
-Produce `docs/observability/analysis-<app>-<date>.md` or a Word file with **every Always-on heading** from the architect agent (not an inventory stub). **Lead with a target breakdown analysis** in the same shape as Appendix A. Prompt 02 deepens schema JSON and span-tree detail — it does not introduce workflows, baggage code, attribution, SPA/React route-change code, or the span-link table for the first time.
+Produce `docs/observability/analysis-<app>-<date>.md` and the `.docx` rendered from it, with **every section** from [`../skills/references/document-template.md`](../skills/references/document-template.md) in that order. That table is the only section list; do not restate it here and do not reorder it. If evidence is missing, keep the heading and write **Not in evidence** plus the evidence that would settle it.
 
-Cover every heading in the architect agent’s **Always-on contract sections** table (same order). If evidence is missing, keep the heading and write **Not in evidence**. Do not drop a section because this is “analysis.”
+Six things this run gets wrong if it is not deliberate about them:
 
-1. **Target breakdown (Observed)** — this is the first page:
-   - Composition (SPA/MFE/host vs remotes, API, batch)
-   - Client surfaces / bundles and load-order timeline if a browser exists
-   - Third parties and overlapping EUM/RUM
-   - Backend accounts, buses, partners, DLQ/failure points from diagrams
-   - **Business transaction registry** (every BT/surface discovered)
-   - **Named integration flows** (hops across accounts/buses; what is already in Observability Cloud vs reconstructed in logs)
-   - Unknowns
-2. **Course of action** and **Missing portfolio components** — after the inventory, not before. Phase 0 yes/no; first journey; which products. Present/partial/absent for RUM, APM, Infra, Synthetics, Enterprise+LOC, ThousandEyes.
-3. **Front-end deep scan** — keep the heading; one-line “no browser” if none. Name the router and whether navigations are client-side.
-3a. **RUM SPA / React route changes** — if React or any SPA client router is in evidence: host-owned listener **code** (`useLocation` / `usePathname` / Pages `Router.events` / History), bounded `page.type`, `SplunkRum.setGlobalAttributes`, `route.change` span. `document-load` does not cover client navigations. MPA-only: **Not in evidence**.
-4. **Identity and baggage enablement code** — attribute table + `SplunkRum.init` / language SDK, `SpanProcessor.onStart`, identity-success baggage write, backend composite propagator, bus inject/extract. Placeholders only for tokens.
-5. **Shared libraries** — package name per language; remotes must not `init`.
-6. **RUM ad / first-touch attribution** (if a browser exists) — classifier function, `session.ad_attribution`, bounded baggage subset, first vs last touch. If no UTM/pixels, still include the section (`direct`/`organic`).
-7. **Parent-child vs span links** — table of every join; span links only for webhooks, batch consume, DLQ redrive, schedulers, scatter/gather. Not for RUM fetch → APM handler.
-8. **Collector / MPM / PII redaction** — OTTL classify; no cookie dump; dimension vs attribute-only lists.
-9. **Business Transactions and Workflows (Recommendations)** — one heading per BT; **exhaustive** dotted-kebab workflow lists (`{surface}.{object}.{verb}`). Enumerate from namedChunks, remotes, GTM/feature/payment flags, UI/translation copy, and diagrams. Do not stop at three generic verbs per BT.
-10. **Monitoring use cases** for every ranked journey and every A.6 flow: workflow identity, span events, attributes (dimension yes/no), metrics, **dashboard** (variables, KPI row, p90, LOC, event overlay), **detectors** (including silent-outage), cross-workflow joins labeled **continue trace** | **span link** | **attribute pivot**. Then **Dashboards Overview** and a **Detectors Catalog**.
-11. **Identity gaps**, **Phase 0 blockers** (observed only), **Bootstrap vs contract**, and **Questions for the human** (numbered). Draft detectors anyway; arm after trust. Do not guess PII-adjacent fields.
-12. **Appendix C pre-delivery checklist** from the architect agent — every Always-on row yes/no.
+1. **Critical Findings is section 4** — immediately after the architecture it was found in, ordered by severity, each with observation and evidence, the files and surfaces involved, what is exposed and to whom, the risk, the remediation path split into stop-the-bleeding and structural, and how to verify. Stable ids from the start. A credential is recorded by shape and location, never by value. Spec: [`../skills/references/critical-findings.md`](../skills/references/critical-findings.md).
+2. **Nothing in the body sits under an appendix heading.** Appendices are the attribute dictionary, long code variants, the agent work-order plan, supplementary evidence, and open items — five topic-scoped appendices, not a container for the analysis.
+3. **The catalogue is sections 19–25, contiguous and in this order**: Business Transactions (flat), Workflows (flat), Custom Metrics, BT-Aligned Workflows (the join), Detectors and Thresholds, Service Level Indicators and Objectives, Composite Use Cases. Each is defined in terms of the one before it.
+4. **Every detector has a threshold** that is a measured baseline, a customer-agreed target traced to an SLO, or a labelled placeholder with the query that will replace it. There is no fourth option.
+5. **Every SLI is written in the customer's voice first**, its query second, with good/total events, objective, window, error budget, and burn-rate alerting. Spec: [`../skills/references/service-levels.md`](../skills/references/service-levels.md).
+6. **Every `Use Case:` opens with `Narrative`** — plain language, no attribute or span names, who the user is and what the business loses when it fails. Then identity, attributes, span events, metrics, SLI, dashboard, detectors, and the join labelled **continue trace** | **span link** | **attribute pivot**.
 
-Do not omit BT catalog, use cases, baggage code, attribution, SPA/React route-change code, or the span-link table because this is “analysis.” Do not modify application source.
+**Cross-Cutting Attributes and Baggage Propagation is mandatory** and is the section most often dropped. Attribute-set table plus all five code subsections: provider bootstrap, the `SpanProcessor.onStart` stamp over an explicit key allowlist, the identity-success baggage write, the backend composite propagator, and producer inject / consumer extract once per bus in the architecture section. Prose saying "use baggage" does not satisfy it. If a piece does not exist in the target, keep the heading and write **Not in evidence — do not deploy** with the pattern shown anyway.
+
+Also required, and easy to drop because they are not sections: record the tool, SDK, semconv, collector, and provider **versions** this document was designed against in `### Document control and evidence basis`, and call out any breaking change since the last run. Spec: [`../skills/references/version-currency.md`](../skills/references/version-currency.md).
+
+## Acceptance
+
+A reader who stops after six pages leaves knowing the architecture and every finding worth acting on this week. A staff engineer can implement Phase 0 and the first workflow without asking what a `workflow.step` value is, how baggage is stamped, or whether a join continues the trace. A TAM can configure MetricSets and Business Workflows from the portfolio mapping. Every row of the pre-delivery checklist in Appendix E is `yes`, and `verify_render.py` exits 0.
+
+Do not modify application source. Do not produce a second customer-facing document.

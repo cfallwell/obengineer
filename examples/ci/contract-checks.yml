@@ -1,0 +1,167 @@
+# Layer 1 — deterministic contract checks.
+#
+# Lives in the application repository. No model, no credentials, runs on every pull
+# request, and fails the build. Adopt this before either of the other two layers: it is
+# what produces the signal that tells anyone whether the later layers helped.
+#
+# Start with schema-agreement and single-init. Both catch real defects immediately.
+# Add the rest as the contract sections they enforce actually land.
+
+name: instrumentation contract
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+env:
+  # Where the contract lives. Adjust if the wiki is a submodule or a separate repo.
+  SCHEMA: docs/observability/attribute-schema.json
+  WIKI: wiki/ACME/storefront # <- customer/app
+
+jobs:
+  contract:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # the freshness check needs the diff
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      # ---------------------------------------------------------------- #
+      # 1. Schema agreement: no attribute in code that the contract does
+      #    not name. This is the check that keeps the dictionary honest.
+      # ---------------------------------------------------------------- #
+      - name: attributes exist in the schema
+        run: |
+          python3 - <<'PY'
+          import json, pathlib, re, sys, os
+
+          schema = json.loads(pathlib.Path(os.environ["SCHEMA"]).read_text())
+          known = {a["name"] for a in schema["attributes"]}
+
+          # setAttribute("x", …) / setAttributes({ "x": … }) — widen for your stack.
+          pattern = re.compile(r'setAttributes?\(\s*[\'"]([a-z][a-z0-9_.]+)[\'"]')
+          offenders = []
+          for path in pathlib.Path("src").rglob("*.[jt]s"):
+              for n, line in enumerate(path.read_text(errors="ignore").splitlines(), 1):
+                  for key in pattern.findall(line):
+                      if key not in known and not key.startswith(("http.", "db.", "messaging.")):
+                          offenders.append(f"{path}:{n}: {key}")
+
+          if offenders:
+              print("Attributes not in the contract schema:\n  " + "\n  ".join(offenders))
+              print("\nAdd them to the schema through an analysis run, or remove them.")
+              sys.exit(1)
+          print(f"ok — every emitted attribute is one of the {len(known)} in the schema")
+          PY
+
+      # ---------------------------------------------------------------- #
+      # 2. Single init. More than one provider init silently halves RUM
+      #    data, and it is invisible in review because each call site
+      #    looks correct on its own.
+      # ---------------------------------------------------------------- #
+      - name: exactly one provider init
+        run: |
+          count=$(grep -rn --include='*.[jt]s' --include='*.[jt]sx' \
+                    -E '(SplunkRum|provider)\.init\(' src | grep -v '\.test\.' | wc -l)
+          echo "init call sites: $count"
+          grep -rn --include='*.[jt]s' --include='*.[jt]sx' \
+            -E '(SplunkRum|provider)\.init\(' src | grep -v '\.test\.' || true
+          if [ "$count" -ne 1 ]; then
+            echo "::error::expected exactly 1 provider init, found $count"
+            exit 1
+          fi
+
+      # ---------------------------------------------------------------- #
+      # 3. Workflow registry: no workflow.name literal that the wiki has
+      #    no note for. Dashboards and detectors are built on these
+      #    strings, so an unregistered one is telemetry nobody can chart.
+      # ---------------------------------------------------------------- #
+      - name: workflow names are registered
+        run: |
+          python3 - <<'PY'
+          import pathlib, re, sys, os
+
+          wiki = pathlib.Path(os.environ["WIKI"]) / "workflows"
+          registered = {p.stem for p in wiki.glob("*.md")}
+          used = {}
+          pattern = re.compile(r'workflow\.name[\'"]?\s*[:,=]\s*[\'"]([a-z0-9.\-]+)[\'"]')
+          for path in pathlib.Path("src").rglob("*.[jt]s"):
+              for n, line in enumerate(path.read_text(errors="ignore").splitlines(), 1):
+                  for name in pattern.findall(line):
+                      used.setdefault(name, f"{path}:{n}")
+
+          unknown = {k: v for k, v in used.items() if k not in registered}
+          if unknown:
+              print("workflow.name values with no wiki note:")
+              for name, where in sorted(unknown.items()):
+                  print(f"  {where}: {name}")
+              sys.exit(1)
+          print(f"ok — {len(used)} workflow names, all registered")
+          PY
+
+      # ---------------------------------------------------------------- #
+      # 4. Dimension budget: no metric dimensioned on a key the schema
+      #    marks attribute-only. That chart renders empty, and an empty
+      #    chart reads as an outage.
+      # ---------------------------------------------------------------- #
+      - name: no metric dimensioned on an attribute-only key
+        run: |
+          python3 - <<'PY'
+          import json, pathlib, re, sys, os
+
+          schema = json.loads(pathlib.Path(os.environ["SCHEMA"]).read_text())
+          attr_only = {a["name"] for a in schema["attributes"] if not a.get("dimension")}
+          offenders = []
+          for path in pathlib.Path("src").rglob("*.[jt]s"):
+              text = path.read_text(errors="ignore")
+              for n, line in enumerate(text.splitlines(), 1):
+                  if "add(" not in line and "record(" not in line:
+                      continue
+                  for key in attr_only:
+                      if f'"{key}"' in line or f"'{key}'" in line:
+                          offenders.append(f"{path}:{n}: {key}")
+          if offenders:
+              print("attribute-only keys used as metric dimensions:\n  " + "\n  ".join(offenders))
+              sys.exit(1)
+          print("ok — no attribute-only key is a metric dimension")
+          PY
+
+      # ---------------------------------------------------------------- #
+      # 5. Wiki freshness. This is the check people leave out and the one
+      #    that keeps every other check true: without it the wiki is
+      #    documentation, and documentation is wrong within a week.
+      # ---------------------------------------------------------------- #
+      - name: wiki updated alongside instrumentation
+        if: github.event_name == 'pull_request'
+        run: |
+          base=origin/${{ github.base_ref }}
+          changed_code=$(git diff --name-only "$base"... -- src | grep -cE '\.(ts|js|tsx|jsx)$' || true)
+          changed_wiki=$(git diff --name-only "$base"... -- "$WIKI" | wc -l)
+          touched_telemetry=$(git diff "$base"... -- src \
+            | grep -cE '^\+.*(workflow\.name|setAttribute|addEvent|createCounter|createHistogram)' || true)
+
+          echo "code files: $changed_code, telemetry lines: $touched_telemetry, wiki files: $changed_wiki"
+          if [ "$touched_telemetry" -gt 0 ] && [ "$changed_wiki" -eq 0 ]; then
+            echo "::error::this PR changes telemetry but updates no wiki note."
+            echo "Update the status and updated fields of the notes you touched, in this commit."
+            exit 1
+          fi
+
+      # ---------------------------------------------------------------- #
+      # 6. No credential shape anywhere near telemetry.
+      # ---------------------------------------------------------------- #
+      - name: no credential in telemetry
+        run: |
+          if grep -rnE '(setAttribute|addEvent|span\.set)[^;]*(AKIA|ghp_|sk_live_|eyJ[A-Za-z0-9_-]{20,})' src; then
+            echo "::error::credential-shaped literal reaching telemetry"
+            exit 1
+          fi
+          echo "ok"

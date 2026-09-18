@@ -1,0 +1,168 @@
+# Layer 3 — incremental configuration delivery.
+#
+# Lives in the OBSERVABILITY CONFIG repository, not the application repository. They
+# have different reviewers, different blast radius, and different cadence: an
+# application revert should not revert a dashboard, and a detector threshold change
+# should not need an application reviewer.
+#
+# One repo for all of a customer's applications, one workspace per environment.
+#
+# Two ordering rules, both learned the expensive way:
+#
+#   Configuration follows telemetry, never leads it. A dashboard applied before the
+#   attribute exists renders empty, and an empty panel is indistinguishable from an
+#   outage to whoever is looking at it. The gate below is a real check, not a comment.
+#
+#   Detectors arrive disabled. They are armed by a separate, deliberate change once
+#   the signal has been clean for the agreed window.
+
+name: observability config
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+env:
+  TF_VERSION: "1.9.8"
+  # Realm, not a token. Tokens come from secrets, below.
+  SFX_API_URL: https://api.us1.signalfx.com
+
+jobs:
+  plan:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        environment: [stage, prod]
+    defaults:
+      run:
+        working-directory: environments/${{ matrix.environment }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+
+      - name: fmt
+        run: terraform fmt -check -recursive
+
+      - name: init
+        run: terraform init -input=false
+
+      # Proves every resource type and argument name is real, offline, without
+      # credentials. Cheap, and it catches the class of failure that reads like a
+      # provider bug: a resource that does not exist. A registry documentation page
+      # is not evidence — that site answers 200 for pages that do not exist.
+      - name: provider schema check
+        run: terraform providers schema -json > /dev/null && echo "schema ok"
+
+      - name: validate
+        run: terraform validate
+
+      # The dimension gate. A chart or detector grouped by a key the schema marks
+      # attribute-only renders empty, and it is found at 3am by someone who then
+      # stops trusting the whole dashboard group.
+      - name: every group_by exists and is dimension-eligible
+        working-directory: .
+        run: python3 scripts/check_dimensions.py --schema contracts/attribute-schema.json
+
+      # The telemetry gate. Do not apply configuration for an attribute the tenant has
+      # never seen. Deploy timing is not a substitute for asking.
+      - name: telemetry exists for what this plan charts
+        if: github.ref == 'refs/heads/main'
+        env:
+          SFX_AUTH_TOKEN: ${{ secrets.SFX_AUTH_TOKEN }}
+        working-directory: .
+        run: python3 scripts/check_telemetry_present.py --schema contracts/attribute-schema.json
+
+      - name: plan
+        env:
+          SFX_AUTH_TOKEN: ${{ secrets.SFX_AUTH_TOKEN }}
+          OBSERVABILITY_API_TOKEN: ${{ secrets.SYNTHETICS_API_TOKEN }}
+          SPLUNK_AUTH_TOKEN: ${{ secrets.SPLUNK_AUTH_TOKEN }}
+        run: |
+          terraform plan -input=false -lock-timeout=5m -out=tfplan
+          terraform show -no-color tfplan > plan.txt
+
+      # Resource counts by type, so a reviewer sees the shape before the detail. A
+      # plan that creates forty detectors when the pull request said "one dashboard"
+      # is visible here in one line and invisible in 900 lines of diff.
+      - name: summarise the plan
+        run: |
+          echo "### ${{ matrix.environment }}" >> "$GITHUB_STEP_SUMMARY"
+          grep -oE '^  # [a-z_]+\.' plan.txt | sort | uniq -c | sort -rn \
+            >> "$GITHUB_STEP_SUMMARY" || true
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+          tail -5 plan.txt >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+
+      # Fail loudly on the two changes nobody wants to discover after the fact.
+      - name: refuse to arm a detector implicitly
+        run: |
+          if grep -qE '^\s*[~+]\s*disabled\s*=\s*false' plan.txt; then
+            echo "::error::this plan enables a detector."
+            echo "Arming is a separate, deliberate change once the signal is trusted."
+            exit 1
+          fi
+          if grep -qE '^\s*-\s*resource "signalfx_(dashboard|detector)' plan.txt; then
+            echo "::warning::this plan destroys a dashboard or detector. Confirm it is not an unimported hand-made object."
+          fi
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: plan-${{ matrix.environment }}
+          path: environments/${{ matrix.environment }}/tfplan
+
+  apply:
+    needs: plan
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    runs-on: ubuntu-latest
+    strategy:
+      # Never both environments at once, and stage first.
+      max-parallel: 1
+      matrix:
+        environment: [stage, prod]
+    # A human approves the plan, every time, at least until the estate has been
+    # stable for a quarter. A dashboard applied without review is recoverable; a
+    # detector applied without review pages someone at 03:00 on a threshold nobody
+    # agreed to.
+    environment:
+      name: ${{ matrix.environment }}
+    defaults:
+      run:
+        working-directory: environments/${{ matrix.environment }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: plan-${{ matrix.environment }}
+          path: environments/${{ matrix.environment }}
+
+      - name: init
+        run: terraform init -input=false
+
+      # Apply the reviewed plan file, not a fresh one. Re-planning at apply time
+      # means the thing approved is not the thing applied.
+      - name: apply
+        env:
+          SFX_AUTH_TOKEN: ${{ secrets.SFX_AUTH_TOKEN }}
+          OBSERVABILITY_API_TOKEN: ${{ secrets.SYNTHETICS_API_TOKEN }}
+          SPLUNK_AUTH_TOKEN: ${{ secrets.SPLUNK_AUTH_TOKEN }}
+        run: terraform apply -input=false -lock-timeout=5m tfplan
+
+      # Close the loop the wiki depends on: what Terraform now owns, so the next
+      # as-code run imports rather than duplicates.
+      - name: record what is now managed
+        run: |
+          terraform state list > /tmp/state.txt
+          echo "Update wiki as-code/inventory.md with this state list in the follow-up PR."

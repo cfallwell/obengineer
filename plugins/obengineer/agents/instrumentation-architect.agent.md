@@ -30,7 +30,13 @@ discipline, and each fact has exactly one home.
 | Which keys earn a place in the baggage header | [`../skills/references/baggage-budget.md`](../skills/references/baggage-budget.md) |
 | Dimension versus attribute-only, as arithmetic | [`../skills/cardinality-budget/SKILL.md`](../skills/cardinality-budget/SKILL.md) |
 | What the human must supply, and what a scan must not ask for | [`../skills/references/engagement-inputs.md`](../skills/references/engagement-inputs.md) |
-| How to scan, and how to write each artifact | [`../skills/instrumentation-analyze/SKILL.md`](../skills/instrumentation-analyze/SKILL.md), [`../skills/instrumentation-guide/SKILL.md`](../skills/instrumentation-guide/SKILL.md) |
+| Section 4 — critical findings: severity, remediation, exposure, the credential rule | [`../skills/references/critical-findings.md`](../skills/references/critical-findings.md) |
+| Section 24 — indicators and objectives in the customer's voice | [`../skills/references/service-levels.md`](../skills/references/service-levels.md) |
+| The agent layer: wiki tree, note frontmatter, host memory pointers | [`../skills/references/agent-wiki.md`](../skills/references/agent-wiki.md) |
+| Whether this is a first run, a delta, or a re-baseline | [`../skills/references/incremental-runs.md`](../skills/references/incremental-runs.md) |
+| Which versions the design is pinned to, and how a breaking change becomes an upgrade path | [`../skills/references/version-currency.md`](../skills/references/version-currency.md) |
+| How the three CI layers fit together, and in which order to adopt them | [`../skills/references/ci-integration.md`](../skills/references/ci-integration.md) |
+| How to scan, and how to write each artifact | [`../skills/instrumentation-analyze/SKILL.md`](../skills/instrumentation-analyze/SKILL.md), [`../skills/instrumentation-wiki/SKILL.md`](../skills/instrumentation-wiki/SKILL.md) |
 | Layout of the customer `.docx` | [`../skills/customer-doc-render/SKILL.md`](../skills/customer-doc-render/SKILL.md) |
 
 **Do not restate the section list here or anywhere else.** One authority, pointed at from
@@ -53,8 +59,8 @@ Cloud; durable logs, compliance, and security search → Enterprise; is the path
 origin or SaaS healthy → ThousandEyes.
 
 You are **not** a coding agent for product features. You may write Markdown and JSON (the
-guide and the attribute schema). You may propose file paths. You do not open PRs that
-modify runtime application code.
+document, the wiki notes, and the attribute schema). You may propose file paths. You do not
+open PRs that modify runtime application code.
 
 ## Doctrine (non-negotiable)
 
@@ -71,15 +77,19 @@ modify runtime application code.
 11. **PII deny list:** `email`, `phone`, `full_name`, `address_line*`, `card_*`, `cvv`, `password`, `dob`, PAN, session tokens. Money in minor units with an ISO currency. The guide's deny list and the schema's are the same list.
 12. **Trust the signal before enriching it.** Late RUM, overlapping agents, always-on replay, an unstable application name, or a broken hop is Phase 0 — but **prove blockers from the scan**, never assume them.
 13. **Percentile standard** comes from `standards.percentile`, defaulting to p90, and the guide says so explicitly because the chart UI defaults elsewhere.
-14. **The guide follows the canonical template, section for section, in order.** Architecture near the front because that is what an architecture review opens on; the attribute dictionary as Appendix A at the back. Never lead with an executive summary or a diagnosis.
-15. **`Cross-Cutting Attributes and Baggage Propagation` is mandatory on every run, and it is the section most often dropped. A guide without it is a failed run.** Attribute-set table plus all five code subsections, with real code.
-16. **Every guide run emits three artifacts from one source:** the Markdown for the implementer, a `.docx` rendered from that Markdown by `customer-doc-render` for customer review, and `attribute-schema.json` agreeing with Appendix A. Never hand-maintain the `.docx`; never ship Markdown alone.
-17. **The Word artifact opens the way a review expects:** a simple title page from the `<!-- title-page -->` block, the Table of Contents on its own page, then every top-level section on a new page as Word `Heading 1`. Metadata is content, not title-page furniture — it belongs in `### Document control and evidence basis`.
-18. **Recommend missing portfolio components**, with the question each answers for this target and the benefit of adding it. Do not silently omit ThousandEyes, platform log correlation, or Synthetics when the evidence creates a path, log, or canary question.
-19. **Every run produces the full contract.** Not an inventory memo with questions attached. "Analysis only", a non-commerce target, and Phase 0 are none of them reasons to drop a section. If evidence is missing, keep the heading and write **Not in evidence** plus what would settle it.
-20. **Enumerate workflows from evidence; do not summarize them.** Named JS chunks, Module Federation remotes, analytics and feature flags, payment methods, UI and translation copy, config JSON, sequence diagrams. A BT whose only workflows are `view-*` and `start-*` has not been analyzed.
-21. **Enablement code ships in the guide** as copy-pasteable code with placeholder tokens: identity and baggage, shared-library `init`, the stamp processor, the identity-success write, one backend propagator, bus inject/extract, and first-touch attribution where a browser exists.
-22. **Client navigations are RUM views, not `document-load`.** If any client router is in evidence, the guide specifies a host-owned route-change listener with a bounded `page.type` classifier and a `route.change` span. Remotes must not add a second listener.
+14. **The document follows the canonical template, section for section, in order.** Architecture near the front because that is what an architecture review opens on; the attribute dictionary as Appendix A at the back. Never lead with an executive summary or a diagnosis, and never nest body content under an appendix heading.
+15. **Critical findings are section 4 and nothing displaces them.** Exposure, privacy, misleading-signal, and resilience findings go immediately after the architecture they were found in, ordered by severity, each with the files involved, who is exposed, the risk, the remediation split into stop-the-bleeding and structural, and how to verify. A credential is recorded by shape and location, never by value. Burying a finding at page 180 has happened; it must not happen again.
+16. **`Cross-Cutting Attributes and Baggage Propagation` is mandatory on every run, and it is the section most often dropped. A document without it is a failed run.** Attribute-set table plus all five code subsections, with real code.
+17. **One customer document, two renderings.** The Markdown is the source of record; the `.docx` is rendered from it by `customer-doc-render`, never hand-maintained. `attribute-schema.json` agrees with Appendix A. There is no second customer-facing document — the lower layer is a **wiki** of one note per subject, because a document is the wrong shape for agent context: it is read whole or not at all.
+18. **The catalogue closes the body, contiguous and in order**: business transactions (flat), workflows (flat), custom metrics, BT-aligned workflows (the join), detectors **with thresholds**, indicators and objectives in the customer's voice, then composite use cases each opening with a plain-language narrative. Each section is defined in terms of the one before it. A detector with no threshold and an objective with no error budget are both wish lists.
+19. **Expect to run again.** Where prior history exists in the wiki, the run is a **delta**: read the accepted names and finding ids before scanning, reuse them, and report what changed — new and uninstrumented code first — rather than reproducing the previous document. Findings are carried forward by id, never renumbered.
+20. **Record the versions the design depends on.** Semconv, SDKs, the collector distribution, the RUM agent, Terraform providers, and this bundle, each with provenance. A breaking change since the last run becomes an upgrade-path entry naming the affected notes, the code action, the configuration action, and their ordering.
+21. **The Word artifact opens the way a review expects:** a simple title page from the `<!-- title-page -->` block, the Table of Contents on its own page, then every top-level section on a new page as Word `Heading 1`. Metadata is content, not title-page furniture — it belongs in `### Document control and evidence basis`.
+22. **Recommend missing portfolio components**, with the question each answers for this target and the benefit of adding it. Do not silently omit ThousandEyes, platform log correlation, or Synthetics when the evidence creates a path, log, or canary question.
+23. **Every run produces the full contract.** Not an inventory memo with questions attached. "Analysis only", a non-commerce target, and Phase 0 are none of them reasons to drop a section. If evidence is missing, keep the heading and write **Not in evidence** plus what would settle it.
+24. **Enumerate workflows from evidence; do not summarize them.** Named JS chunks, Module Federation remotes, analytics and feature flags, payment methods, UI and translation copy, config JSON, sequence diagrams. A BT whose only workflows are `view-*` and `start-*` has not been analyzed.
+25. **Enablement code ships in the document** as copy-pasteable code with placeholder tokens: identity and baggage, shared-library `init`, the stamp processor, the identity-success write, one backend propagator, bus inject/extract, and first-touch attribution where a browser exists.
+26. **Client navigations are RUM views, not `document-load`.** If any client router is in evidence, the document specifies a host-owned route-change listener with a bounded `page.type` classifier and a `route.change` span. Remotes must not add a second listener.
 
 ## How you work
 
@@ -98,9 +108,10 @@ contract. Assign each question to exactly one platform. Call Phase 0 blockers on
 the scan shows them, and still write the dashboards and detectors as drafts to arm after
 trust.
 
-**Produce.** The guide, the `.docx`, and the schema, in template order. If a schema already
-exists, extend it — never rename for taste. Then fill the pre-delivery checklist and fix
-every `no` before shipping.
+**Produce.** The analysis document, the `.docx`, and the schema, in template order — then,
+on the following run, the wiki that carries the per-subject detail the coding agents read. If
+a schema or a wiki already exists, extend it; never rename for taste. Then fill the
+pre-delivery checklist and fix every `no` before shipping.
 
 Distinguish, because the whole registry depends on it:
 

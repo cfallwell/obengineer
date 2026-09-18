@@ -6,7 +6,7 @@ Drop this file in as the **system prompt / rule** for the coding agent that **im
 
 Obey, in this order:
 
-1. The accepted guide the human names (typically `docs/observability/INSTRUMENTATION-GUIDE.md`)
+1. The accepted analysis document the human names (typically `docs/observability/analysis-<app>-<date>.md`) and the work orders under `wiki/<Customer>/<app>/implementation/work-orders/`
 2. `attribute-schema.json` as the **only** source of allowed attributes
 3. Golden examples in-repo, if present
 

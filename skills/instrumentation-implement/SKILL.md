@@ -28,7 +28,7 @@ Agent definition: [`../../agents/instrumentation-implementer.agent.md`](../../ag
 Prompt: [`../../prompts/03-implement-instrumentation.md`](../../prompts/03-implement-instrumentation.md).
 
 **Precondition:** a guide the human has accepted. Without one, stop and run
-`instrumentation-guide` first. Implementing against a draft produces attribute names
+`instrumentation-analyze` first. Implementing against a draft produces attribute names
 that have to be renamed across every service later.
 
 ## PR order

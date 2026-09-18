@@ -3,16 +3,18 @@ name: deliverable-review
 description: >-
   Grade a produced instrumentation deliverable against the completeness bar and
   the pre-delivery checklist before a human sees it — every required section
-  present, the cross-cutting section with all five code subsections, no dimension
+  present, critical findings at section 4 with remediation and exposure, the
+  cross-cutting section with all five code subsections, every detector carrying a
+  threshold, every objective an error budget, every use case a narrative, no dimension
   list without cardinality arithmetic, no baggage key without a named consumer, no
   join without a labelled type, the dictionary agreeing with the schema, and no
   credential anywhere. Returns a pass or a numbered list of defects with the file
-  and line for each. Use when the user types $deliverable-review, asks whether a
-  guide or analysis is ready, asks what is missing from a deliverable, or at the
-  end of any run that produced one. Reads and reports; does not rewrite.
+  and line for each. Use when the user types $deliverable-review, asks whether an
+  analysis document or a wiki is ready, asks what is missing from a deliverable, or at
+  the end of any run that produced one. Reads and reports; does not rewrite.
 metadata:
   author: obengineer
-  version: 0.1.0
+  version: 0.2.0
   category: observability
 ---
 
@@ -62,6 +64,7 @@ conditional and how each condition resolved:
 | A bus exists | Messaging Observability, and one `Messaging boundary — <bus>` subsection per bus |
 | Log Observer Connect is entitled | Log Observer Connect panels; otherwise they must **not** appear |
 | Session replay accepted in writing | Always-on replay may be recommended; otherwise it must not be |
+| A wiki exists with prior runs | Section 3 must carry `Changes since v<N-1>`, and findings must be carried forward by id rather than renumbered |
 
 A conditional section that is absent is a defect. A conditional section present as
 `Not in evidence` **with the evidence that would settle it** is a pass. A conditional section
@@ -91,7 +94,16 @@ part of the pass:
 - **Every workflow name matches `standards.workflow_naming`**, and every `workflow.step` enumeration is bounded and stated.
 - **The APM Business Workflow tag is named**, once, with its value shape. A TAM cannot configure a description.
 - **No credential.** Token shapes, `-----BEGIN`, long random strings, and anything the deny list names. This check fails the deliverable outright rather than adding a defect row.
-- **Cross-references resolve.** A guide that cites a section number that does not exist was reorganised without being re-read.
+- **Cross-references resolve.** A document that cites a section number that does not exist was reorganised without being re-read.
+- **Critical findings are section 4, severity-ordered, and complete.** Each carries observation with evidence, files and surfaces, exposure, risk, remediation split into stop-the-bleeding and structural, and a runnable verification. A finding with no remediation is a complaint. Every finding at or above the agreed severity appears in the phase plan by id.
+- **Stable finding ids**, and on a repeat run the prior ids are all accounted for — fixed, open, regressed, or accepted. A finding that vanished between two versions is a blocking defect: the reader cannot tell whether it was fixed or dropped.
+- **No body content under an appendix heading.** The appendices are the dictionary, long code variants, the work-order plan, supplementary evidence, and open items. Anything the argument depends on sitting under one is a defect.
+- **Catalogue sections 19–25 present, contiguous, and in order**, with the flat BT list, the flat workflow list, and the join all present rather than one standing in for the others.
+- **Every detector has a threshold**, and that threshold is a measured baseline with its window, an agreed target traced to an objective, or a labelled placeholder with the query that will replace it. There is no fourth category, and an unlabelled invented number is indistinguishable from a tuned one once the document ships.
+- **Every objective has an error budget and a burn-rate rule**, and its user-facing statement reads as something a customer would say. An SLO expressed only as a server metric is a defect against [`../references/service-levels.md`](../references/service-levels.md).
+- **Detector thresholds and objectives agree.** They are the same commitment written twice; a disagreement means one of them is wrong.
+- **Every `Use Case:` opens with `Narrative`**, in plain language, with no attribute or span names in it.
+- **Versions recorded with provenance**, and any breaking change since the last run present as an upgrade-path entry naming affected notes, the code action, the configuration action, and their ordering.
 
 ### Step 4 — Verify the rendered artifact, not just the Markdown
 
@@ -105,7 +117,7 @@ second source of truth, and it will disagree with the Markdown within a week.
 FAIL — 4 defects, 1 blocking
 
 BLOCKING
-  1. Credential-shaped value at INSTRUMENTATION-GUIDE.md:412
+  1. Credential-shaped value at analysis-<app>-2026-09-18.md:412
      Row: "No ingest token, secret, or credential value anywhere"
      Fix: replace with ${SPLUNK_ACCESS_TOKEN}
 

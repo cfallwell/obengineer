@@ -3,7 +3,7 @@
 **Agent:** [`../agents/observability-as-code.agent.md`](../agents/observability-as-code.agent.md)  
 **Skills:** `observability-as-code`, `cardinality-budget`  
 **Inputs:** `docs/observability/engagement-inputs.yaml` + the accepted guide and schema  
-**Depends on:** an accepted `INSTRUMENTATION-GUIDE.md` and `attribute-schema.json`. Runs in parallel with Prompt 03 — configuration and instrumentation do not block each other.  
+**Depends on:** an accepted analysis document and `attribute-schema.json`. Runs in parallel with Prompt 03 — configuration and instrumentation do not block each other.  
 **Output:** a `terraform/` tree, a `terraform plan`, and a handover. **No `apply`.**
 
 **Invoke it, do not paste it.** `/obengineer-as-code` reads this file in place.
@@ -29,7 +29,8 @@ You produce a **plan**. You do not run `apply`, and you do not create anything i
 
 | Source | Used for |
 |---|---|
-| `docs/observability/INSTRUMENTATION-GUIDE.md` | Dashboards Overview, Detectors Catalog, use cases, phase plan |
+| `docs/observability/analysis-<app>-<date>.md` | Dashboards Overview, Detectors and Thresholds, SLIs and SLOs, use cases, phase plan |
+| `wiki/<Customer>/<app>/detectors/`, `slos/`, `as-code/` | Per-detector thresholds with provenance, objectives, and what the tenant already has |
 | `docs/observability/attribute-schema.json` | Which keys are dimension-eligible, which are attribute-only |
 | `engagement-inputs.yaml` → `tenancy.o11y_realm`, `.environments` | Provider `api_url`, one workspace per environment |
 | `engagement-inputs.yaml` → `entitlement.synthetics` | Run frequency times locations, before proposing checks |

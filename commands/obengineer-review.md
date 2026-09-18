@@ -8,7 +8,7 @@ Read `{{OBENGINEER_ROOT}}/skills/deliverable-review/SKILL.md` and follow it. The
 `{{OBENGINEER_ROOT}}/skills/references/document-template.md` — its section list, completeness
 bar, and pre-delivery checklist. If this skill and the rubric disagree, the rubric wins.
 
-Grade the file named below, defaulting to `docs/observability/INSTRUMENTATION-GUIDE.md`.
+Grade the file named below, defaulting to the analysis document under `docs/observability/`.
 Use `docs/observability/engagement-inputs.yaml` to decide which conditional sections apply.
 
 Report every defect with the rubric row, the file, the line, and the smallest fix. Do not

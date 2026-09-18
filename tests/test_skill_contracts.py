@@ -56,7 +56,7 @@ def frontmatter(path: Path) -> tuple[dict, str]:
 def test_skills_exist():
     assert CANONICAL_SKILLS, "no canonical skills found under skills/"
     for expected in ("baggage-propagation", "customer-doc-render",
-                     "instrumentation-analyze", "instrumentation-guide",
+                     "instrumentation-analyze", "instrumentation-wiki",
                      "instrumentation-implement"):
         assert expected in CANONICAL_SKILLS, f"missing skill: {expected}"
 
@@ -100,9 +100,9 @@ def test_skill_scripts_are_executable_python(skill):
 def test_cross_cutting_section_is_mandatory_everywhere():
     surfaces = {
         "architect agent": AGENTS / "instrumentation-architect.agent.md",
-        "prompt 02": PROMPTS / "02-develop-instrumentation-guide.md",
+        "prompt 01": PROMPTS / "01-analyze-application.md",
         "document template": SKILLS / "references" / "document-template.md",
-        "guide skill": SKILLS / "instrumentation-guide" / "SKILL.md",
+        "analyze skill": SKILLS / "instrumentation-analyze" / "SKILL.md",
     }
     for label, path in surfaces.items():
         assert SECTION in path.read_text(), (
@@ -160,7 +160,7 @@ ONCE_MISSING_SECTIONS = (
     "Course of action",
     "Missing portfolio components",
     "RUM SPA / client route changes",
-    "Custom meters (business vs developer/execution)",
+    "Custom Metrics",
     "Splunk portfolio mapping",
     "Phased plan and exit criteria",
     "Bootstrap vs non-goals",
@@ -326,6 +326,237 @@ def test_installer_offers_every_host_and_installs_every_skill():
 
 
 # --------------------------------------------------------------------------- #
+# the customer document: findings up front, catalogue at the back, one artifact
+# --------------------------------------------------------------------------- #
+TEMPLATE = SKILLS / "references" / "document-template.md"
+
+# Order matters and is the request: architecture, then the findings it produced,
+# then what to do, then the catalogue the build reads, then appendices.
+CATALOGUE_SECTIONS = (
+    "Business Transactions",
+    "Workflows",
+    "Custom Metrics",
+    "BT-Aligned Workflows",
+    "Detectors and Thresholds",
+    "Service Level Indicators and Objectives",
+    "Composite Use Cases",
+)
+
+
+def test_findings_come_immediately_after_the_architecture():
+    """A reachable credential was once on page 180 of a document nobody finished.
+
+    Section 4 exists so a reader who stops after six pages still leaves with the
+    list. Anything placed between the architecture and the findings pushes them
+    down, so the ordering is asserted rather than described.
+    """
+    text = TEMPLATE.read_text()
+    arch = text.index("| 3 | **\\<Frontend\\> and Backend Architecture (Observed)**")
+    findings = text.index("| 4 | **Critical Findings** |")
+    course = text.index("| 5 | Course of action |")
+    assert arch < findings < course, (
+        "critical findings must sit between the architecture section and the "
+        "course of action"
+    )
+
+    spec = (SKILLS / "references" / "critical-findings.md").read_text()
+    for required in ("Exposure", "Risk if unaddressed", "Remediation path",
+                     "Verification", "Files and surfaces involved"):
+        assert required in spec, f"findings spec is missing: {required}"
+    assert "Never the value" in spec, (
+        "the findings spec must forbid reproducing a discovered credential"
+    )
+
+
+def test_catalogue_sections_are_contiguous_and_ordered():
+    text = TEMPLATE.read_text()
+    positions = []
+    for name in CATALOGUE_SECTIONS:
+        marker = f"**{name}** | H1 |"
+        assert marker in text, (
+            f"'{name}' must be a top-level section of the customer document; the "
+            "catalogue is what the implementer and the Terraform run read"
+        )
+        positions.append(text.index(marker))
+    assert positions == sorted(positions), (
+        "catalogue sections are out of order; each is defined in terms of the one "
+        f"before it. Required order: {' -> '.join(CATALOGUE_SECTIONS)}"
+    )
+    # And they close the body: nothing but appendices after the last one.
+    assert text.index("| Appendix A: Master Attribute Dictionary") > positions[-1]
+
+
+def test_appendices_are_topic_scoped_not_a_container_for_the_document():
+    """The whole analysis was once nested under 'Appendix A — Target breakdown'.
+
+    That put the substance of the document behind a heading that reads as
+    optional. Appendices now have named topics, and the rule is stated where a
+    run will read it.
+    """
+    text = TEMPLATE.read_text()
+    for appendix in ("Appendix A: Master Attribute Dictionary",
+                     "Appendix B: Supplementary Code and Configuration",
+                     "Appendix C: Instrumentation Agent Work Order",
+                     "Appendix D: Supplementary Evidence",
+                     "Appendix E: Open Items and Assumptions"):
+        assert appendix in text, f"missing topic-scoped appendix: {appendix}"
+    assert "Body content under an appendix heading" in text, (
+        "the completeness bar must fail a document that hides body content in an "
+        "appendix"
+    )
+
+
+def test_every_detector_needs_a_threshold_and_every_objective_a_budget():
+    text = TEMPLATE.read_text()
+    assert "A detector with no threshold" in text
+    assert "error budget" in text
+    levels = (SKILLS / "references" / "service-levels.md").read_text()
+    for required in ("Good events", "Total events", "error budget",
+                     "burn-rate", "user-facing statement"):
+        assert required.lower() in levels.lower(), (
+            f"the service-levels spec must define {required}"
+        )
+    assert "voice" in levels.lower(), (
+        "objectives are written in the customer's voice first, the query second"
+    )
+
+
+def test_use_cases_open_with_a_narrative():
+    text = TEMPLATE.read_text()
+    narrative = text.index("**`Narrative`**")
+    identity = text.index("**`Workflow identity`**")
+    assert narrative < identity, (
+        "the narrative comes first; a use case whose narrative cannot be written "
+        "does not exist"
+    )
+
+
+# --------------------------------------------------------------------------- #
+# one customer document, and a wiki underneath it
+# --------------------------------------------------------------------------- #
+def test_there_is_exactly_one_customer_facing_document():
+    """The second document duplicated the first and was read by nobody.
+
+    Customers did not read it and agents could not load it without spending
+    their whole context on irrelevant material. Nothing may reintroduce it.
+    """
+    template = TEMPLATE.read_text()
+    assert "One customer document, two renderings" in template
+    assert "A second customer-facing document" in template, (
+        "the completeness bar must fail a run that produces two documents"
+    )
+
+    wiki_prompt = (PROMPTS / "02-build-instrumentation-wiki.md").read_text()
+    assert "Do not produce a second document" in wiki_prompt
+    assert ".docx" in wiki_prompt, "the wiki prompt must say it emits no .docx"
+
+    # Naming the retired artifact to say it is retired is fine; producing or
+    # reading it is not, so the check is for a live path reference.
+    stale = [
+        path
+        for path in sorted(ROOT.rglob("*.md"))
+        if PLUGIN not in path.parents
+        and "docs/observability/INSTRUMENTATION-GUIDE.md" in path.read_text()
+    ]
+    assert not stale, (
+        "the retired guide artifact is still read or written by "
+        + ", ".join(str(p.relative_to(ROOT)) for p in stale)
+    )
+
+
+def test_wiki_is_addressable_and_host_readable():
+    spec = (SKILLS / "references" / "agent-wiki.md").read_text()
+    # Customer above application, because tenancy and entitlement are
+    # customer-level facts that must not be duplicated per application.
+    assert spec.index("<Customer>/") < spec.index("<app>/")
+    for required in ("business-transactions/", "workflows/", "use-cases/",
+                     "findings/", "detectors/", "slos/", "work-orders/",
+                     "meta/", "index.md"):
+        assert required in spec, f"wiki layout is missing {required}"
+    # Frontmatter is what makes it machine-usable rather than a folder of prose.
+    for field in ("type:", "status:", "updated:", "tags:"):
+        assert field in spec, f"note frontmatter must carry {field}"
+    assert "[[wikilinks]]" in spec
+    for host in (".cursor/rules", "CLAUDE.md", "AGENTS.md"):
+        assert host in spec, f"the wiki must be reachable from {host}"
+    assert "Do not load the whole wiki" in spec, (
+        "the retrieval rule is the point of having a wiki rather than a document"
+    )
+
+
+# --------------------------------------------------------------------------- #
+# the run repeats: versions tracked, deltas not rewrites, CI possible
+# --------------------------------------------------------------------------- #
+def test_versions_are_tracked_with_provenance_and_an_upgrade_path():
+    spec = (SKILLS / "references" / "version-currency.md").read_text()
+    for component in ("semconv", "collector", "tf.signalfx", "rum_agent"):
+        assert component in spec, f"version tracking must cover {component}"
+    assert "Provenance" in spec or "provenance" in spec, (
+        '"how do you know" is the question that matters when a number is wrong'
+    )
+    assert "Upgrade path" in spec
+    assert "unverified" in spec, (
+        "a version that could not be checked must be marked, not reused as though "
+        "it were confirmed"
+    )
+    # A breaking change has to reach the agents, and code cuts over before config.
+    assert "Action for the implementer agent" in spec
+    assert "Action for the as-code agent" in spec
+
+
+def test_repeat_runs_are_deltas_and_carry_findings_forward():
+    spec = (SKILLS / "references" / "incremental-runs.md").read_text()
+    assert "Changes since v" in spec
+    for required in ("New surfaces and services", "Drift", "re-baseline"):
+        assert required.lower() in spec.lower(), f"delta spec is missing {required}"
+    assert "never renumbered" in spec, (
+        "finding ids outlive the document; renumbering invalidates every ticket"
+    )
+    template = TEMPLATE.read_text()
+    assert "Changes since v<N-1>" in template, (
+        "the template must carry the delta subsection, or a repeat run has nowhere "
+        "to put what changed"
+    )
+
+
+def test_ci_layers_are_ordered_and_have_runnable_examples():
+    spec = (SKILLS / "references" / "ci-integration.md").read_text()
+    one = spec.index("Contract checks")
+    two = spec.index("Agent instrumentation")
+    three = spec.index("Configuration delivery")
+    assert one < two < three, (
+        "adopt deterministic checks before agent pull requests; without them "
+        "nothing measures whether the pull requests helped"
+    )
+    assert "never pushes to the default branch" in spec
+    assert "Detectors arrive disabled" in spec
+    assert "own repository" in spec, (
+        "observability configuration belongs beside neither the application's "
+        "reviewers nor its revert history"
+    )
+
+    examples = ROOT / "examples" / "ci"
+    for name in ("contract-checks.yml", "agent-instrument.yml",
+                 "terraform-plan-apply.yml", "README.md"):
+        assert (examples / name).is_file(), f"missing CI example: {name}"
+    # An example that leaks a token teaches the wrong thing more effectively
+    # than the prose teaches the right one.
+    for workflow in examples.glob("*.yml"):
+        text = workflow.read_text()
+        # Full-length shapes only: these workflows legitimately contain the
+        # prefixes as part of a detection pattern.
+        assert not re.search(
+            r"(AKIA[A-Z0-9]{16}|ghp_[A-Za-z0-9]{20,}|sk_live_[A-Za-z0-9]{20,}"
+            r"|eyJ[A-Za-z0-9]{20,}\.)", text), (
+            f"{workflow.name} contains a credential-shaped literal"
+        )
+        if "secrets." in text:
+            assert "${{ secrets." in text, (
+                f"{workflow.name} must read tokens from the secret store"
+            )
+
+
+# --------------------------------------------------------------------------- #
 # the approved layout: simple title page, contents, one section per page
 # --------------------------------------------------------------------------- #
 def test_house_style_is_committed_not_remembered():
@@ -354,10 +585,10 @@ def test_title_page_contract_is_stated_everywhere_it_is_enforced():
     template = (SKILLS / "references" / "document-template.md").read_text()
     architect = (AGENTS / "instrumentation-architect.agent.md").read_text()
     skill = (SKILLS / "customer-doc-render" / "SKILL.md").read_text()
-    prompt = (ROOT / "prompts" / "02-develop-instrumentation-guide.md").read_text()
+    prompt = (ROOT / "prompts" / "01-analyze-application.md").read_text()
 
     for name, text in (("template", template), ("architect agent", architect),
-                       ("render skill", skill), ("prompt 02", prompt)):
+                       ("render skill", skill), ("prompt 01", prompt)):
         assert "title-page" in text, f"{name} must declare the title-page block"
         assert "Document control and evidence basis" in text, (
             f"{name} must send metadata to a body section, not the title page"

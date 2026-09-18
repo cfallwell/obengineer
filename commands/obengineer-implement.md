@@ -6,7 +6,7 @@ Run obengineer run 3 — implement one slice.
 
 1. Adopt `{{OBENGINEER_ROOT}}/agents/instrumentation-implementer.agent.md` as your
    operating contract for this run.
-2. Load `docs/observability/INSTRUMENTATION-GUIDE.md` and
+2. Load `docs/observability/analysis-<app>-<date>.md` and
    `docs/observability/attribute-schema.json`. **Stop if the human has not accepted the
    guide.** This run implements a contract; it does not invent one.
 3. Follow `{{OBENGINEER_ROOT}}/prompts/03-implement-instrumentation.md`.

@@ -6,7 +6,7 @@ Run obengineer run 4 — observability as code.
 
 1. Adopt `{{OBENGINEER_ROOT}}/agents/observability-as-code.agent.md` as your operating
    contract for this run.
-2. Load `docs/observability/INSTRUMENTATION-GUIDE.md`,
+2. Load `docs/observability/analysis-<app>-<date>.md`,
    `docs/observability/attribute-schema.json`, and
    `docs/observability/engagement-inputs.yaml`. **Stop if the human has not accepted the
    guide** — this run configures a contract, it does not invent one.

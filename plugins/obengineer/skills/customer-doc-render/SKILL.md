@@ -46,7 +46,7 @@ rule 1, and it refuses to save one that breaks rule 3.
 
 ## When to use
 
-- Any run of `instrumentation-guide` (the guide is not delivered until both artifacts exist).
+- Any run of `instrumentation-analyze` (the analysis is not delivered until both renderings exist).
 - The analysis memo from `instrumentation-analyze`, when the customer wants to review findings before the contract.
 - Any Markdown deliverable heading to a review meeting.
 
@@ -71,7 +71,7 @@ author: <Name, Role>
 audience: <Customer> engineering, platform SRE, and the Splunk TAM
 date: 2026-09-17
 version: v3
-header: Implementation Recommendations
+header: Application Analysis
 -->
 
 ## Purpose and Scope
@@ -90,8 +90,8 @@ and a contents entry.
 ### Step 2 — Render
 
 ```bash
-python3 scripts/render_customer_doc.py docs/observability/INSTRUMENTATION-GUIDE.md \
-    -o "docs/observability/<Customer>-<App>-Instrumentation-Recommendations-<date>.docx"
+python3 scripts/render_customer_doc.py docs/observability/analysis-<app>-<date>.md \
+    -o "docs/observability/<Customer>-<App>-Analysis-<date>.docx"
 ```
 
 Markdown `##` becomes Word `Heading 1` and starts a new page; `###` becomes
@@ -112,8 +112,8 @@ a level too deep.
 ### Step 3 — Verify, do not eyeball
 
 ```bash
-python3 scripts/verify_render.py docs/observability/INSTRUMENTATION-GUIDE.md \
-    "docs/observability/<Customer>-<App>-Instrumentation-Recommendations-<date>.docx"
+python3 scripts/verify_render.py docs/observability/analysis-<app>-<date>.md \
+    "docs/observability/<Customer>-<App>-Analysis-<date>.docx"
 ```
 
 The verifier is fence-aware, so YAML and SignalFlow comments inside code blocks are

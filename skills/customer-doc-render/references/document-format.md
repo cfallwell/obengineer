@@ -43,7 +43,7 @@ paragraph spacing, which survives a font change.
 
 The first page carries a banner image across the top of the header
 (`assets/header-banner.png`, 7.66 in wide) with the document class beside it —
-`Implementation Recommendations` for a guide, `Application Analysis` for an
+`Application Analysis` for the customer document, or any label the source declares, for an
 analysis memo. `w:titlePg` keeps the banner off every other page.
 
 **Nothing else belongs on page 1.** Application identifiers, environment scanned,

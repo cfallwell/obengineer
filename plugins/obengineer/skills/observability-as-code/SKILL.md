@@ -147,5 +147,5 @@ The handover states, in this order:
 
 - Does not run `apply`, and does not create anything in a tenant. It produces code and a plan.
 - Does not add telemetry. A dashboard needing a metric nobody emits is a finding for [`../instrumentation-implement/SKILL.md`](../instrumentation-implement/SKILL.md).
-- Does not decide which journeys or dimensions exist. That is [`../instrumentation-guide/SKILL.md`](../instrumentation-guide/SKILL.md) and [`../cardinality-budget/SKILL.md`](../cardinality-budget/SKILL.md).
+- Does not decide which journeys or dimensions exist. That is [`../instrumentation-analyze/SKILL.md`](../instrumentation-analyze/SKILL.md) and [`../cardinality-budget/SKILL.md`](../cardinality-budget/SKILL.md).
 - Does not redesign the contract. A contract that cannot be configured is one to send back, with the specific reason.

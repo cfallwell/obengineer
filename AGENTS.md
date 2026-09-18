@@ -72,22 +72,43 @@ It is now mandatory in four places, and
 `tests/test_skill_contracts.py::test_cross_cutting_section_is_mandatory_everywhere`
 fails if any of them stops requiring it:
 
-- `agents/instrumentation-architect.agent.md` — doctrine 15
-- `prompts/02-develop-instrumentation-guide.md`
+- `agents/instrumentation-architect.agent.md` — doctrine 16
+- `prompts/01-analyze-application.md`
 - `skills/references/document-template.md`
-- `skills/instrumentation-guide/SKILL.md`
+- `skills/instrumentation-analyze/SKILL.md`
 
 Do not weaken that test. If the section genuinely does not apply to a target, the
 guide keeps the heading and writes **Not in evidence**; the requirement to emit the
 heading does not move.
 
-## Deliverables are produced in pairs
+## One customer document, and a wiki underneath it
 
-Every guide run emits Markdown **and** a `.docx` rendered from that Markdown by
+The analyze run emits Markdown **and** a `.docx` rendered from that Markdown by
 `customer-doc-render`, plus `attribute-schema.json`. The Word file is a build
 artifact: never hand-maintained, always regenerated, and verified with
 `verify_render.py` before delivery. A `.docx` with a modification time newer than
 its source means somebody edited the wrong file.
+
+There is exactly **one** customer-facing document. A second one existed —
+`INSTRUMENTATION-GUIDE.md`, nominally for the implementers — and it failed in both
+directions: it duplicated the analysis so the two disagreed, no customer read it, and no
+agent could load it without spending its whole context on material irrelevant to the task
+in hand. The lower layer is now a wiki of one note per subject under
+`wiki/<Customer>/<app>/`; see `skills/references/agent-wiki.md`. If a change would
+reintroduce a second document, it is the wrong change.
+
+## Two placements that are load-bearing
+
+**Critical findings are section 4.** Immediately after the architecture, ordered by
+severity, each with the files involved, the exposure, the risk, the remediation, and the
+verification. They were once written into whichever section discovered them, which put a
+reachable credential on page 180 of a document nobody read to the end. See
+`skills/references/critical-findings.md`.
+
+**Nothing in the body sits under an appendix heading.** An earlier revision nested the
+whole analysis under "Appendix A — Target breakdown", which put the substance of the
+document behind a heading that reads as optional. Appendices are the attribute dictionary,
+long code variants, the agent work-order plan, supplementary evidence, and open items.
 
 ## Coding Agent Definition of Done
 
@@ -146,11 +167,11 @@ run `pip install python-docx` before trusting a green run.
 
 | Skill | Purpose |
 |---|---|
-| `$instrumentation-analyze` | Deep-scan a target and inventory what is actually there before designing anything |
-| `$instrumentation-guide` | Write the full instrumentation contract; emits Markdown, `.docx`, and the attribute schema |
+| `$instrumentation-analyze` | Deep-scan a target and write the single customer document: architecture observed, critical findings, and the full recommendation catalogue |
+| `$instrumentation-wiki` | Turn the accepted analysis into the agent wiki: one note per BT, workflow, use case, finding, detector, and objective, plus work orders and tracked versions |
 | `$baggage-propagation` | Design the cross-cutting attribute set and the baggage propagation contract |
 | `$customer-doc-render` | Render a Markdown deliverable as a verified customer-review Word document |
-| `$instrumentation-implement` | Land an accepted guide as small reviewable PRs, with the CI checks that keep it enforced |
+| `$instrumentation-implement` | Land an accepted analysis as small reviewable PRs from the wiki work orders, with the CI checks that keep it enforced |
 | `$engagement-intake` | Collect the inputs no scan can measure into one `engagement-inputs.yaml`, asking only for what is missing |
 | `$cardinality-budget` | Decide dimension versus attribute-only as arithmetic against the customer's entitlement |
 | `$observability-as-code` | Emit the accepted contract as Terraform across the three Splunk providers, at three persona levels |

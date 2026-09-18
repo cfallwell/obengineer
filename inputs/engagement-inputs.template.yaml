@@ -28,7 +28,7 @@ engagement:
 artifacts:
   diagrams: []                 # C4, sequence, MFE map, account/VPC — paths or "attached in chat"
   narrative: ""                # path to an architecture write-up, if one exists
-  prior_contract: ""           # an existing INSTRUMENTATION-GUIDE.md to extend, not replace
+  prior_contract: ""           # an existing analysis document to extend, not replace
   prior_schema: ""             # an existing attribute-schema.json — reuse its key names
   house_style_docx: ""         # an approved .docx whose layout the output must match
   front_end_scan_notes: ""     # path, or "no browser", or "" to scan live

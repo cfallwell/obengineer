@@ -19,7 +19,7 @@ leaks onto it:
     tagline: Splunk Observability Cloud - OpenTelemetry - RUM
     author: Name, Technical Account Manager
     audience: Customer engineering
-    header: Implementation Recommendations
+    header: Application Analysis
     -->
 
 Any other content between the title and the first section heading is rejected:

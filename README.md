@@ -65,14 +65,14 @@ claude plugin marketplace add /path/to/obengineer
 
 ## Invoke
 
-Five commands, in order. They read the prompt files in place, so the run contract has
-exactly one copy and it is the copy under review — nothing is pasted into a chat.
+Seven commands; the first five run in order. They read the prompt files in place, so the run
+contract has exactly one copy and it is the copy under review — nothing is pasted into a chat.
 
 | Command | Does | Produces |
 |---|---|---|
 | `/obengineer-intake` | Asks for the inputs no scan can measure, in one round | `engagement-inputs.yaml` |
-| `/obengineer-analyze` | Deep-scans the front end, maps the backends from diagrams, inventories the existing portfolio | `analysis-<app>-<date>.md` |
-| `/obengineer-guide` | Writes the full contract, renders it for the customer, emits the schema | `INSTRUMENTATION-GUIDE.md`, a `.docx`, `attribute-schema.json` |
+| `/obengineer-analyze` | Deep-scans the front end, maps the backends from diagrams, raises the findings, and writes the full recommendation set | `analysis-<app>-<date>.md`, a customer `.docx`, `attribute-schema.json` |
+| `/obengineer-wiki` | Turns the accepted analysis into the notes the agents retrieve by subject | `wiki/<Customer>/<app>/`, work orders, tracked versions |
 | `/obengineer-implement` | Lands one contract slice with the CI check that keeps it enforced | A single-concern PR |
 | `/obengineer-as-code` | Generates Terraform for the contract at three persona levels | A `terraform/` tree and a plan |
 | `/obengineer-review` | Grades a deliverable against the completeness bar before a human sees it | A pass, or numbered defects with lines |
@@ -81,14 +81,14 @@ exactly one copy and it is the copy under review — nothing is pasted into a ch
 ```
 /obengineer-intake
 /obengineer-analyze
-/obengineer-guide
+/obengineer-wiki
 /obengineer-implement workflow: checkout.payment.authorize
 /obengineer-as-code
 ```
 
 `/obengineer-implement` and `/obengineer-as-code` are independent — instrumentation lands in
 application repos, configuration lands in a tenant — so they can run in parallel once the
-guide is accepted.
+analysis is accepted.
 
 Or name a skill directly when you want one piece rather than a whole run:
 `$baggage-propagation`, `$cardinality-budget`, `$customer-doc-render`.
@@ -120,14 +120,30 @@ Four runs, each with a run contract and an agent definition:
 
 | Run | Prompt | Output |
 |---|---|---|
-| Analyze | [`prompts/01-analyze-application.md`](prompts/01-analyze-application.md) | `analysis-<app>-<date>.md` — what the target actually is, measured |
-| Guide | [`prompts/02-develop-instrumentation-guide.md`](prompts/02-develop-instrumentation-guide.md) | `INSTRUMENTATION-GUIDE.md`, a customer `.docx`, and `attribute-schema.json` |
+| Analyze | [`prompts/01-analyze-application.md`](prompts/01-analyze-application.md) | **The customer document** — architecture observed, critical findings, and the full recommendation set — plus its `.docx` and `attribute-schema.json` |
+| Wiki | [`prompts/02-build-instrumentation-wiki.md`](prompts/02-build-instrumentation-wiki.md) | `wiki/<Customer>/<app>/` — one note per BT, workflow, use case, finding, detector, and objective, plus work orders and tracked versions |
 | Implement | [`prompts/03-implement-instrumentation.md`](prompts/03-implement-instrumentation.md) | Small reviewable PRs, one contract slice each |
 | Configure | [`prompts/04-generate-observability-as-code.md`](prompts/04-generate-observability-as-code.md) | A `terraform/` tree and a plan — executive, SRE, and engineer modules |
 
-Every guide ships **twice** — Markdown for the engineers working the PRs, and a Word
-document for customer architecture review, rendered from the same Markdown so the two
-cannot disagree.
+**One customer document, two renderings.** Markdown as the source of record, and a Word
+document for architecture review rendered from that same Markdown so the two cannot disagree.
+There is no separate "instrumentation recommendations" deliverable: it duplicated the
+analysis, no customer read it, and no agent could load it without spending its whole context
+on material irrelevant to the task in hand.
+
+The document leads with what a reader needs in the first six pages — the observed
+architecture, then **critical findings** ordered by severity with remediation, files, and
+exposure — and closes with the catalogue the build works from: business transactions,
+workflows, custom metrics, the BT-to-workflow join, detectors with thresholds, indicators and
+objectives in the customer's voice, then the composite use cases.
+
+The lower layer is a **wiki**, one note per subject under `wiki/<Customer>/<app>/`, with
+frontmatter and wikilinks that Obsidian and the Cursor, Claude, and Codex memory features can
+read. It is what makes a periodic run a delta rather than a rewrite, and what makes a CI
+pipeline possible at all. See
+[`skills/references/agent-wiki.md`](skills/references/agent-wiki.md),
+[`skills/references/incremental-runs.md`](skills/references/incremental-runs.md), and
+[`skills/references/ci-integration.md`](skills/references/ci-integration.md).
 
 ## Skills
 
@@ -135,7 +151,8 @@ cannot disagree.
 |---|---|
 | `$engagement-intake` | Collect and validate the inputs no scan can reach — artifacts, tenancy, entitlement, privacy regime, who deploys what — into one file, asking only for what is missing |
 | `$instrumentation-analyze` | Deep-scan the front end (script order, competing agents, where the agent initialises, router, CSP, consent, status-versus-content), map backends and buses, inventory the existing portfolio footprint, enumerate business transactions from evidence |
-| `$instrumentation-guide` | Write the full contract in canonical template order and emit all three artifacts |
+| `$instrumentation-analyze` (document) | Write the customer document in canonical template order — findings at section 4, the catalogue closing the body — and emit all three artifacts |
+| `$instrumentation-wiki` | Turn the accepted analysis into one note per subject, with work orders, tracked versions, and the host memory pointers |
 | `$baggage-propagation` | The cross-cutting attribute set and W3C Baggage contract: set once, propagate, stamp on every span via `SpanProcessor.onStart` — and the byte budget that decides which keys earn a place in the header |
 | `$cardinality-budget` | Dimension versus attribute-only as arithmetic against entitlement: MTS cost per promotion, MMS and TMS sizing, and the classifiers that replace raw URLs and topic names |
 | `$customer-doc-render` | Render Markdown to a customer-review `.docx` — simple title page, Table of Contents, one section per page, `Confidential` footer — then prove the render matches its source |
@@ -149,7 +166,7 @@ cannot disagree.
 make test                # contract tests over the agentry and the renderer round-trip
 make check               # packaging consistency: plugin mirror, manifest versions
 make sync-plugin-skills  # refresh plugin copies and host links from canonical skills
-make render FILE=../docs/observability/INSTRUMENTATION-GUIDE.md
+make render FILE=../docs/observability/analysis-<app>-<date>.md
 ```
 
 `skills/` is the single source. The plugin carries copies so an installed bundle is

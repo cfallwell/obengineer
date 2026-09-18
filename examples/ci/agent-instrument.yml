@@ -1,0 +1,145 @@
+# Layer 2 — the agent proposes instrumentation as a pull request.
+#
+# Lives in the application repository. Needs a model and a token, so it is the layer
+# with real blast radius. Three rules make it safe enough to leave on:
+#
+#   1. It opens a pull request. It never pushes to the default branch. No exception.
+#   2. One work order per pull request. A PR that instruments four workflows is a PR
+#      that gets approved without being read.
+#   3. It implements what the contract already names. If the diff needs a workflow,
+#      meter, or dimension that is not in the wiki, it stops and says which section
+#      is missing rather than inventing one — that is an analysis run's job, and the
+#      boundary is what makes these pull requests trustworthy.
+#
+# Enable the label trigger first and live with it for a month. Move to the schedule
+# or the watched-path trigger only once the pull requests are being merged roughly
+# as-is; if they are being heavily edited, fix the contract, not the trigger.
+
+name: obengineer instrument
+
+on:
+  # Start here: a human decides when.
+  pull_request:
+    types: [labeled]
+  # Then this: catches newly shipped code before it ships uninstrumented.
+  push:
+    branches: [main]
+    paths:
+      - "src/routes/**"
+      - "src/services/**"
+  # And optionally a slow cadence, one work order at a time.
+  schedule:
+    - cron: "0 6 * * 1"
+  workflow_dispatch:
+    inputs:
+      work_order:
+        description: "Work order to execute, e.g. 03-checkout-workflow-spans"
+        required: false
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  # Never two open bot pull requests. Queueing them is how a repo ends up with nine
+  # and then a policy against them.
+  group: obengineer-instrument
+  cancel-in-progress: false
+
+jobs:
+  propose:
+    if: >-
+      github.event_name != 'pull_request' ||
+      github.event.label.name == 'obengineer:instrument'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: refuse if a bot pull request is already open
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          open=$(gh pr list --label 'obengineer' --state open --json number --jq 'length')
+          if [ "$open" -gt 0 ]; then
+            echo "A previous proposal is still open. Review it before generating another."
+            exit 0
+          fi
+
+      - name: pick the next work order
+        id: pick
+        run: |
+          # Explicit input wins; otherwise the lowest-numbered work order whose
+          # status is not implemented.
+          if [ -n "${{ inputs.work_order }}" ]; then
+            echo "order=wiki/ACME/storefront/implementation/work-orders/${{ inputs.work_order }}.md" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          next=$(grep -l 'status: \(proposed\|accepted\)' \
+                   wiki/ACME/storefront/implementation/work-orders/*.md | sort | head -1)
+          if [ -z "$next" ]; then
+            echo "No open work order. Nothing to propose."
+            echo "order=" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "order=$next" >> "$GITHUB_OUTPUT"
+
+      # Replace with your agent runner. Whatever it is, it must be given:
+      #   - the work order as the scope
+      #   - the wiki index note and the notes the work order names, nothing more
+      #   - the protected-paths list as a refusal set
+      #   - an explicit instruction to stop and report rather than invent contract
+      - name: run the implementer agent
+        if: steps.pick.outputs.order != ''
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          WORK_ORDER: ${{ steps.pick.outputs.order }}
+          # A human owns this list. The agent may propose a change to these paths in
+          # the PR body; it may not make one.
+          PROTECTED_PATHS: "src/payment/**,src/auth/**,**/csp.config.*,public/**"
+        run: |
+          echo "Executing $WORK_ORDER"
+          # your-agent-cli run \
+          #   --prompt-file .obengineer/prompts/03-implement-instrumentation.md \
+          #   --scope "$WORK_ORDER" \
+          #   --refuse "$PROTECTED_PATHS"
+
+      - name: contract checks must pass on what the agent wrote
+        if: steps.pick.outputs.order != ''
+        run: |
+          # Run the same layer-1 checks here. A proposal that fails the contract it
+          # was implementing is not a proposal, it is noise — and finding that out in
+          # review costs a reviewer's afternoon.
+          echo "invoke contract-checks.yml steps, or a composite action sharing them"
+
+      - name: open the pull request
+        if: steps.pick.outputs.order != ''
+        uses: peter-evans/create-pull-request@v6
+        with:
+          branch: obengineer/instrument-${{ github.run_number }}
+          labels: obengineer
+          draft: true
+          commit-message: "instrument: ${{ steps.pick.outputs.order }}"
+          title: "instrument: one contract slice"
+          # The body is the whole value of this layer. A reviewer must not have to
+          # reconstruct intent from a diff.
+          body: |
+            Generated from `${{ steps.pick.outputs.order }}`.
+
+            **Contract sections implemented**
+            <!-- filled by the agent -->
+
+            **Files touched, and why each one**
+            <!-- filled by the agent -->
+
+            **Refused, and the reason**
+            <!-- protected paths, or contract the wiki does not yet name -->
+
+            **Verification**
+            <!-- the query or check that proves the telemetry arrives -->
+
+            **Wiki notes updated in this commit**
+            <!-- status/updated fields, same commit as the code -->
+
+            ---
+            Detectors are **not** armed by this pull request. Configuration follows
+            telemetry; see the observability config repo.

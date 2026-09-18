@@ -38,7 +38,7 @@ check-manifest-versions: ## Fail if the Claude and Codex plugin versions disagre
 	sys.exit(0) if c['version']==x['version'] else sys.exit(f\"version mismatch: claude {c['version']} != codex {x['version']}\")" \
 	&& echo "plugin manifest versions agree"
 
-# make render FILE=../docs/observability/INSTRUMENTATION-GUIDE.md [OUT=...]
+# make render FILE=../docs/observability/analysis-<app>-<date>.md [OUT=...]
 .PHONY: render
 render: ## Render a Markdown deliverable to .docx and verify the result
 	@test -n "$(FILE)" || { echo "usage: make render FILE=<path.md> [OUT=<path.docx>]"; exit 2; }
