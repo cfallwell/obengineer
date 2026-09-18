@@ -144,6 +144,12 @@ Run `verify_render.py`. Then confirm what it does not: the `.docx` is newer than
 Markdown it came from, and no one has hand-edited it. A `.docx` edited after rendering is a
 second source of truth, and it will disagree with the Markdown within a week.
 
+The script proves every reference is a link and every link lands. Read for the half it
+cannot judge: a reference that names a section where the sentence meant the product, and
+its opposite — a sentence pointing a reader at "the workflow catalogue" or "the section
+above" with no link at all, which the census cannot count because it is not written as a
+reference.
+
 ### Step 6 — Report
 
 ```

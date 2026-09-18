@@ -35,14 +35,15 @@ The layout is not a matter of taste. It is recorded in
 in [`references/document-format.md`](references/document-format.md), so the same
 document comes out of a fresh session with no approved sample to copy from.
 
-## The three rules that make it a customer document
+## The four rules that make it a customer document
 
 1. **A simple title page.** Title, subtitle, product line, author, audience, date, version. Nothing else. No metadata dump, no evidence basis, no scope notes.
 2. **The Table of Contents on its own page**, immediately after the title page, as a field Word refreshes on open.
 3. **Every top-level section starts on a new page**, as Word `Heading 1`.
+4. **Every reference to another section or appendix is clickable**, because a 150-page document in which "see Appendix E" is inert makes the reader scroll and guess.
 
-The renderer enforces all three. It refuses to build a document that breaks
-rule 1, and it refuses to save one that breaks rule 3.
+The renderer enforces all four. It refuses to build a document that breaks
+rule 1 or rule 4, and it refuses to save one that breaks rule 3.
 
 ## When to use
 
@@ -87,7 +88,35 @@ file them in a body section — `### Document control and evidence basis` under
 Purpose and Scope is the conventional home — where they get a heading, a page,
 and a contents entry.
 
-### Step 2 — Render
+### Step 2 — Write cross-references so they can be linked
+
+Two forms, and the split is deliberate.
+
+**By number or letter — write it plainly.** `Appendix E`, `section 4`,
+`sections 5 and 6`, `§7`. The renderer counts the top-level sections in order,
+matches an appendix by its letter, and links them. A phrase carrying one number
+links whole, so the click target is the words a reader recognises; a phrase
+carrying several links each number, so `sections 5 and 6` reaches both.
+
+**By name — write an anchor link.** `[Business Transactions](#business-transactions)`,
+using GitHub's heading slug, which also makes the Markdown navigable on its own.
+
+The renderer does *not* guess at names, and that is the point: a section title is
+also ordinary vocabulary. In one storefront analysis, `Workflows`,
+`Business Transactions`, `Custom Metrics`, and `Log Observer Connect` are all
+section headings *and* Splunk concepts used in prose several hundred times. A
+renderer linking every occurrence would send a reader to a heading when the
+sentence meant the product, so naming a section is an explicit act by the author.
+
+Two consequences worth knowing:
+
+- **A reference that resolves to nothing fails the render.** `section 40` in a document with 31 sections, or `[x](#renamed-heading)`, stops the build and names the phrase. This is the failure a renumbering leaves behind, and in a `.docx` it is invisible: the text still reads correctly and the link goes nowhere.
+- **Headings are destinations only.** They are bookmarked and never scanned, so a heading called `Appendix B` does not link to itself.
+
+Nothing is needed for the contents page: the `TOC` field carries `\h`, so Word
+builds every entry as a link when it refreshes.
+
+### Step 3 — Render
 
 ```bash
 python3 scripts/render_customer_doc.py docs/observability/analysis-<app>-<date>.md \
@@ -109,7 +138,7 @@ a level too deep.
 | `--no-banner` | Suppress the first-page banner image |
 | `--format-spec <path>` | Render onto a different approved house style |
 
-### Step 3 — Verify, do not eyeball
+### Step 4 — Verify, do not eyeball
 
 ```bash
 python3 scripts/verify_render.py docs/observability/analysis-<app>-<date>.md \
@@ -126,12 +155,17 @@ It fails the render when:
 - the title page carries more than seven lines, or any line long enough to be prose;
 - Markdown markers leaked as literal text (`**bold**` or backticks printed in prose — what happens when bold wraps a code span and the two are not composed);
 - a credential-shaped value reached the document (JWT, opaque hex token, cloud access key, private-key block, or a URL with inline credentials);
-- there is no Table of Contents field, or Word will not refresh it on open.
+- there is no Table of Contents field, or Word will not refresh it on open;
+- a heading carries no bookmark, an internal link points at no bookmark, or the number of links disagrees with the number of references in the source — which is how "the renderer stopped linking" is caught rather than noticed by a customer.
+
+The reference census reads the grammar from the renderer rather than restating
+it. Two copies of "what counts as a reference" is how a verifier ends up
+approving a document the renderer did not link.
 
 Exit code 0 means the artifact is deliverable. Do not hand over a `.docx` that has
 not passed.
 
-### Step 4 — Optional visual check
+### Step 5 — Optional visual check
 
 When the layout itself is in question — a very wide table, a long code block — render
 to PDF and look at the pages rather than guessing:
@@ -174,6 +208,9 @@ place in a committed template.
 | Tables use autofit layout | Word sizes columns to content instead of splitting evenly |
 | The banner sits in a first-page-only header | `w:titlePg` keeps it off the body pages, matching the approved sample |
 | `updateFields` is set in settings.xml | Word populates the contents and page counts on open, without the reader pressing F9 |
+| Cross-references are `w:hyperlink w:anchor` onto a `w:bookmarkStart` | The same mechanism a contents entry uses, so it survives a PDF export as a go-to link and needs no field refresh |
+| Bookmark names are `_` plus the slug, truncated to 39 characters | Word bookmarks allow letters, digits, and underscores only, and stop at 40; a collision gets a numeric suffix rather than silently overwriting |
+| A link label is rendered first, then moved inside the hyperlink | A label keeps its `code`, **bold**, and *italic* instead of printing the markers — several section titles in these documents are identifiers |
 
 ## Warning signs
 
@@ -182,6 +219,9 @@ place in a committed template.
 - **Sections render as `Heading 2`.** The source is being rendered with `--section-level 1`, or the title `#` is missing so the level shift is off by one.
 - **The verifier reports leaked backticks and the paragraph is not a code box.** Bold wrapping a code span; the inline parser must recurse into bold rather than emitting its contents raw.
 - **Section count is one higher than expected.** A `#` comment inside a fenced code block is being read as a heading; confirm the fence is closed.
+- **`cross-reference NNN points at nothing`.** Sections were renumbered, an appendix was renamed, or the phrase is not a reference at all — "section 508 compliance" reads like one. Reword it, or fix the number.
+- **`anchor link … matches no heading`.** A heading was renamed after the reference was written. The message names the nearest slug; take it.
+- **A reference to the product reads as a link to a section.** Someone wrote an anchor link around a phrase that meant the feature. Names are linked only where the sentence means the heading.
 
 ## Non-goals
 

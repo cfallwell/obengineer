@@ -837,6 +837,56 @@ def test_title_page_contract_is_stated_everywhere_it_is_enforced():
     assert "pageBreakBefore" in skill
 
 
+def test_cross_references_are_clickable_and_the_two_forms_are_explained():
+    """A 150-page document whose "see Appendix E" is inert makes the reader
+    scroll and guess, and a reference that clicks nowhere is invisible in Word
+    until a customer tries it."""
+    template = (SKILLS / "references" / "document-template.md").read_text()
+    skill = (SKILLS / "customer-doc-render" / "SKILL.md").read_text()
+    analyze = (SKILLS / "instrumentation-analyze" / "SKILL.md").read_text()
+    architect = (AGENTS / "instrumentation-architect.agent.md").read_text()
+    prompt = (ROOT / "prompts" / "01-analyze-application.md").read_text()
+
+    for name, text in (("template", template), ("render skill", skill),
+                       ("analyze skill", analyze), ("architect agent", architect),
+                       ("prompt 01", prompt)):
+        assert "clickable" in text, f"{name} must require clickable references"
+        assert "anchor link" in text, (
+            f"{name} must say how a reference by name is written"
+        )
+
+    # Both halves of the split, or an author guesses which one applies.
+    for name, text in (("template", template), ("render skill", skill)):
+        assert "sections 5 and 6" in text, f"{name} must show the numbered form"
+        assert "#business-transactions" in text, (
+            f"{name} must show the named form as a slug anchor"
+        )
+        assert "vocabulary" in text, (
+            f"{name} must say why names are not auto-linked: a section title is "
+            "also ordinary vocabulary"
+        )
+
+    assert "clickable in the `.docx`" in template, (
+        "the pre-delivery checklist must carry the reference row"
+    )
+
+    # The renderer refuses a stale reference, and the verifier counts them.
+    render_py = (SKILLS / "customer-doc-render" / "scripts"
+                 / "render_customer_doc.py").read_text()
+    verify_py = (SKILLS / "customer-doc-render" / "scripts"
+                 / "verify_render.py").read_text()
+    assert "points at nothing" in render_py
+    assert "matches no heading" in render_py
+    assert "w:bookmarkStart" in render_py and "w:anchor" in render_py
+    assert "cross-reference count" in verify_py
+    assert "point at no bookmark" in verify_py
+    # One authority for what counts as a reference.
+    assert "XREF" not in verify_py.split("def _renderer")[0], (
+        "the verifier must read the reference grammar from the renderer rather "
+        "than restating it"
+    )
+
+
 # --------------------------------------------------------------------------- #
 # plugin packaging
 # --------------------------------------------------------------------------- #

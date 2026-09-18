@@ -250,6 +250,14 @@ python3 ../customer-doc-render/scripts/verify_render.py \
     "docs/observability/<Customer>-<App>-Analysis-<date>.docx"
 ```
 
+Every reference to another section or appendix ships clickable, and the render fails on
+one that resolves to nothing — which is what a renumbered section leaves behind, invisible
+in a `.docx` because the text still reads correctly. Write the numbered forms plainly — `Appendix E`,
+`section 4`, `sections 5 and 6` — and write a reference that *names* a section as an
+anchor link on its slug, `[Business Transactions](#business-transactions)`. Name it as a
+link where the sentence means the section and leave it plain where it means the Splunk
+feature: several section titles here are also product vocabulary.
+
 Then run [`../deliverable-review/SKILL.md`](../deliverable-review/SKILL.md) against the
 completeness bar and fill the pre-delivery checklist at the end of Appendix E. Any `no` means
 do not ship.

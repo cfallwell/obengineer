@@ -172,7 +172,7 @@ pipeline possible at all. See
 | `$instrumentation-wiki` | Turn the accepted analysis into one note per subject, with work orders, the value workings and their cited sources, tracked versions, and the host memory pointers |
 | `$baggage-propagation` | The cross-cutting attribute set and W3C Baggage contract: set once, propagate, stamp on every span via `SpanProcessor.onStart` — and the byte budget that decides which keys earn a place in the header |
 | `$cardinality-budget` | Dimension versus attribute-only as arithmetic: MTS cost per promotion, MMS and TMS sizing, the classifiers that replace raw URLs and topic names, and the priced overage the account team gets when the total exceeds what the customer owns |
-| `$customer-doc-render` | Render Markdown to a customer-review `.docx` — simple title page, Table of Contents, one section per page, `Confidential` footer — then prove the render matches its source |
+| `$customer-doc-render` | Render Markdown to a customer-review `.docx` — simple title page, Table of Contents, one section per page, clickable section and appendix references, `Confidential` footer — then prove the render matches its source |
 | `$instrumentation-implement` | Land the contract as ordered PRs, with the CI checks that keep it enforced |
 | `$observability-as-code` | Emit the contract as Terraform across the three Splunk providers — executive, SRE, and engineer modules — importing what the tenant already has and refusing any grouping the schema cannot support |
 | `$deliverable-review` | Grade a finished deliverable against the completeness bar, separately from whoever wrote it, and report defects by rubric row with line numbers |

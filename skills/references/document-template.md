@@ -149,6 +149,7 @@ Rules that are easy to get wrong:
 - **Sections 19–25 are the catalogue and are contiguous, in that order.** They are what the implementer and the Terraform run read: the BT list, the workflow list, the meters, the BT-to-workflow mapping, every detector with its threshold, every SLI with its objective, then the use cases that compose them. Order matters because each one is defined in terms of the one before it.
 - **Business Value Realization is section 26, the last body section, immediately before the appendices.** Last because it is the argument the preceding sections have earned rather than the promise the document opens with, and in the body because it is for the customer rather than for the account team. Every figure in it is labelled `stated`, `measured`, `public`, or `derived`; no industry benchmark appears; and every claim names the workflow, indicator, or detector that produces it. With no business inputs supplied it is still written — short, from measured performance and the public record, with the value model's coefficients named and unfilled. Full spec in [`business-value.md`](business-value.md).
 - **Every H1 starts on a new page in the Word artifact**, including each `Use Case:` and each appendix. `BT:` and per-workflow entries are H2 inside their section and do not force a page each; forty-six page breaks for forty-six one-line entries makes a document nobody carries.
+- **Every reference to another section or appendix is clickable in the Word artifact.** Numbered forms — `Appendix E`, `section 4`, `sections 5 and 6` — are written plainly and linked by the renderer. A reference that *names* a section is written as an anchor link on the heading's slug, `[Business Transactions](#business-transactions)`, because a section title is also ordinary vocabulary: `Workflows`, `Custom Metrics`, and `Log Observer Connect` are Splunk concepts in these documents as often as they are headings, and linking every occurrence would send a reader to a heading when the sentence meant the product. Name it as a link where the sentence means the section; leave it plain where it means the feature. A reference that resolves to nothing fails the render, which is the only reliable way to catch what a renumbering leaves behind.
 - If a section has no evidence, keep the heading and write **Not in evidence**, plus one line on what evidence would settle it. Never delete a heading.
 - On a **repeat run** against a target with prior history in the wiki, section 3 gains a `### Changes since v<N-1>` subsection and the document is a delta rather than a rewrite. See [`incremental-runs.md`](incremental-runs.md).
 
@@ -674,6 +675,7 @@ review, so read it before writing rather than after.
 | A second customer-facing document | One customer document. The lower layer is the wiki in [`agent-wiki.md`](agent-wiki.md), not a parallel guide that will disagree with it |
 | Metadata dumped on the title page | A simple title page from the `<!-- title-page ... -->` block; identifiers, realm, percentile standard, and evidence basis in `### Document control and evidence basis` |
 | Sections render as Word `Heading 2`, or flow onto the previous page | Markdown `##` renders as `Heading 1` with `w:pageBreakBefore`; the contents list shows sections at level 1 |
+| **`see Appendix E` is inert text in the `.docx`** | Every section and appendix reference is a link onto that heading's bookmark: numbered forms written plainly, named references written as anchor links. `verify_render.py` compares the count against the source |
 | Architecture buried in an appendix | Section 3 is a body section near the front; the attribute dictionary is Appendix A at the back |
 | No `References` section | Real, resolvable Splunk-primary and OTel-secondary URLs for every recommendation class, each with the version read |
 | Course of action placed before the architecture or the findings | Evidence first, then what is wrong, then what to do. A course of action that precedes them reads as a product pitch |
@@ -719,6 +721,7 @@ Appendix E.
 - [ ] No second customer-facing document was produced; lower-layer detail went to the wiki
 - [ ] Table of Contents present in the `.docx`, field-driven, auto-updating
 - [ ] Every H1 starts on a new page in the `.docx`, including each `Use Case:` and appendix
+- [ ] Every section and appendix reference is clickable in the `.docx`, and every link lands on a bookmark
 - [ ] `<Frontend> and Backend Architecture (Observed)` is section 3, a body section, not an appendix
 - [ ] `Critical Findings` is section 4, severity-ordered, with remediation, files, exposure, risk, and verification per finding
 - [ ] Findings at or above the agreed severity bar appear as Phase 0 items in section 17
