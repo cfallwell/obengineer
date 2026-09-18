@@ -1,0 +1,139 @@
+# obengineer — engagement inputs
+#
+# One file per engagement. Every run reads it, so each answer is given once and
+# the prompts stay short. Copy it next to your deliverables and fill it in:
+#
+#     cp obengineer/inputs/engagement-inputs.template.yaml \
+#        docs/observability/engagement-inputs.yaml
+#
+# Unknown is a legitimate answer. Write `unknown` and the run records the gap in
+# "Open items" rather than inventing a value. What is NOT acceptable is deleting
+# a key: an absent key looks like an oversight, `unknown` looks like a decision.
+#
+# NEVER put a token, password, or API key in this file. It records whether a
+# credential exists and who holds it, never its value.
+
+schema_version: 1
+
+engagement:
+  application: ""              # the identifier used in every filename and heading
+  customer: ""
+  scope: ""                    # e.g. "web storefront and checkout backends"
+  date: ""                     # YYYY-MM-DD, the date on the deliverable
+  document_version: 1
+
+# ---------------------------------------------------------------------------
+# Artifacts the human supplies. Paths relative to the workspace root.
+# ---------------------------------------------------------------------------
+artifacts:
+  diagrams: []                 # C4, sequence, MFE map, account/VPC — paths or "attached in chat"
+  narrative: ""                # path to an architecture write-up, if one exists
+  prior_contract: ""           # an existing INSTRUMENTATION-GUIDE.md to extend, not replace
+  prior_schema: ""             # an existing attribute-schema.json — reuse its key names
+  house_style_docx: ""         # an approved .docx whose layout the output must match
+  front_end_scan_notes: ""     # path, or "no browser", or "" to scan live
+
+# ---------------------------------------------------------------------------
+# Front-end surfaces to deep-scan. Omit or empty if there is no browser.
+# ---------------------------------------------------------------------------
+surfaces:
+  production_urls: []
+  non_production_urls: []
+  host_and_remotes: ""         # which bundle owns provider boot, which are remotes
+  edge_cdn: ""
+  test_account:
+    available: false
+    held_by: ""                # who to ask. Never the credential itself.
+    rotates_after_run: false
+
+# ---------------------------------------------------------------------------
+# Backends, from the diagrams or from the team.
+# ---------------------------------------------------------------------------
+backends:
+  languages: []                # ["node", "java", "python", "go", "dotnet"]
+  deploy_targets: []           # ["eks", "ecs", "lambda", "vm", "on-prem"]
+  buses: []                    # ["kafka", "sqs", "sns", "eventbridge", "rabbitmq"]
+  cloud_accounts: []           # account/subscription boundaries a trace crosses
+  gateway: ""                  # what terminates TLS and may strip headers
+
+# ---------------------------------------------------------------------------
+# Splunk tenancy. Identifiers only — no tokens.
+# ---------------------------------------------------------------------------
+tenancy:
+  o11y_realm: ""               # e.g. us1
+  o11y_org_id: ""
+  environments: []             # the deployment.environment values that exist today
+  splunk_platform_host: ""
+  thousandeyes_account_group: ""
+  tokens_held_by: ""           # who can issue an ingest token when Phase 0 starts
+
+# ---------------------------------------------------------------------------
+# Entitlement. This is the section that changes the design.
+#
+# Cardinality is not a style preference, it is a budget: every tag promoted to a
+# metric dimension multiplies metric time series, and MTS is what the contract
+# is billed and throttled on. A run given these numbers can compute whether a
+# proposed dimension fits. A run without them can only warn in the abstract, so
+# `unknown` here is the single most expensive blank in the file.
+# ---------------------------------------------------------------------------
+entitlement:
+  observability_cloud:
+    custom_mts_included: unknown       # licensed custom metric time series
+    custom_mts_in_use: unknown         # current consumption, from Org Metrics
+    hosts_licensed: unknown
+    containers_licensed: unknown
+    traces_per_minute: unknown         # APM TAPM entitlement
+    mms_slots_remaining: unknown       # Monitoring MetricSets are a bounded resource
+    tms_cardinality_ceiling: unknown   # per-tag ceiling agreed for Troubleshooting MetricSets
+  rum:
+    entitled: unknown
+    sessions_per_month: unknown
+    session_replay_entitled: unknown
+    session_replay_accepted_in_writing: false   # cost and Core Web Vitals risk, in writing
+  synthetics:
+    entitled: unknown
+    browser_runs_per_month: unknown
+    uptime_runs_per_month: unknown
+    private_locations: []
+  splunk_platform:
+    entitled: unknown
+    ingest_gb_per_day: unknown
+    retention_days: unknown
+    log_observer_connect_entitled: unknown
+  thousandeyes:
+    entitled: unknown
+    cloud_agent_units: unknown
+    enterprise_agents: unknown
+    test_slots_available: unknown
+
+# ---------------------------------------------------------------------------
+# Standards the deliverable must follow.
+# ---------------------------------------------------------------------------
+standards:
+  percentile: p90              # one percentile, used in every chart and detector
+  workflow_naming: "{surface}.{object}.{verb}"
+  baggage_header_budget_bytes: 512     # see references/baggage-budget.md
+  baggage_value_ceiling_bytes: 64
+  unknown_dimension_threshold_pct: 1   # tolerated UNKNOWN bucket when grouping by a tenant key
+
+# ---------------------------------------------------------------------------
+# Constraints that veto otherwise-correct recommendations.
+# ---------------------------------------------------------------------------
+constraints:
+  privacy_regimes: []          # ["gdpr", "ccpa", "hipaa", "pci"]
+  consent_platform: ""         # what gates the agent before it may load
+  pii_deny_list_additions: []  # customer-specific keys, added to the standard deny list
+  competing_eum_agents: []     # other RUM/EUM agents observed on the page
+  data_residency: ""           # regions telemetry may not leave
+  change_windows: ""           # freeze periods that shape the phase plan
+  who_deploys_front_end: ""    # the team that must agree before Phase 0 can start
+  who_deploys_collector: ""
+
+# ---------------------------------------------------------------------------
+# What the human wants out of this engagement, in their words. Used to rank
+# journeys when the evidence offers several equally instrumentable candidates.
+# ---------------------------------------------------------------------------
+outcomes:
+  first_journey: ""            # leave blank to have the run rank candidates and propose one
+  known_pain: []               # incidents that prompted the engagement
+  audiences: ["sre", "engineer", "executive"]

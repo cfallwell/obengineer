@@ -1,0 +1,108 @@
+{
+  "derived_from": "Nuskin_RUM_Backend_ObservabilityV2.docx",
+  "note": "Formatting only. Regenerate with extract_docx_format.py when the customer approves a new house style.",
+  "page": {
+    "page_width_in": 8.5,
+    "page_height_in": 11.0,
+    "different_first_page": true,
+    "top_in": 0.5,
+    "right_in": 0.4,
+    "bottom_in": 0.5,
+    "left_in": 0.4,
+    "header_in": 0.4,
+    "footer_in": 0.0
+  },
+  "styles": {
+    "Heading 1": {
+      "font": null,
+      "size_pt": 16.0,
+      "bold": true,
+      "color": "393939"
+    },
+    "Heading 2": {
+      "font": null,
+      "size_pt": 13.0,
+      "bold": true,
+      "color": "7F7F7F"
+    },
+    "Heading 3": {
+      "font": null,
+      "size_pt": 12.0,
+      "bold": null,
+      "color": "EC008C"
+    },
+    "Heading 4": {
+      "font": null,
+      "size_pt": null,
+      "bold": null,
+      "color": null
+    },
+    "Normal": {
+      "font": null,
+      "size_pt": null,
+      "bold": null,
+      "color": null
+    },
+    "docDefaults": {
+      "font": "Arial"
+    }
+  },
+  "title_page": {
+    "lines": [
+      {
+        "text_shape": "title-or-subtitle",
+        "size_pt": 22.0,
+        "bold": true,
+        "alignment": "CENTER (1)",
+        "blank_lines_before": 8
+      },
+      {
+        "text_shape": "title-or-subtitle",
+        "size_pt": 16.0,
+        "bold": false,
+        "alignment": "CENTER (1)",
+        "blank_lines_before": 0
+      },
+      {
+        "text_shape": "product-line",
+        "size_pt": 12.0,
+        "bold": false,
+        "alignment": "None",
+        "blank_lines_before": 17
+      },
+      {
+        "text_shape": "author-field",
+        "size_pt": 11.0,
+        "bold": false,
+        "alignment": "None",
+        "blank_lines_before": 0
+      },
+      {
+        "text_shape": "audience-field",
+        "size_pt": 11.0,
+        "bold": false,
+        "alignment": "None",
+        "blank_lines_before": 0
+      }
+    ],
+    "ends_with_page_break": true
+  },
+  "sections": {
+    "section_style": "Heading 1",
+    "with_page_break_before_property": 0,
+    "with_explicit_break_in_previous_paragraph": 20,
+    "with_no_break": 3,
+    "renderer_uses": "w:pageBreakBefore on the section heading"
+  },
+  "header_footer_labels": [
+    "276225",
+    "527685",
+    "Confidential",
+    "Implementation Recommendations",
+    "bottom",
+    "right"
+  ],
+  "assets": [
+    "header-banner.png"
+  ]
+}

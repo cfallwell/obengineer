@@ -1,0 +1,23 @@
+{
+  "name": "obengineer",
+  "displayName": "obengineer",
+  "version": "0.1.0",
+  "description": "Instrumentation architecture workflows for Claude Code: analyze a target, write the full instrumentation contract, and render it for customer review.",
+  "author": {
+    "name": "Splunk Observability Practice"
+  },
+  "license": "Apache-2.0",
+  "keywords": [
+    "opentelemetry",
+    "observability",
+    "splunk",
+    "instrumentation",
+    "baggage",
+    "claude-code",
+    "mcp",
+    "skills"
+  ],
+  "skills": ["./skills/"],
+  "mcpServers": "./.mcp.json",
+  "hooks": "./hooks/claude-hooks.json"
+}
