@@ -72,7 +72,7 @@ The analysis document is the source. Reuse its BT names, `workflow.name` strings
 keys, and finding ids exactly. Extend from new evidence; never rename for taste. If a prior
 `attribute-schema.json` exists, it is the naming authority and this run extends it.
 
-### Step 3 — One note per subject, and nothing larger
+### Step 3 — One note per subject, and a note earns its file
 
 | Note | Carries |
 |---|---|
@@ -89,8 +89,18 @@ Every note gets the frontmatter from `agent-wiki.md`: `type`, `customer`, `app`,
 `updated`, `run`, `tags`, and `sources`. `status` is read by CI and by the delta run, so it
 is load-bearing rather than descriptive.
 
+**One note per subject is not one note per name.** A workflow or a detector earns a file when
+it carries something beyond its name — spans, a threshold with a provenance, an objective, a
+work order. Until then it is a line in its BT note or the detector catalogue note, and it is
+promoted the moment there is something to record. An application with four hundred workflows
+would otherwise open with four hundred frontmatter stubs, which is a retrieval surface where
+every search returns names. Put the counts in `index.md` — named versus noted — so the gap is
+visible rather than looking like an omission.
+
 Link with `[[wikilinks]]`. Use a relative Markdown link only when pointing out of the wiki at
-a real repository file.
+a real repository file. Check that every link resolves before closing the run: a link that
+goes nowhere is worse than no link, because an agent follows it, finds nothing, and infers
+the subject was never analysed.
 
 ### Step 4 — Keep the index a map, not a summary
 
@@ -125,7 +135,19 @@ deny list. It is the file the layer-1 CI checks read, so it is the reason those 
 exist at all — see [`../references/ci-integration.md`](../references/ci-integration.md).
 It and the document's Appendix A are generated from each other and may not disagree.
 
-### Step 8 — Close the run
+### Step 8 — Point the hosts at it
+
+An agent that has to be told to read the wiki will not read it. Write a **pointer** — never a
+copy — into each host's automatically loaded file: `.cursor/rules/obengineer-wiki.mdc` with
+`alwaysApply: true`, `CLAUDE.md`, and `AGENTS.md`. Each carries the path to `index.md`, the
+retrieval rule ("read the index, then only the notes in scope, do not load the whole wiki"),
+the same-commit update rule, and the two or three prohibitions specific to this target that
+have already gone wrong — a single `init`, names from the registry, no credential values.
+
+Keep it short. A pointer that grows into a summary is a second authority, and the copy is the
+one that will be wrong.
+
+### Step 9 — Close the run
 
 `meta/run-log.md` gains a row: date, run version, document filename, counts of new and
 changed items, findings opened and closed. `meta/decisions.md` gains what the human accepted,

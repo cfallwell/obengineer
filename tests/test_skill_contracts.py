@@ -484,6 +484,26 @@ def test_wiki_is_addressable_and_host_readable():
     )
 
 
+def test_a_note_earns_its_file():
+    """One note per subject is not one note per name. An application with four
+    hundred workflows would otherwise open with four hundred frontmatter stubs,
+    which dilutes every search and hides the twenty that have a design."""
+    spec = (SKILLS / "references" / "agent-wiki.md").read_text()
+    rule = spec[spec.index("## A note earns its file"):]
+    rule = rule[:rule.index("\n## ", 10)]
+    # The promotion trigger has to be concrete, or it is a matter of taste.
+    for trigger in ("spans", "threshold", "objective", "work order"):
+        assert trigger in rule, f"promotion trigger {trigger} is not named"
+    assert "BT note" in rule, "an unpromoted workflow needs a stated home"
+    assert "index.md" in rule, (
+        "counts belong in the index, so the gap is visible rather than looking "
+        "like an omission"
+    )
+    # And the rule must come before the note shape, since it decides whether a
+    # note exists at all.
+    assert spec.index("## A note earns its file") < spec.index("## Note shape")
+
+
 # --------------------------------------------------------------------------- #
 # the run repeats: versions tracked, deltas not rewrites, CI possible
 # --------------------------------------------------------------------------- #

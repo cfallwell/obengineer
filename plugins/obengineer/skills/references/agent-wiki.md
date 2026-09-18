@@ -68,6 +68,23 @@ duplicated facts drift and then two applications disagree about the same MTS bud
 `service.name`, in the document filename, in the `<org>.bt` prefix. One string, so a grep
 finds everything.
 
+## A note earns its file
+
+One note per subject does **not** mean one note per name. A workflow or a detector gets its own
+note when it carries something beyond its name — spans, attributes, a threshold with a
+provenance, an objective, a work order that touches it. Until then it lives as a line in its
+BT note or the detector catalogue note, and it is promoted to a file the moment an agent needs
+to record something against it.
+
+This matters at real scale. An application with forty-four business transactions and four
+hundred workflows would otherwise open with four hundred files containing a name and a
+frontmatter block, which is not memory: it is a retrieval surface where every search returns
+mostly stubs, and it hides the twenty workflows that actually have a design. Promotion is
+cheap and reversible; a wall of stubs is neither.
+
+Record the rule in `index.md` with the current counts — workflows named, workflows with notes
+— so the gap is visible rather than looking like an omission.
+
 ## Note shape
 
 Every note opens with YAML frontmatter, then a single H1, then content. The frontmatter is
