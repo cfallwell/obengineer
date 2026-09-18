@@ -1,0 +1,15 @@
+{
+  "$comment": [
+    "No MCP servers are enabled by default. Every server this plugin can use needs",
+    "an endpoint, command, or token that only the operator can supply, and a server",
+    "that fails to start is worse than one that was never declared.",
+    "",
+    "See .mcp.optional.json for the servers that pair with these skills, what each",
+    "one is used for, and the environment variables it needs. Copy an entry here to",
+    "enable it.",
+    "",
+    "Never put a token value in this file. Use ${VAR} references only; this file is",
+    "committed to a repository."
+  ],
+  "mcpServers": {}
+}

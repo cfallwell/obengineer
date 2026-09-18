@@ -1,0 +1,47 @@
+{
+  "$comment": [
+    "Optional MCP servers for this plugin. They are NOT in .mcp.json because each",
+    "one needs an endpoint or command that only the operator can supply, and a",
+    "server that fails to start is worse than one that was never declared.",
+    "",
+    "To enable a server: copy its entry into .mcp.json, replace the placeholder",
+    "command or URL with the one your organisation runs, and export the listed",
+    "environment variables in your shell or secret manager.",
+    "",
+    "Never put a token value in this file or in .mcp.json. Use ${VAR} references",
+    "only. These files are committed to a repository."
+  ],
+  "mcpServers": {
+    "local-otel-tools": {
+      "$comment": "A local HTTP MCP server exposing OpenTelemetry audit and verify tools — the loop that reads a collector config or SDK setup and reports what it would actually emit. Enable it if your team runs one; the skills work without it. Adjust the port to match your server.",
+      "type": "http",
+      "url": "http://127.0.0.1:3000/mcp"
+    },
+    "splunk-observability": {
+      "$comment": "Splunk Observability Cloud: verify a MetricSet exists, read APM workflows and Tag Spotlight cardinality, and check whether an attribute actually landed as a dimension. Used by instrumentation-analyze for the existing-footprint inventory and by instrumentation-guide for portfolio-verifiable exit criteria.",
+      "type": "stdio",
+      "command": "<command your org runs for the Splunk Observability MCP server>",
+      "env": {
+        "SPLUNK_REALM": "${SPLUNK_REALM}",
+        "SPLUNK_ACCESS_TOKEN": "${SPLUNK_ACCESS_TOKEN}"
+      }
+    },
+    "splunk-platform": {
+      "$comment": "Splunk Enterprise or Cloud Platform: run the SPL behind a Log Observer Connect panel, and confirm trace_id is indexed on the events a dashboard joins to. Used when the guide specifies the LOC panel shape.",
+      "type": "stdio",
+      "command": "<command your org runs for the Splunk platform MCP server>",
+      "env": {
+        "SPLUNK_HOST": "${SPLUNK_HOST}",
+        "SPLUNK_TOKEN": "${SPLUNK_TOKEN}"
+      }
+    },
+    "thousandeyes": {
+      "$comment": "Cisco ThousandEyes: list existing tests and agent locations so the guide recommends path coverage for hops that are genuinely unmonitored rather than duplicating a test that already exists.",
+      "type": "stdio",
+      "command": "<command your org runs for the ThousandEyes MCP server>",
+      "env": {
+        "TE_OAUTH_BEARER_TOKEN": "${TE_OAUTH_BEARER_TOKEN}"
+      }
+    }
+  }
+}

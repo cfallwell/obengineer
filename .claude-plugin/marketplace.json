@@ -1,0 +1,15 @@
+{
+  "name": "obengineer",
+  "owner": {
+    "name": "Splunk Observability Practice"
+  },
+  "description": "obengineer bundles instrumentation architecture workflows — target analysis, the full instrumentation contract, and customer-review document rendering — for Claude Code.",
+  "plugins": [
+    {
+      "name": "obengineer",
+      "displayName": "obengineer",
+      "source": "./plugins/obengineer",
+      "description": "Analyze a target, write the instrumentation contract, and render it for customer architecture review."
+    }
+  ]
+}
