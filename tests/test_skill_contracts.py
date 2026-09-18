@@ -492,9 +492,25 @@ def test_the_grader_grades_both_artifacts_it_claims_to():
     assert "a wiki" in skill
     wiki_pass = skill[skill.index("Grade the wiki"):]
     wiki_pass = wiki_pass[:wiki_pass.index("\n### ")]
-    for check in ("wikilink", "index is a map", "counts", "Host pointers",
-                  "credential", "updated"):
-        assert check in wiki_pass, f"the wiki pass does not check {check}"
+
+    # The mechanical half is a script, so the check cannot degrade into a claim
+    # that the reviewer looked. The judgement half must not restate it.
+    assert "verify_wiki.py" in wiki_pass, (
+        "the wiki pass must run the verifier rather than describe its checks"
+    )
+    for judgement in ("verbatim", "pointer", "status"):
+        assert judgement in wiki_pass, (
+            f"the wiki pass drops {judgement}, which no script settles"
+        )
+
+    script = (SKILLS / "instrumentation-wiki" / "scripts" / "verify_wiki.py").read_text()
+    for check in ("wikilink", "ambiguous", "frontmatter", "index", "provenance",
+                  "pointer", "SECRET_PATTERNS", "earns its file"):
+        assert check in script, f"the verifier does not check {check}"
+    # It has to be able to fail, and the wiki run has to be the one that runs it.
+    assert "return 1" in script
+    assert "verify_wiki.py" in (SKILLS / "instrumentation-wiki" / "SKILL.md").read_text()
+
     # The rubric owns the section list; the grader must not restate it.
     assert "document-template.md" in skill and "the rubric wins" in skill
 

@@ -46,6 +46,13 @@ render: ## Render a Markdown deliverable to .docx and verify the result
 	  $(PY) skills/customer-doc-render/scripts/render_customer_doc.py "$(FILE)" -o "$$out" && \
 	  $(PY) skills/customer-doc-render/scripts/verify_render.py "$(FILE)" "$$out"
 
+# make verify-wiki WIKI="../wiki/<Customer>/<app>" [REPO_ROOT=..]
+.PHONY: verify-wiki
+verify-wiki: ## Verify an agent wiki: links, frontmatter, counts, pointers, secrets
+	@test -n "$(WIKI)" || { echo "usage: make verify-wiki WIKI=<wiki/Customer/app> [REPO_ROOT=..]"; exit 2; }
+	$(PY) skills/instrumentation-wiki/scripts/verify_wiki.py "$(WIKI)" \
+	  $${REPO_ROOT:+--repo-root "$$REPO_ROOT"}
+
 .PHONY: verify
 verify: ## Verify an existing .docx against its Markdown source
 	@test -n "$(FILE)" -a -n "$(DOCX)" || { echo "usage: make verify FILE=<path.md> DOCX=<path.docx>"; exit 2; }

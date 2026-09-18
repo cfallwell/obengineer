@@ -108,17 +108,24 @@ part of the pass:
 ### Step 4 — Grade the wiki, when the run produced one
 
 The wiki fails differently from the document, so it needs its own pass rather than the same
-one. Against [`../references/agent-wiki.md`](../references/agent-wiki.md):
+one. Start with the mechanical half, which is a script rather than a reading:
 
-- **Every wikilink resolves.** A link that goes nowhere is worse than no link: an agent follows it, finds nothing, and concludes the subject was never analysed. Check them all — there is no reason to sample when the check is mechanical.
-- **Every note has `type`, `status`, and `updated`.** A note with no `updated` field makes the next delta run unable to tell stale from current, so it re-derives everything and produces a full rewrite.
-- **The index is a map, not a summary.** Links plus counts plus entry points by task. If it summarises each workflow it has become the document again, and the whole point was that a run loads three notes.
-- **The index's counts match the notes on disk** — BTs, workflows named, workflows with their own note, findings open, objectives. Counts that disagree with the tree are worse than absent ones.
-- **No note duplicates a document section verbatim.** Two authorities, and the wiki loses, because nobody re-renders it.
-- **A promoted note earns its promotion.** A `workflows/` note that carries only a name is a stub the rule exists to prevent; fold it back into its BT note.
-- **Host pointers exist and are pointers.** `.cursor/rules/`, `CLAUDE.md`, `AGENTS.md`, each carrying the retrieval rule and the same-commit update rule, none of them carrying a copy of the contract.
-- **No credential in any note**, and this matters more here than in the document, because a wiki is loaded into agent context by default.
-- **`meta/versions.md` has a row per component with provenance**, `unknown` included. An absent row is the defect; nobody checks a component that is not listed.
+```bash
+python3 ../instrumentation-wiki/scripts/verify_wiki.py "wiki/<Customer>/<app>"
+```
+
+It settles required notes, frontmatter fields and their allowed values, link resolution and
+ambiguity, index length and count agreement, stub promotion, the provenance column, the host
+pointers, and credential shapes. Report its failures as defects with the note and the field —
+then read for the half no script can reach, against
+[`../references/agent-wiki.md`](../references/agent-wiki.md):
+
+- **The index is a map, not a summary.** The script bounds its length; only a reader can tell whether what is inside it is links and entry points or a paragraph per workflow. If it summarises each workflow it has become the document again, and the whole point was that a run loads three notes.
+- **No note duplicates a document section verbatim.** Two authorities, and the wiki loses, because nobody re-renders it. Sample the longest notes — that is where a paste lands.
+- **A promotion earns more than a passing line count.** The script rejects a three-line stub; a note that carries three lines of restated name is the same defect wearing more words.
+- **The host pointers are pointers.** The script confirms they exist and carry both rules. Read them for the failure it cannot see: a pointer that has grown a copy of the contract, which is a second authority and the one that will be wrong.
+- **`status` reflects reality.** A workflow at `designed` with code in the repository that emits it is a stale wiki, and the delta run will trust it. Spot-check the notes whose work order has landed.
+- **A credential recorded as a holder rather than a value.** The script matches shapes; a secret described in prose — "the key is the one in the market config" — passes it and still tells a reader where to look.
 
 ### Step 5 — Verify the rendered artifact, not just the Markdown
 

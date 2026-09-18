@@ -98,9 +98,9 @@ every search returns names. Put the counts in `index.md` — named versus noted 
 visible rather than looking like an omission.
 
 Link with `[[wikilinks]]`. Use a relative Markdown link only when pointing out of the wiki at
-a real repository file. Check that every link resolves before closing the run: a link that
-goes nowhere is worse than no link, because an agent follows it, finds nothing, and infers
-the subject was never analysed.
+a real repository file. Check that every link resolves before closing the run — `verify_wiki.py`
+in Step 9 does it mechanically — because a link that goes nowhere is worse than no link: an
+agent follows it, finds nothing, and infers the subject was never analysed.
 
 ### Step 4 — Keep the index a map, not a summary
 
@@ -147,7 +147,18 @@ have already gone wrong — a single `init`, names from the registry, no credent
 Keep it short. A pointer that grows into a summary is a second authority, and the copy is the
 one that will be wrong.
 
-### Step 9 — Close the run
+### Step 9 — Verify the wiki, then close the run
+
+```bash
+python3 scripts/verify_wiki.py "wiki/<Customer>/<app>"
+```
+
+It checks what a reader will not: the notes every wiki must have, `type` / `status` / `updated`
+on every note from the allowed sets, every wikilink resolving and no bare name ambiguous, the
+index short with its counts matching the tree, a promoted note carrying more than its name, a
+provenance column in `meta/versions.md`, the host pointers carrying the retrieval and
+same-commit rules, and no credential-shaped value anywhere. A failure is the run's, not the
+reviewer's — fix it before handing over.
 
 `meta/run-log.md` gains a row: date, run version, document filename, counts of new and
 changed items, findings opened and closed. `meta/decisions.md` gains what the human accepted,
