@@ -29,11 +29,11 @@ checked when a later run touches it, diffed into an upgrade path the agents act 
 ```markdown
 | Component | Version | Checked | Provenance |
 |---|---|---|---|
-| semconv | 1.27.0 | 2026-09-18 | pinned in the contract; upstream latest at time of run |
+| semconv | 1.44.0 | 2026-09-18 | release feed; the contract's attribute names are aligned to it |
 | sdk.node | 1.26.0 | 2026-09-18 | `package.json` in the target repo |
-| rum_agent | 0.20.3 | 2026-09-18 | observed in the served bundle |
-| collector | 0.108.0 | 2026-09-18 | customer-reported; not verified against the running pod |
-| tf.signalfx | 9.34.0 | 2026-09-18 | registry, cross-checked against the provider resource map |
+| rum_agent | 0.20.3 | 2026-09-18 | observed in the served bundle — not the latest release, which is the point |
+| collector | 0.160.1 | 2026-09-18 | release feed; the running version is customer-reported and unverified |
+| tf.signalfx | 9.34.0 | 2026-09-18 | registry, latest stable, cross-checked against the provider resource map |
 | obengineer | 0.1.0 | 2026-09-18 | bundle manifest |
 ```
 
@@ -49,7 +49,22 @@ only the `.docx` can tell what it was written against.
 Three questions, in order, and each has a defined answer when the check cannot be performed:
 
 1. **What is recorded?** Read `meta/versions.md`. No file means this is a first run: record and move on.
-2. **What is current?** Determine the current version from the authoritative source for each component — the registry for providers, the release feed for the collector and SDKs, the served bundle for the RUM agent, the target repository's manifests for SDK pins. Where the environment has no network access, say so per component and mark it `unverified this run` rather than reusing the recorded number as though it were confirmed. A stale check silently presented as current is worse than a skipped one.
+2. **What is current?** Determine the current version from the authoritative source for each component. Where the environment has no network access, say so per component and mark it `unverified this run` rather than reusing the recorded number as though it were confirmed. A stale check silently presented as current is worse than a skipped one.
+
+| Component | Authoritative source |
+|---|---|
+| semconv | `curl -s https://api.github.com/repos/open-telemetry/semantic-conventions/releases/latest` → `tag_name` |
+| collector | `curl -s https://api.github.com/repos/signalfx/splunk-otel-collector/releases/latest` → `tag_name` |
+| rum_agent (latest) | `npm view @splunk/otel-web version` |
+| rum_agent (in use) | the served bundle — `splunk.rumVersion` on a live beacon. Evidence beats a release feed here |
+| sdk.\<language\> | the target repository's manifest, not the registry: the pin is what runs |
+| tf.\* | `curl -s https://registry.terraform.io/v1/providers/<namespace>/<name>/versions` |
+
+One trap, and it has bitten: `/v1/providers/<ns>/<name>` returns the newest **published**
+version, which may be a prerelease — `splunk-terraform/signalfx` currently answers with a
+`10.0.0-beta`. Read the `versions` list, sort it numerically rather than as strings, and take
+the newest entry with no alphabetic suffix. A pin generated from the first call installs a
+beta into a customer's tenant.
 3. **What changed, and does it break anything we recommended?** Only this third question is expensive, and it is scoped: compare against the design, not against the changelog. A release that renamed a processor the contract does not use is not a finding.
 
 A version bump is reportable when it touches something the design names. Three classes:
