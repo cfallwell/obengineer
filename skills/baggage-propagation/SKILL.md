@@ -5,12 +5,15 @@ description: >-
   for a target: which keys appear on every span, where each is set once, how
   they ride the baggage header and message attributes, and the
   SpanProcessor.onStart stamp that puts them on every span without per-service
-  code. Produces the mandatory "Cross-Cutting Attributes and Baggage
-  Propagation" section with all five code subsections. Use when the user types
-  $baggage-propagation, asks about baggage, cross-cutting attributes, "getting
-  account_id on every span", trace context across a message bus, why an
-  attribute is missing on backend spans, or when writing or reviewing an
-  instrumentation guide. Writes documentation, not application code.
+  code. Decides which keys earn a place in the header against a byte and
+  key-count budget, and gives the rejected ones a path-scoped or query-time home.
+  Produces the mandatory "Cross-Cutting Attributes and Baggage Propagation"
+  section with all five code subsections. Use when the user types
+  $baggage-propagation, asks about baggage, cross-cutting attributes, whether
+  baggage is expensive, what to propagate versus derive, "getting account_id on
+  every span", trace context across a message bus, why an attribute is missing on
+  backend spans, or when writing or reviewing an instrumentation guide. Writes
+  documentation, not application code.
 metadata:
   author: obengineer
   version: 0.1.0
@@ -52,12 +55,34 @@ Why not the alternatives:
 
 ### Step 1 — Choose the set, and keep it small
 
-Every key here is stamped on every span, so each addition is paid for estate-wide.
-Build the table with columns exactly `Attribute | Type | Set at | Dimension? | Notes`.
+Baggage is a request header, re-serialized on every hop, competing with cookies and
+`Authorization` for one per-request ceiling, and capped by the bus (Amazon SQS allows
+ten message attributes; trace context plus baggage takes three). So the set is chosen
+against a budget, not assembled from requests: **six keys, 512 bytes, 64 bytes per
+value.** Selection tests, the three tiers, and worked verdicts for the usual candidates:
+[`../references/baggage-budget.md`](../references/baggage-budget.md).
 
+A key earns a place only if all five hold — it is needed on spans that do not know it;
+the receiver cannot derive it; a **named** dashboard variable, detector `group by`, or
+troubleshooting pivot reads it; it is bounded and stable for the request; and it is safe
+in plaintext, in a log, and at a third party.
+
+Most rejected candidates are not unimportant, only not estate-wide. Give them a tier, or
+they come back as an argument: **Tier 2** is path-scoped propagation, injected at one
+boundary and carried along one call chain; **Tier 3** is joined at query time by continue
+trace, span link, attribute pivot, or log correlation. "Correlation" is never a reason
+for baggage — that is what `trace_id` is for.
+
+Build the table with columns exactly `Attribute | Type | Set at | Dimension? | Notes`.
 Include, when they exist in the target: the identity key, the tenant/market/region
 key, the bounded attribution subset, `session.id`, and the semconv mirror
 (`enduser.id`). Nothing else without a named question it answers.
+
+Carrying and stamping are two decisions. The propagator decides what crosses the wire;
+the `onStart` allowlist decides what lands on spans; and whether a stamped key becomes a
+metric dimension is a third decision with its own budget
+([`../cardinality-budget/SKILL.md`](../cardinality-budget/SKILL.md)). Conflating the
+three is how a set of six becomes a set of twenty.
 
 ### Step 2 — Classify each key for cardinality before writing any code
 
@@ -96,6 +121,10 @@ assertable:
 
 ## Warning signs
 
+- **A key is in the set with no consumer named.** Every key names the dashboard variable, detector `group by`, or pivot that reads it, or it is removed before the guide ships. This is the check that keeps the set at six.
+- **The set grew and nothing was removed.** Tier 1 is closed: an addition displaces a member, or it is Tier 2.
+- **A key the receiver could derive is being propagated.** Region, environment, service version, route, and a tenant already in the JWT are all derivable. Prefer a Collector transform, which costs zero header bytes.
+- **Nobody measured the header.** The byte budget is arithmetic until someone captures the real header on a real authenticated request.
 - **"Use baggage" appears as prose with no code.** Incomplete. Five subsections or an explicit `Not in evidence` under each heading.
 - **The stamp processor loops over all baggage entries.** Replace with an allowlist before it ships.
 - **The gateway is not mentioned.** The browser only sends `baggage` to origins in the RUM agent's CORS propagation list, and the gateway must allow `traceparent`, `tracestate`, and `baggage`. A gateway that strips them breaks the join, and the symptom looks like an instrumentation bug.
