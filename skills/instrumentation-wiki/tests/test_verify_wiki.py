@@ -55,7 +55,7 @@ def note(title: str, kind: str, status: str, body: str = "Content line.\n") -> s
 def wiki(tmp_path: Path) -> Path:
     app = tmp_path / "wiki" / "Acme" / "storefront"
     for directory in ("meta", "contract", "findings", "business-transactions",
-                      "use-cases", "slos", "implementation/work-orders"):
+                      "use-cases", "slos", "business", "implementation/work-orders"):
         (app / directory).mkdir(parents=True, exist_ok=True)
 
     (app / "index.md").write_text(
@@ -96,6 +96,12 @@ def wiki(tmp_path: Path) -> Path:
         note("checkout-success", "sli", "proposed"))
     (app / "implementation" / "work-orders" / "01-the-shared-library.md").write_text(
         note("The shared library", "work-order", "proposed"))
+    (app / "business" / "value-model.md").write_text(note(
+        "value model", "reference", "proposed",
+        body="Incidents per month: not supplied (`stated` when the customer gives it).\n"))
+    (app / "business" / "public-evidence.md").write_text(note(
+        "public evidence", "reference", "proposed",
+        body="- Status page, https://status.example.com, 2026-01-01, read 2026-01-02.\n"))
 
     root = tmp_path
     (root / ".cursor" / "rules").mkdir(parents=True)
@@ -194,3 +200,18 @@ def test_a_credential_in_a_note_is_caught(wiki: Path):
 def test_a_required_note_missing_is_caught(wiki: Path):
     (wiki / "meta" / "run-log.md").unlink()
     assert any("missing required note: meta/run-log.md" in f for f in failures(wiki))
+
+
+def test_a_value_model_with_no_labelled_figure_is_caught(wiki: Path):
+    # An unlabelled business number is indistinguishable from an invented one.
+    (wiki / "business" / "value-model.md").write_text(note(
+        "value model", "reference", "proposed",
+        body="Incidents per month: 40. Cost per hour: $50,000.\n"))
+    assert any("labels no figure" in f for f in failures(wiki))
+
+
+def test_cited_evidence_with_no_read_date_is_caught(wiki: Path):
+    (wiki / "business" / "public-evidence.md").write_text(note(
+        "public evidence", "reference", "proposed",
+        body="- Outage coverage, https://news.example.com/outage, 2026-01-01.\n"))
+    assert any("no read date" in f for f in failures(wiki))

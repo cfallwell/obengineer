@@ -49,6 +49,11 @@ wiki/
         <detector>.md             # condition, threshold and its provenance, arm state, runbook
       slos/
         <sli>.md                  # user-facing statement, queries, objective, budget, burn rate
+      business/
+        value-model.md            # the value arithmetic and its coefficients, each labelled
+        public-evidence.md        # cited public sources with their read dates
+        asks.md                   # the inputs that would make the value case quantitative
+        entitlement-exposure.md   # the priced position, when entitlement was supplied
       implementation/
         work-orders/<nn>-<slice>.md   # what the implementer agent will do, one note per PR-sized slice
         enforcement.md            # the CI checks that keep the contract true
@@ -162,6 +167,13 @@ owner:
 | Attribute keys and dimension eligibility | `contract/attribute-schema.json` | The document appendix is generated from it |
 | Per-workflow spans, events, thresholds | The wiki note | The document use case summarises it |
 | Run history, versions, decisions | `meta/` | Document control cites it |
+| Value arithmetic, coefficients, cited sources, unfilled asks | `business/` | The document's Business Value Realization section states the case |
+| Licensed totals, consumption, projected overage | `business/entitlement-exposure.md` | The account-team document is written from it; the customer document carries none of it |
+
+`business/` exists so a later run updates a coefficient rather than re-researching a quarter.
+The document states the case; the wiki holds the workings, including the sources with the date
+each was read — a citation with no read date is a citation to a page that may since have
+changed.
 
 The document is regenerated per run and versioned by filename. The wiki is **updated in
 place** and versioned by Git. That difference is deliberate: a customer wants to see what
@@ -189,3 +201,5 @@ See [`incremental-runs.md`](incremental-runs.md) for how a later run consumes it
 - **An index note that has grown a summary of every workflow.** It is now the document again. Cut it back to links.
 - **Notes with no `updated` field.** The delta run cannot tell stale from current, so it will re-derive everything and produce a full rewrite.
 - **A credential in the wiki.** The same rule as the document, and more dangerous here because a wiki is loaded into agent context by default. Record who holds it, never the value.
+- **A `business/` figure with no label or no source.** The value case is only as strong as the provenance of its inputs, and the wiki is where that provenance is supposed to survive.
+- **`business/entitlement-exposure.md` present when no entitlement was supplied.** Then it was invented, and the next run will inherit it as fact.

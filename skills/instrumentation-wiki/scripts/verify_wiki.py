@@ -12,6 +12,7 @@ enforced by whoever remembers them. Checks, all mechanical:
   index        a map rather than a summary: short, and its counts match the tree
   promotion    a promoted note carries more than its name
   versions     a row per component with a provenance column
+  value        the value model labels its figures, and cited sources carry read dates
   pointers     the host files exist, point at the index, and stay pointers
   secrets      no credential-shaped value reached a note
 
@@ -48,7 +49,16 @@ REQUIRED = [
     "meta/decisions.md",
     "contract/cross-cutting.md",
     "contract/attribute-schema.json",
+    # The value model exists on every run. With no business inputs it holds the
+    # arithmetic with its coefficients visibly unfilled, which is what makes the
+    # next run a coefficient update rather than a fresh research exercise.
+    "business/value-model.md",
 ]
+
+# Every figure in the value model carries its provenance. An unlabelled number
+# is indistinguishable from an invented one, and invented business numbers are
+# the fastest way to lose an executive audience.
+VALUE_LABELS = ("stated", "measured", "public", "derived")
 
 NOTE_TYPES = {"index", "reference", "bt", "workflow", "use-case", "finding",
               "detector", "sli", "work-order"}
@@ -207,6 +217,26 @@ def check(app: Path, repo_root: Path, index_max_lines: int) -> list[str]:
                 if ln.startswith("|") and not re.fullmatch(r"[|\s:-]+", ln)]
         if len(rows) < 2:  # the header, plus at least one component
             failures.append("meta/versions.md records no component versions")
+
+    # ---- value model -----------------------------------------------------
+    # The value case is only as good as the provenance of its inputs, so the
+    # note that holds the arithmetic has to say where each number came from.
+    model = app / "business" / "value-model.md"
+    if model.is_file():
+        text = model.read_text()
+        if not any(label in text.lower() for label in VALUE_LABELS):
+            failures.append(
+                "business/value-model.md labels no figure "
+                f"{VALUE_LABELS}; an unlabelled number reads as an invented one")
+
+    evidence = app / "business" / "public-evidence.md"
+    if evidence.is_file():
+        text = evidence.read_text()
+        urls = re.findall(r"https?://\S+", text)
+        if urls and not re.search(r"\bread\b", text, re.I):
+            failures.append(
+                "business/public-evidence.md cites sources but records no read date; "
+                "a citation with no read date points at a page that may have changed")
 
     # ---- host pointers ---------------------------------------------------
     index_path = str(index.relative_to(repo_root)) if index.is_file() and \

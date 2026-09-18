@@ -7,7 +7,9 @@ description: >-
   cross-cutting section with all five code subsections, every detector carrying a
   threshold, every objective an error budget, every use case a narrative, no dimension
   list without cardinality arithmetic, no baggage key without a named consumer, no
-  join without a labelled type, the dictionary agreeing with the schema, and no
+  join without a labelled type, the dictionary agreeing with the schema, every
+  business-value figure carrying its provenance label, licensing exposure kept out
+  of the customer document, and no
   credential anywhere. Returns a pass or a numbered list of defects with the file
   and line for each. Use when the user types $deliverable-review, asks whether an
   analysis document or a wiki is ready, asks what is missing from a deliverable, or at
@@ -65,6 +67,10 @@ conditional and how each condition resolved:
 | Log Observer Connect is entitled | Log Observer Connect panels; otherwise they must **not** appear |
 | Session replay accepted in writing | Always-on replay may be recommended; otherwise it must not be |
 | A wiki exists with prior runs | Section 3 must carry `Changes since v<N-1>`, and findings must be carried forward by id rather than renumbered |
+| `entitlement` was supplied | The separate `entitlement-exposure-<app>-<date>.md` must exist, and the analysis must reference it in exactly one document-control line. Supplied and no exposure document is a defect; **not** supplied and an exposure document exists is a blocking defect, because every number in it was invented |
+| `entitlement.fit_to_entitlement` is true | The exposure document must carry the what-was-cut section, each cut naming the question it made unanswerable |
+| `business_context` was supplied | Section 26's stated figures and the quoted commentary must trace to it. Absent, section 26 is still required — from measured performance and the public record, with unfilled coefficients |
+| `public_evidence.allowed` is true | Section 26 must carry `What the public record shows` with cited entries, or the statement that a twelve-month search found nothing |
 
 A conditional section that is absent is a defect. A conditional section present as
 `Not in evidence` **with the evidence that would settle it** is a pass. A conditional section
@@ -104,6 +110,10 @@ part of the pass:
 - **Detector thresholds and objectives agree.** They are the same commitment written twice; a disagreement means one of them is wrong.
 - **Every `Use Case:` opens with `Narrative`**, in plain language, with no attribute or span names in it.
 - **Versions recorded with provenance**, and any breaking change since the last run present as an upgrade-path entry naming affected notes, the code action, the configuration action, and their ordering.
+- **Business Value Realization is section 26, last in the body**, with all six subsections. Then read it as a sceptic would, because that is who reads it: every figure carries a `stated` / `measured` / `public` / `derived` label; every `derived` figure shows its arithmetic; every claim names a workflow, indicator, or detector **that exists in this document**; every public entry carries a URL, publication, date, and its source class; no complaint is reported as an outage; and no industry benchmark appears anywhere. A benchmark is the tell that a number could not be obtained and was substituted.
+- **The value section does not promise speed.** Instrumentation makes slowness visible, measurable, and attributable. A section implying the application gets faster is a defect against [`../references/business-value.md`](../references/business-value.md), and it costs the technical sections their credibility.
+- **No licensing, consumption, or overage figure anywhere in the customer document.** That audience is the account team, in its own file. One document-control reference line is the whole permitted footprint.
+- **Nothing was trimmed to fit the entitlement unless it was asked for.** Cross-check the cardinality section's promotions against the catalogue: a dimension that an indicator depends on and that quietly became attribute-only is a defect, not an optimisation. Under `fit_to_entitlement` it is the reverse — every cut must be recorded.
 
 ### Step 4 — Grade the wiki, when the run produced one
 
@@ -126,6 +136,7 @@ then read for the half no script can reach, against
 - **The host pointers are pointers.** The script confirms they exist and carry both rules. Read them for the failure it cannot see: a pointer that has grown a copy of the contract, which is a second authority and the one that will be wrong.
 - **`status` reflects reality.** A workflow at `designed` with code in the repository that emits it is a stale wiki, and the delta run will trust it. Spot-check the notes whose work order has landed.
 - **A credential recorded as a holder rather than a value.** The script matches shapes; a secret described in prose — "the key is the one in the market config" — passes it and still tells a reader where to look.
+- **`business/` holds the workings, not a second copy of the section.** The script checks that the value model labels its figures and that cited sources carry read dates. Read for what it cannot: whether a coefficient in the wiki disagrees with the same number in the document, which means the next run will inherit the wrong one.
 
 ### Step 5 — Verify the rendered artifact, not just the Markdown
 

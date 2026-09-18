@@ -7,8 +7,12 @@ description: >-
   diagrams, inventory the existing Splunk and ThousandEyes footprint, raise the
   critical findings, and carry through the full recommendation set — business
   transactions, workflows, custom metrics, detectors with thresholds, SLIs and
-  SLOs in the customer's voice, and composite use cases. Emits the Markdown, the
-  customer-review .docx rendered from it, and attribute-schema.json. Use when the
+  SLOs in the customer's voice, and composite use cases. Closes with a business
+  value realization section built from the customer's own numbers, the last twelve
+  months of the public record, and measured performance. Emits the Markdown, the
+  customer-review .docx rendered from it, attribute-schema.json, and — only when
+  entitlement was supplied — a separate entitlement exposure document for the
+  account team. Use when the
   user types $instrumentation-analyze, asks to "analyze this site or app",
   "Prompt 01", for the analysis document, what business transactions exist, why
   RUM data looks wrong, or which observability products are missing. Read-only
@@ -47,17 +51,22 @@ Prompt: [`../../prompts/01-analyze-application.md`](../../prompts/01-analyze-app
 | [`../references/cross-cutting-attributes.md`](../references/cross-cutting-attributes.md) | Section 7 and its five mandatory code subsections. |
 | [`../references/portfolio-decision-engine.md`](../references/portfolio-decision-engine.md) | Which question goes to Observability Cloud, Splunk Enterprise, or ThousandEyes. |
 | [`../references/incremental-runs.md`](../references/incremental-runs.md) | Whether this is a first run or a delta. |
+| [`../references/business-value.md`](../references/business-value.md) | Section 26 — the value case, the twelve-month public-record scan, and the four evidence labels. |
+| [`../references/entitlement-exposure.md`](../references/entitlement-exposure.md) | The separate account-team document, and the rule that entitlement never trims the recommendation. |
 
 ## Output
 
-| Artifact | Path |
-|---|---|
-| Markdown | `docs/observability/analysis-<app>-<date>.md` |
-| Word | `docs/observability/<Customer>-<App>-Analysis-<date>.docx` |
-| Schema | `docs/observability/attribute-schema.json` |
+| Artifact | Path | When |
+|---|---|---|
+| Markdown | `docs/observability/analysis-<app>-<date>.md` | always |
+| Word | `docs/observability/<Customer>-<App>-Analysis-<date>.docx` | always |
+| Schema | `docs/observability/attribute-schema.json` | always |
+| Entitlement exposure | `docs/observability/entitlement-exposure-<app>-<date>.md` | only when `entitlement` was supplied |
 
 One customer document. If a run is about to produce a second one, it has recreated the
-artifact this design removed.
+artifact this design removed. The exposure document is not a second customer document: it is
+addressed to the **account team**, markdown only, never rendered, and the analysis mentions it
+in exactly one document-control line.
 
 ## Rules
 
@@ -65,6 +74,8 @@ artifact this design removed.
 - **Never store a credential.** A found token is a finding referenced by shape and location, never by value. See [`../references/critical-findings.md`](../references/critical-findings.md).
 - **Mark gaps as gaps.** "Not in evidence" with a named next step is a finding, not an omission.
 - **Nothing goes under an appendix heading that the argument depends on.** Appendices are the dictionary, long code, the work-order plan, supplementary evidence, and open items.
+- **Entitlement prices the recommendation; it does not cap it.** Recommend what the application needs, cost it, and send the overage to the account team. Cut to fit only when `entitlement.fit_to_entitlement` is true, and record every cut.
+- **Never infer a business number.** No industry benchmark, no revenue estimated from a filing and presented as this application's. Every figure in section 26 is labelled `stated`, `measured`, `public`, or `derived`.
 
 ## Process
 
@@ -95,6 +106,12 @@ When a URL is in scope, capture the document and the runtime, not just the HTML.
 
 Record measured facts. "The agent is late" is an opinion; "first paint at 288 ms, first
 beacon at 2081 ms" is evidence.
+
+Record the **conditions** with every timing — URL, date, device class, network profile, cold
+or warm cache, authenticated or not. Section 26 reuses these numbers as the performance
+baseline of the value case, and a measurement whose conditions were not recorded is
+unreproducible, which means the first person to re-measure gets a different answer and the
+value case loses its floor.
 
 ### Step 3 — Raise the critical findings while the evidence is in hand
 
@@ -167,7 +184,61 @@ a TAM can run. Critical findings at or above the agreed severity are Phase 0 ite
 the signal **is** trustworthy, say so; a Phase 0 invented out of caution costs a release
 cycle.
 
-### Step 10 — Render, verify, and check yourself
+### Step 10 — Read the public record, then build the value case
+
+Section 26 is written last of the body sections because it is the argument the rest of the
+document has earned. It has three ingredients and no fourth: the `business_context` the intake
+collected, the last twelve months of public evidence, and the performance measured in Step 2.
+Full spec: [`../references/business-value.md`](../references/business-value.md).
+
+**Read the public record** when `public_evidence.allowed` is true, over
+`public_evidence.window_months` (default twelve), across `brand_terms` including sub-brands
+and country sites:
+
+| Search | Establishes |
+|---|---|
+| Outage and degradation coverage in trade, tech, and regional press | That incidents reached the outside world, and how they were characterised |
+| The customer's own status or incident history pages | Frequency and duration, in their own publication |
+| App-store reviews, review sites, community forums, public social posts | What the failure feels like from outside, in words the section can quote |
+| Public field-performance data for the origin | Whether real users experience the performance the customer believes they do |
+| Press releases, earnings commentary, investor material | Which initiative this work attaches to, and the language the executive audience already uses |
+
+Cite every entry — URL, publication, date, one line on what it shows — and never promote a
+complaint into an outage. Finding nothing in twelve months is itself a finding: it says the
+incidents were contained, and the value case then rests on internal cost rather than on brand
+exposure.
+
+**Then write the six subsections** in the template's order: the problem in the customer's
+words (quoted, not paraphrased), what the public record shows, measured performance today,
+where the time goes today, what realisation looks like, and what the section needs to become
+quantitative.
+
+Every claim names a mechanism **that exists in this document** — a workflow, an indicator, a
+detector. Every figure carries its label. And say plainly what instrumentation does not do:
+it makes slowness visible, measurable, and attributable; it does not make the application
+fast. A section that implies otherwise is why the sections above it stop being believed.
+
+With no business inputs at all, the section is still written: one sentence saying nothing was
+supplied, the public record, the measured performance, the value model with its coefficients
+named and unfilled, and the asks. Short and honest beats fabricated and quantitative.
+
+### Step 11 — Price it for the account team, if there is anything to price against
+
+When `entitlement` carries real numbers, write
+`docs/observability/entitlement-exposure-<app>-<date>.md` per
+[`../references/entitlement-exposure.md`](../references/entitlement-exposure.md): position
+today, what the recommendation adds with the arithmetic visible per row, the projected
+position, each overage with options and a recommendation, and growth headroom.
+
+The analysis document gets one line in document control saying the exposure document exists
+and that the recommendation was not trimmed to fit. No licensed totals, no consumption, no
+overage figures in the customer document.
+
+When entitlement is `unknown` throughout: no exposure document, no assumed limit, and one
+document-control line saying the budget was not supplied. Recommend as though there is enough
+licensing, because that is the honest position when nobody has said otherwise.
+
+### Step 12 — Render, verify, and check yourself
 
 ```bash
 python3 ../customer-doc-render/scripts/render_customer_doc.py \
@@ -194,10 +265,16 @@ do not ship.
 - **A detector with no threshold, or an SLO with no error budget.** Both are wish lists.
 - **A credential pasted into the document.** Reference it by shape and location; record the exposure.
 - **A second document produced "for the implementers".** That is the wiki, and it is notes.
+- **An industry benchmark in section 26.** Someone could not get the customer's number and substituted one. Delete it and name the ask.
+- **A value claim with no mechanism in this document.** Marketing inside a technical deliverable, and the first thing a reviewer attacks.
+- **A dimension that disappeared between the cardinality section and the catalogue.** Something was trimmed to fit a budget nobody was asked about.
+- **An overage figure in the customer document.** Wrong artifact, wrong audience.
 
 ## Non-goals
 
 - Does not modify the target, log in destructively, or run load against production.
 - Does not open application pull requests. That is [`../instrumentation-implement/SKILL.md`](../instrumentation-implement/SKILL.md).
-- Does not produce a second customer-facing document.
+- Does not produce a second customer-facing document. The entitlement exposure document is for the account team and is not delivered to the customer as part of the review.
+- Does not build a commercial proposal or quote products. It prices resources; the account team prices deals.
+- Does not perform a formal business value assessment. Section 26 is ad-hoc, built from supplied numbers, cited public evidence, and its own measurements.
 - Does not write Terraform. That is [`../observability-as-code/SKILL.md`](../observability-as-code/SKILL.md).

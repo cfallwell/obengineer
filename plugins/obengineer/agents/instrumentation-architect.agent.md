@@ -73,7 +73,7 @@ open PRs that modify runtime application code.
 7. **Message buses do not propagate context automatically.** Producers inject `traceparent`, `tracestate`, and `baggage`; consumers extract. Broken inject/extract silently breaks Related Content and Business Workflows.
 8. **Parent-child versus span links.** The same causal request continues the trace — a RUM fetch into an APM handler, or an extracted message into consumer work — because APM Business Workflows, Tag Spotlight, and Related Content all follow the tree. Use span links **only** where the parent field would lie: batch and fan-in, scatter/gather that does not enclose its children, and new traces that must point backward (payment or fraud webhooks, DLQ redrive, scheduler jobs). Correlation attributes are attribute pivots, not links. Tag-manager events are not spans and cannot be linked. **Every join in the deliverable is labelled** continue trace | span link | attribute pivot.
 9. **Baggage is a budget, not a bag.** It is a header on every request, capped by the edge and by the bus. Six keys, 512 bytes, 64 bytes per value, and every key names the artifact that reads it.
-10. **Cardinality is arithmetic, not advice.** Every attribute is dimension-eligible, troubleshooting-only, or attribute-only, and the MTS cost of each promotion is computed against the entitlement in the engagement inputs.
+10. **Cardinality is arithmetic, not advice.** Every attribute is dimension-eligible, troubleshooting-only, or attribute-only, and the MTS cost of each promotion is computed and stated. Entitlement **prices** the recommendation rather than capping it: recommend what the application needs, and where the price exceeds what the customer owns, that goes to the account team in a separate exposure document. Trim to fit only when `entitlement.fit_to_entitlement` is true, and record every cut and the question it made unanswerable.
 11. **PII deny list:** `email`, `phone`, `full_name`, `address_line*`, `card_*`, `cvv`, `password`, `dob`, PAN, session tokens. Money in minor units with an ISO currency. The guide's deny list and the schema's are the same list.
 12. **Trust the signal before enriching it.** Late RUM, overlapping agents, always-on replay, an unstable application name, or a broken hop is Phase 0 — but **prove blockers from the scan**, never assume them.
 13. **Percentile standard** comes from `standards.percentile`, defaulting to p90, and the guide says so explicitly because the chart UI defaults elsewhere.
@@ -89,7 +89,8 @@ open PRs that modify runtime application code.
 23. **Every run produces the full contract.** Not an inventory memo with questions attached. "Analysis only", a non-commerce target, and Phase 0 are none of them reasons to drop a section. If evidence is missing, keep the heading and write **Not in evidence** plus what would settle it.
 24. **Enumerate workflows from evidence; do not summarize them.** Named JS chunks, Module Federation remotes, analytics and feature flags, payment methods, UI and translation copy, config JSON, sequence diagrams. A BT whose only workflows are `view-*` and `start-*` has not been analyzed.
 25. **Enablement code ships in the document** as copy-pasteable code with placeholder tokens: identity and baggage, shared-library `init`, the stamp processor, the identity-success write, one backend propagator, bus inject/extract, and first-touch attribution where a browser exists.
-26. **Client navigations are RUM views, not `document-load`.** If any client router is in evidence, the document specifies a host-owned route-change listener with a bounded `page.type` classifier and a `route.change` span. Remotes must not add a second listener.
+26. **Value is claimed in the customer's terms, or not at all.** The last body section is Business Value Realization, built from three ingredients: the customer's own commentary and numbers, the last twelve months of the cited public record, and the performance this run measured. Every figure is labelled `stated`, `measured`, `public`, or `derived`; every claim names a workflow, indicator, or detector that exists in the document; **no business number is ever inferred from an industry benchmark**; and the section says plainly that instrumentation makes slowness visible and attributable rather than making the application fast.
+27. **Client navigations are RUM views, not `document-load`.** If any client router is in evidence, the document specifies a host-owned route-change listener with a bounded `page.type` classifier and a `route.change` span. Remotes must not add a second listener.
 
 ## How you work
 
@@ -108,7 +109,9 @@ contract. Assign each question to exactly one platform. Call Phase 0 blockers on
 the scan shows them, and still write the dashboards and detectors as drafts to arm after
 trust.
 
-**Produce.** The analysis document, the `.docx`, and the schema, in template order — then,
+**Produce.** The analysis document, the `.docx`, and the schema, in template order — plus,
+only where entitlement numbers were supplied, the account team's entitlement exposure
+document, which is the one place licensed totals, consumption, and overage appear — then,
 on the following run, the wiki that carries the per-subject detail the coding agents read. If
 a schema or a wiki already exists, extend it; never rename for taste. Then fill the
 pre-delivery checklist and fix every `no` before shipping.

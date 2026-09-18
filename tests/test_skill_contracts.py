@@ -432,6 +432,177 @@ def test_use_cases_open_with_a_narrative():
 
 
 # --------------------------------------------------------------------------- #
+# value in the customer's document, cost in the account team's
+# --------------------------------------------------------------------------- #
+BUSINESS_VALUE = SKILLS / "references" / "business-value.md"
+EXPOSURE = SKILLS / "references" / "entitlement-exposure.md"
+VALUE_SECTION = "Business Value Realization"
+
+
+def test_business_value_is_the_last_body_section_before_the_appendices():
+    """The value case is the argument the document has earned, not its opening
+    promise — and it is a body section, because the customer reads it."""
+    text = TEMPLATE.read_text()
+    value = text.index(f"| 26 | **{VALUE_SECTION}** | H1 |")
+    use_cases = text.index("**Composite Use Cases** | H1 |")
+    appendix_a = text.index("| 27 | Appendix A: Master Attribute Dictionary")
+    assert use_cases < value < appendix_a, (
+        "Business Value Realization comes after the catalogue and before the "
+        "appendices"
+    )
+    assert f"**No `{VALUE_SECTION}` section**" in text, (
+        "the completeness bar must fail a document that drops the value section"
+    )
+
+
+def test_business_value_figures_carry_their_provenance():
+    """An unlabelled business number is indistinguishable from an invented one,
+    and one invented number costs the whole document its credibility."""
+    spec = BUSINESS_VALUE.read_text()
+    for label in ("`stated`", "`measured`", "`public`", "`derived`"):
+        assert label in spec, f"the value spec must define the {label} label"
+    assert "Never infer a business number" in spec, (
+        "the spec must forbid substituting a benchmark for a number nobody gave"
+    )
+    assert "benchmark" in spec.lower()
+    # Every claim has to point at machinery that exists in the same document.
+    assert "names its mechanism" in spec or "names the workflow" in spec
+    # And it must not promise what instrumentation does not deliver.
+    assert "does not make it fast" in spec or "does not make the application fast" in spec
+
+    for required in ("The problem in the customer's words",
+                     "What the public record shows",
+                     "Measured performance today",
+                     "Where the time goes today",
+                     "What realisation looks like",
+                     "become quantitative"):
+        assert required in spec, f"the value section is missing {required}"
+
+    # Written even with nothing supplied, or a first engagement produces nothing.
+    assert "no business context" in spec.lower()
+
+    template = TEMPLATE.read_text()
+    assert "industry benchmark" in template, (
+        "the completeness bar must fail a benchmark in the customer document"
+    )
+
+
+def test_public_evidence_is_cited_and_bounded_to_twelve_months():
+    spec = BUSINESS_VALUE.read_text()
+    assert "Cite or delete" in spec
+    assert "complaint is a complaint, not an outage" in spec, (
+        "a complaint promoted into an outage is unsafe in a document carrying the "
+        "customer's name"
+    )
+    assert "Absence is a finding too" in spec, (
+        "a twelve-month search that finds nothing must be reportable"
+    )
+    template = (ROOT / "inputs" / "engagement-inputs.template.yaml").read_text()
+    assert "public_evidence:" in template
+    assert "window_months: 12" in template
+    assert "allowed:" in template, (
+        "research must be refusable; some engagements cannot search in the open"
+    )
+
+
+def test_intake_collects_the_business_context_no_scan_can_reach():
+    template = (ROOT / "inputs" / "engagement-inputs.template.yaml").read_text()
+    assert "business_context:" in template
+    for field in ("commentary", "mttd_minutes", "mtta_minutes", "mttr_minutes",
+                  "incidents_per_month", "fully_loaded_hourly_cost",
+                  "annual_tooling_spend", "opex_challenges",
+                  "revenue_per_hour_online", "conversion_rate_pct",
+                  "revenue_challenges", "business_model"):
+        assert field in template, f"business context must capture {field}"
+
+    intake = (SKILLS / "engagement-intake" / "SKILL.md").read_text()
+    assert "business" in intake.lower()
+    assert "MTTR" in intake, "the intake must ask for the current MTTx"
+    assert "own words" in intake, (
+        "the commentary is quoted, so it has to be asked for as prose"
+    )
+    command = (ROOT / "commands" / "obengineer-intake.md").read_text()
+    assert "what hurts today" in command, (
+        "the intake command must prompt for the business commentary itself, since "
+        "a host may run the command without reading the skill first"
+    )
+
+
+def test_entitlement_prices_the_recommendation_and_never_silently_caps_it():
+    """Licensing is reference. A customer told that full coverage needs more MTS
+    can buy it, phase it, or promote less — and none of those happen if a
+    dimension is dropped before anyone sees the number."""
+    exposure = EXPOSURE.read_text()
+    assert "reference, not a ceiling" in exposure
+    assert "account team" in exposure
+    assert "entitlement-exposure-<app>-<date>.md" in exposure, (
+        "the exposure document needs a stable path, or it is written once and lost"
+    )
+    assert "there is no exposure document" in exposure, (
+        "with no entitlement supplied, every number in the document would be "
+        "invented, and it would be quoted as though it were not"
+    )
+    assert "fit_to_entitlement" in exposure
+
+    inputs = (ROOT / "inputs" / "engagement-inputs.template.yaml").read_text()
+    assert "fit_to_entitlement: false" in inputs, (
+        "cutting to fit is opt-in, on explicit customer request"
+    )
+
+    budget = (SKILLS / "cardinality-budget" / "SKILL.md").read_text()
+    assert "Cost is not a veto" in budget
+    assert "entitlement-exposure.md" in budget
+
+    template = TEMPLATE.read_text()
+    assert "**Licensing or overage numbers in this document**" in template, (
+        "the completeness bar must keep commercial exposure out of the customer "
+        "document"
+    )
+    assert "trimmed to fit the entitlement without being asked" in template
+
+
+def test_the_analysis_run_owns_both_new_outputs():
+    skill = (SKILLS / "instrumentation-analyze" / "SKILL.md").read_text()
+    assert "entitlement-exposure-<app>-<date>.md" in skill
+    assert "only when `entitlement` was supplied" in skill, (
+        "the exposure document is conditional; produced unconditionally it is "
+        "fabricated"
+    )
+    assert "public record" in skill and "twelve months" in skill
+    assert "business-value.md" in skill
+
+    prompt = (PROMPTS / "01-analyze-application.md").read_text()
+    assert VALUE_SECTION in prompt
+    assert "entitlement-exposure" in prompt
+    assert "business_context" in prompt
+
+    # The grader has to know both, or neither is enforced at delivery.
+    review = (SKILLS / "deliverable-review" / "SKILL.md").read_text()
+    assert VALUE_SECTION in review
+    assert "benchmark" in review
+    assert "blocking defect" in review, (
+        "an exposure document with no supplied entitlement is invented, which is "
+        "worse than a missing one"
+    )
+
+
+def test_the_wiki_keeps_the_value_workings():
+    """The document states the case; the wiki holds the arithmetic, so the next
+    run updates a coefficient instead of re-researching a quarter."""
+    spec = (SKILLS / "references" / "agent-wiki.md").read_text()
+    for note in ("business/", "value-model.md", "public-evidence.md", "asks.md"):
+        assert note in spec, f"the wiki layout is missing {note}"
+
+    script = (SKILLS / "instrumentation-wiki" / "scripts" / "verify_wiki.py").read_text()
+    assert "business/value-model.md" in script, (
+        "the value model exists on every run, so the verifier requires it"
+    )
+    assert "read date" in script, (
+        "a citation with no read date points at a page that may have changed"
+    )
+
+
+# --------------------------------------------------------------------------- #
 # one customer document, and a wiki underneath it
 # --------------------------------------------------------------------------- #
 def test_there_is_exactly_one_customer_facing_document():

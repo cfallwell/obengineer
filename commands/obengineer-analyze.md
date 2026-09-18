@@ -29,7 +29,12 @@ Not complete until all three artifacts exist and the render verifier exits 0:
 - `docs/observability/<Customer>-<App>-Analysis-<date>.docx`, rendered from that Markdown
 - `docs/observability/attribute-schema.json`
 
-Four things this run fails on if you are not deliberate:
+Plus a fourth, **only when `entitlement` was supplied**:
+`docs/observability/entitlement-exposure-<app>-<date>.md`, addressed to the account team,
+markdown only, never rendered. Spec:
+`{{OBENGINEER_ROOT}}/skills/references/entitlement-exposure.md`.
+
+Six things this run fails on if you are not deliberate:
 
 - **Critical Findings is section 4**, immediately after the architecture, severity-ordered,
   each with files, exposure, risk, remediation, and verification. A credential is recorded by
@@ -38,6 +43,14 @@ Four things this run fails on if you are not deliberate:
 - **The catalogue is sections 19–25, contiguous**: business transactions, workflows, custom
   metrics, BT-aligned workflows, detectors with thresholds, SLIs and SLOs, composite use cases.
 - **Cross-Cutting Attributes and Baggage Propagation** with all five code subsections.
+- **Business Value Realization is section 26**, last in the body: the customer's own words,
+  the last twelve months of the cited public record, the performance you measured, every
+  figure labelled `stated` / `measured` / `public` / `derived`, every claim tied to a
+  mechanism in this document, and no industry benchmark anywhere. Spec:
+  `{{OBENGINEER_ROOT}}/skills/references/business-value.md`.
+- **Entitlement prices the recommendation, it does not cap it.** No licensing, consumption,
+  or overage number in the customer document; nothing trimmed to fit unless
+  `fit_to_entitlement` is true.
 
 Docs only. Do not modify application source. Do not display ingest tokens. Do not produce a
 second customer-facing document.

@@ -46,10 +46,12 @@ The fields this run depends on:
 | `surfaces.*` | Whether there is a front-end deep scan, and whether authenticated journeys are reachable |
 | `backends.languages`, `.buses`, `.cloud_accounts`, `.gateway` | Which SDK and bus subsections must exist |
 | `tenancy.o11y_realm`, `.environments` | Whether exit criteria can be phrased as queries |
-| `entitlement.*` | The cardinality budget every dimension recommendation is charged against |
+| `entitlement.*` | **Pricing, not a ceiling.** What the recommendation will consume, written up for the account team in a separate document. It does not shrink the recommendation unless `fit_to_entitlement` is true |
 | `constraints.*` | What is vetoed regardless of technical merit |
 | `standards.percentile` | One percentile, in every chart and detector |
 | `outcomes.*` | Ranking when several journeys are equally instrumentable |
+| `business_context.*` | Section 26, Business Value Realization: the quoted commentary, the current MTTx, incident volume, triage and tooling cost, revenue exposure |
+| `public_evidence.*` | Whether to read the last twelve months of outage coverage, complaints, and field performance, and which brand terms to search |
 
 Never request or display an ingest token. The inputs file records who holds a
 credential, not its value.
@@ -68,7 +70,7 @@ If URLs were provided, **deep-scan** the front end (HTML, script order, competin
 
 Produce `docs/observability/analysis-<app>-<date>.md` and the `.docx` rendered from it, with **every section** from [`../skills/references/document-template.md`](../skills/references/document-template.md) in that order. That table is the only section list; do not restate it here and do not reorder it. If evidence is missing, keep the heading and write **Not in evidence** plus the evidence that would settle it.
 
-Six things this run gets wrong if it is not deliberate about them:
+Eight things this run gets wrong if it is not deliberate about them:
 
 1. **Critical Findings is section 4** — immediately after the architecture it was found in, ordered by severity, each with observation and evidence, the files and surfaces involved, what is exposed and to whom, the risk, the remediation path split into stop-the-bleeding and structural, and how to verify. Stable ids from the start. A credential is recorded by shape and location, never by value. Spec: [`../skills/references/critical-findings.md`](../skills/references/critical-findings.md).
 2. **Nothing in the body sits under an appendix heading.** Appendices are the attribute dictionary, long code variants, the agent work-order plan, supplementary evidence, and open items — five topic-scoped appendices, not a container for the analysis.
@@ -76,6 +78,8 @@ Six things this run gets wrong if it is not deliberate about them:
 4. **Every detector has a threshold** that is a measured baseline, a customer-agreed target traced to an SLO, or a labelled placeholder with the query that will replace it. There is no fourth option.
 5. **Every SLI is written in the customer's voice first**, its query second, with good/total events, objective, window, error budget, and burn-rate alerting. Spec: [`../skills/references/service-levels.md`](../skills/references/service-levels.md).
 6. **Every `Use Case:` opens with `Narrative`** — plain language, no attribute or span names, who the user is and what the business loses when it fails. Then identity, attributes, span events, metrics, SLI, dashboard, detectors, and the join labelled **continue trace** | **span link** | **attribute pivot**.
+7. **Business Value Realization is section 26**, the last body section before the appendices, and it is written from three things only: the customer's `business_context`, the last twelve months of the **public record** (outage coverage, their own status history, complaints, field performance — each entry cited with URL, publication, and date), and the performance this run **measured**. Every figure carries a `stated` / `measured` / `public` / `derived` label, every claim names a workflow, indicator, or detector that exists in this document, and **no business number is ever inferred from an industry benchmark**. With no business inputs the section is still written — short, honest, coefficients named and unfilled. Spec: [`../skills/references/business-value.md`](../skills/references/business-value.md).
+8. **Entitlement prices the recommendation; it does not cap it.** Recommend what the application needs. When entitlement numbers were supplied, also write `docs/observability/entitlement-exposure-<app>-<date>.md` for the **account team** — position today, what this adds with the arithmetic per row, the projected overage, the options, and a recommendation — and reference it from the customer document in exactly one document-control line, with no licensing or overage numbers in that document at all. When they were not supplied, there is no exposure document and no assumed limit. Spec: [`../skills/references/entitlement-exposure.md`](../skills/references/entitlement-exposure.md).
 
 **Cross-Cutting Attributes and Baggage Propagation is mandatory** and is the section most often dropped. Attribute-set table plus all five code subsections: provider bootstrap, the `SpanProcessor.onStart` stamp over an explicit key allowlist, the identity-success baggage write, the backend composite propagator, and producer inject / consumer extract once per bus in the architecture section. Prose saying "use baggage" does not satisfy it. If a piece does not exist in the target, keep the heading and write **Not in evidence — do not deploy** with the pattern shown anyway.
 
@@ -83,6 +87,6 @@ Also required, and easy to drop because they are not sections: record the tool, 
 
 ## Acceptance
 
-A reader who stops after six pages leaves knowing the architecture and every finding worth acting on this week. A staff engineer can implement Phase 0 and the first workflow without asking what a `workflow.step` value is, how baggage is stamped, or whether a join continues the trace. A TAM can configure MetricSets and Business Workflows from the portfolio mapping. Every row of the pre-delivery checklist in Appendix E is `yes`, and `verify_render.py` exits 0.
+A reader who stops after six pages leaves knowing the architecture and every finding worth acting on this week. A staff engineer can implement Phase 0 and the first workflow without asking what a `workflow.step` value is, how baggage is stamped, or whether a join continues the trace. A TAM can configure MetricSets and Business Workflows from the portfolio mapping. An executive reading only section 26 sees their own words, cited public evidence, measured numbers, and no benchmark. Every row of the pre-delivery checklist in Appendix E is `yes`, and `verify_render.py` exits 0.
 
-Do not modify application source. Do not produce a second customer-facing document.
+Do not modify application source. Do not produce a second customer-facing document. The entitlement exposure document is for the account team, is markdown only, and is not part of the customer review.

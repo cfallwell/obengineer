@@ -83,6 +83,10 @@ keys, and finding ids exactly. Extend from new evidence; never rename for taste.
 | `detectors/<detector>.md` | Condition, threshold **and its provenance**, arm state, group-by, runbook |
 | `slos/<sli>.md` | User-facing statement, good and total event queries, objective, window, error budget, burn-rate rules |
 | `contract/*.md` | Cross-cutting attributes, baggage budget with each key's named consumer, collector config, MPM lists with their arithmetic |
+| `business/value-model.md` | The value arithmetic and every coefficient, each labelled `stated`, `measured`, `public`, or `derived`, with the unfilled ones left visibly unfilled |
+| `business/public-evidence.md` | Each cited source with its URL, publication, date, source class, and **the date it was read** |
+| `business/asks.md` | The inputs that would make the value case quantitative, and where the customer finds each |
+| `business/entitlement-exposure.md` | The priced position, when entitlement was supplied — and absent when it was not |
 | `meta/*` | Versions, run log, decisions, and the engagement inputs as run |
 
 Every note gets the frontmatter from `agent-wiki.md`: `type`, `customer`, `app`, `status`,
@@ -99,7 +103,7 @@ visible rather than looking like an omission.
 
 Link with `[[wikilinks]]`. Use a relative Markdown link only when pointing out of the wiki at
 a real repository file. Check that every link resolves before closing the run — `verify_wiki.py`
-in Step 9 does it mechanically — because a link that goes nowhere is worse than no link: an
+in Step 10 does it mechanically — because a link that goes nowhere is worse than no link: an
 agent follows it, finds nothing, and infers the subject was never analysed.
 
 ### Step 4 — Keep the index a map, not a summary
@@ -128,14 +132,28 @@ code action, the configuration action, their ordering, and the verification.
 `unknown` is acceptable; an absent row is not, because nobody checks a component that is not
 listed.
 
-### Step 7 — Emit the schema, and make the checks possible
+### Step 7 — Keep the value workings, not just the value claims
+
+`business/` exists so the next run updates a coefficient instead of re-researching a quarter.
+`value-model.md` carries the arithmetic with every input labelled and every missing input
+visibly missing; `public-evidence.md` carries the sources **with the date each was read**,
+because a citation with no read date points at a page that may since have changed; `asks.md`
+carries what is still needed.
+
+`business/entitlement-exposure.md` exists only when the customer supplied entitlement numbers.
+Written without them it is invented, and the next run inherits the invention as fact. The
+customer document never carries these numbers at all —
+[`../references/entitlement-exposure.md`](../references/entitlement-exposure.md) explains why
+the audience for them is the account team.
+
+### Step 8 — Emit the schema, and make the checks possible
 
 `attribute-schema.json` carries every attribute, its type, dimension eligibility, and the
 deny list. It is the file the layer-1 CI checks read, so it is the reason those checks can
 exist at all — see [`../references/ci-integration.md`](../references/ci-integration.md).
 It and the document's Appendix A are generated from each other and may not disagree.
 
-### Step 8 — Point the hosts at it
+### Step 9 — Point the hosts at it
 
 An agent that has to be told to read the wiki will not read it. Write a **pointer** — never a
 copy — into each host's automatically loaded file: `.cursor/rules/obengineer-wiki.mdc` with
@@ -147,7 +165,7 @@ have already gone wrong — a single `init`, names from the registry, no credent
 Keep it short. A pointer that grows into a summary is a second authority, and the copy is the
 one that will be wrong.
 
-### Step 9 — Verify the wiki, then close the run
+### Step 10 — Verify the wiki, then close the run
 
 ```bash
 python3 scripts/verify_wiki.py "wiki/<Customer>/<app>"

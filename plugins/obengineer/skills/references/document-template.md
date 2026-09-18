@@ -23,6 +23,15 @@ findings in one file and their consequences in another.
 | Markdown | `docs/observability/analysis-<app>-<date>.md` | the source of record; engineers and reviewers | authored directly |
 | Word | `docs/observability/<Customer>-<App>-Analysis-<date>.docx` | customer architecture review | `customer-doc-render` skill, from the markdown |
 
+One artifact sits **outside** this document and is not part of it: when the customer
+supplied entitlement numbers, the run also writes
+`docs/observability/entitlement-exposure-<app>-<date>.md` — what implementing the
+recommendation will consume, where it exceeds what they own, and the options — addressed to
+the **account team**. The analysis document references it in one line in document control
+and carries none of its numbers. Entitlement is reference, not a ceiling: the recommendation
+is what the application needs, and it is not trimmed to fit unless the customer asked for
+that. Full spec: [`entitlement-exposure.md`](entitlement-exposure.md).
+
 The `.docx` is never hand-maintained. It is rendered from the markdown so the two can never
 disagree. Delivered as markdown only it is incomplete; a `.docx` that was not rendered from
 the committed markdown is not reviewable.
@@ -93,8 +102,9 @@ Numbered here for reference only; do not number the headings in the output.
 the prompts point here rather than restating it. A second copy drifts, and then two
 documents both claim to be the authority on what a deliverable contains.
 
-The document has three movements: **what is there and what is wrong with it** (1–5),
-**what to build** (6–18), **the catalogue the build works from** (19–25), then appendices.
+The document has four movements: **what is there and what is wrong with it** (1–5),
+**what to build** (6–18), **the catalogue the build works from** (19–25), **what it is for**
+(26), then appendices.
 
 | # | Heading | Level |
 |---|---|---|
@@ -124,18 +134,20 @@ The document has three movements: **what is there and what is wrong with it** (1
 | 24 | **Service Level Indicators and Objectives** | H1 |
 | 25 | **Composite Use Cases** | H1 |
 | 25n | Use Case: \<flow\> — one H1 per ranked flow, immediately after 25 | H1 |
-| 26 | Appendix A: Master Attribute Dictionary | H1 |
-| 27 | Appendix B: Supplementary Code and Configuration | H1 |
-| 28 | Appendix C: Instrumentation Agent Work Order | H1 |
-| 29 | Appendix D: Supplementary Evidence | H1 |
-| 30 | Appendix E: Open Items and Assumptions | H1 |
+| 26 | **Business Value Realization** | H1 |
+| 27 | Appendix A: Master Attribute Dictionary | H1 |
+| 28 | Appendix B: Supplementary Code and Configuration | H1 |
+| 29 | Appendix C: Instrumentation Agent Work Order | H1 |
+| 30 | Appendix D: Supplementary Evidence | H1 |
+| 31 | Appendix E: Open Items and Assumptions | H1 |
 
 Rules that are easy to get wrong:
 
 - **Nothing in the body belongs under an appendix heading.** An earlier revision nested the whole analysis under "Appendix A — Target breakdown", which put the substance of the document behind a heading that reads as optional. Body sections are body sections. Appendices are topic-scoped breakout detail — the dictionary, long code, the agent work order, supplementary evidence, open items — and exist to keep the main document short enough to read.
 - **Architecture (Observed) is section 3 — a named body section near the front.** It is what the customer reviews first in an architecture review. Do not retitle it as an appendix and do not move it behind Purpose.
 - **Critical Findings is section 4, immediately after the architecture it was found in, and nothing displaces it.** Not the course of action, not the portfolio gaps, not an executive summary. A finding that a credential is reachable from the browser is worth more to the reader than everything after it, and burying it at page 180 has happened and must not happen again. Full spec in [`critical-findings.md`](critical-findings.md).
-- **Sections 19–25 are the catalogue and are contiguous, in that order, ending the body.** They are what the implementer and the Terraform run read: the BT list, the workflow list, the meters, the BT-to-workflow mapping, every detector with its threshold, every SLI with its objective, then the use cases that compose them. Order matters because each one is defined in terms of the one before it.
+- **Sections 19–25 are the catalogue and are contiguous, in that order.** They are what the implementer and the Terraform run read: the BT list, the workflow list, the meters, the BT-to-workflow mapping, every detector with its threshold, every SLI with its objective, then the use cases that compose them. Order matters because each one is defined in terms of the one before it.
+- **Business Value Realization is section 26, the last body section, immediately before the appendices.** Last because it is the argument the preceding sections have earned rather than the promise the document opens with, and in the body because it is for the customer rather than for the account team. Every figure in it is labelled `stated`, `measured`, `public`, or `derived`; no industry benchmark appears; and every claim names the workflow, indicator, or detector that produces it. With no business inputs supplied it is still written — short, from measured performance and the public record, with the value model's coefficients named and unfilled. Full spec in [`business-value.md`](business-value.md).
 - **Every H1 starts on a new page in the Word artifact**, including each `Use Case:` and each appendix. `BT:` and per-workflow entries are H2 inside their section and do not force a page each; forty-six page breaks for forty-six one-line entries makes a document nobody carries.
 - If a section has no evidence, keep the heading and write **Not in evidence**, plus one line on what evidence would settle it. Never delete a heading.
 - On a **repeat run** against a target with prior history in the wiki, section 3 gains a `### Changes since v<N-1>` subsection and the document is a delta rather than a rewrite. See [`incremental-runs.md`](incremental-runs.md).
@@ -556,14 +568,41 @@ its own page with this fixed sub-shape, every time, in this order:
 - **`Detectors`** — the rows from section 23 that belong to this flow, each with trigger and group-by.
 - **`Join to the next flow`** — what propagates into the next flow's span, which Related-Content link exists, and the join labelled **continue trace** \| **span link** \| **attribute pivot**.
 
-## 26. Appendix A: Master Attribute Dictionary
+## 26. Business Value Realization
+
+The last body section: what the machinery described above is for, in the customer's terms.
+An ad-hoc business value assessment, not a formal one — no discounted cash flow, no
+three-year model, no benchmark table. Three ingredients only: what the customer told us in
+`business_context`, what the last twelve months of the public record show, and what this
+scan measured.
+
+Six subsections, in this order, fully specified in [`business-value.md`](business-value.md):
+
+- **`The problem in the customer's words`** — the intake commentary, quoted and attributed to the role that said it. Not paraphrased: a paraphrase is our characterisation of their problem.
+- **`What the public record shows`** — the twelve-month evidence, grouped by class, every entry carrying a URL, a publication, a date, and one line on what it shows. A complaint is reported as a complaint and never promoted into an outage. Finding nothing is itself a finding.
+- **`Measured performance today`** — the scan's numbers with the conditions they were taken under, each attributed to a cause the contract addresses, closing with the explicit statement of what instrumentation will and will not change. It makes slowness visible and attributable; it does not make the application fast.
+- **`Where the time goes today`** — the incident lifecycle from the stated MTTx figures, one row per stage, naming the slice that moves it. A stage with no supplied number reads `not supplied` and becomes an ask rather than a plausible-looking baseline.
+- **`What realisation looks like`** — one row per claim: the claim, the mechanism, the basis, and the horizon tied to a phase rather than a date. Every claim names a workflow, indicator, or detector **that exists in this document**; ordered by defensibility rather than by size.
+- **`What this section needs to become quantitative`** — every missing input, what it would let the section say, and where the customer finds it.
+
+Two rules govern every figure. **Each carries a label** — `stated`, `measured`, `public`, or
+`derived`, with `derived` showing its arithmetic — and **no business number is ever
+inferred**. No industry benchmark, no typical conversion rate, no revenue estimated from a
+filing and presented as this application's. With no business inputs supplied the section is
+still written, from measured performance and the public record, with the value model's
+coefficients named and left unfilled.
+
+Cost is not value: what implementing this consumes, and any entitlement overage, belongs in
+the separate account-team document at [`entitlement-exposure.md`](entitlement-exposure.md).
+
+## 27. Appendix A: Master Attribute Dictionary
 
 Alphabetical. Columns: `Attribute | Type | Dim? | Source`. `Dim?` is
 dimension-eligibility in Metrics Pipeline Management. Every attribute named
 anywhere in the document appears exactly once. This appendix and
 `attribute-schema.json` are generated from each other; they may not disagree.
 
-## 27. Appendix B: Supplementary Code and Configuration
+## 28. Appendix B: Supplementary Code and Configuration
 
 The long code that would break the reading flow of the body: the full collector YAML
 including every pipeline, the generated route classifier in full, per-bus inject and
@@ -577,7 +616,7 @@ stamped, the document has failed.
 
 Each block names the file it belongs in and the artifact that owns it.
 
-## 28. Appendix C: Instrumentation Agent Work Order
+## 29. Appendix C: Instrumentation Agent Work Order
 
 What the implementer agent will do, in the order it will do it, so a human can approve the
 plan before any code is written and can review the resulting pull requests against
@@ -596,7 +635,7 @@ This appendix is the customer-readable face of the agent wiki work orders descri
 [`agent-wiki.md`](agent-wiki.md); the wiki holds the executable detail and this holds the
 plan.
 
-## 29. Appendix D: Supplementary Evidence
+## 30. Appendix D: Supplementary Evidence
 
 The measured material that supports a claim in the body but would bury it: the full route
 and chunk inventory, the load-order timing table, the decoded beacon payload, the CSP
@@ -606,7 +645,7 @@ inventory with what each diagram settled.
 Every entry is referenced from a body section. Evidence nothing points at is not evidence,
 it is an attachment.
 
-## 30. Appendix E: Open Items and Assumptions
+## 31. Appendix E: Open Items and Assumptions
 
 Bullets, each an answerable question with the decision it blocks. Unidentified
 bundles, unconfirmed cardinality, gaps flagged in the architecture section, the
@@ -658,6 +697,12 @@ review, so read it before writing rather than after.
 | The APM Business Workflow tag is described but never named | Section 15 names one tag and its value shape. A TAM cannot configure a description |
 | **No recorded versions for the tools the recommendations depend on** | Document control names the collector distribution, SDK, semconv, and provider versions this run was written against. See [`version-currency.md`](version-currency.md) |
 | **A repeat run that reproduces the previous document** | With prior history in the wiki, section 3 carries `Changes since v<N-1>` and the document is a delta. See [`incremental-runs.md`](incremental-runs.md) |
+| **No `Business Value Realization` section** | Section 26 exists as the last body section, with all six subsections. With no business inputs it is short and honest rather than absent. See [`business-value.md`](business-value.md) |
+| **A business figure with no `stated` / `measured` / `public` / `derived` label, or an industry benchmark anywhere** | Every figure labelled, `derived` showing its arithmetic, and no number inferred from a benchmark or a public filing |
+| **A value claim whose mechanism is not in this document** | Every claim names the workflow, indicator, or detector that produces it |
+| **Public evidence with no citation, or a complaint reported as an outage** | URL, publication, date, and the source class stated as what it is |
+| **Licensing or overage numbers in this document** | Entitlement exposure is a separate account-team document; this one references it in a single document-control line. See [`entitlement-exposure.md`](entitlement-exposure.md) |
+| **A recommendation trimmed to fit the entitlement without being asked** | Entitlement is reference. The recommendation is what the application needs; the cost is priced elsewhere. Cutting to fit happens only when `fit_to_entitlement` is true, and every cut is recorded |
 | Cookie dump into RUM attributes | Forbidden. Bounded allowlist only |
 | Checklist skipped | Every row below marked yes or no in Appendix E |
 
@@ -698,6 +743,13 @@ Appendix E.
 - [ ] Every use case opens with `Narrative` and has span events, metrics, SLI, dashboard, detectors, and a labelled join
 - [ ] Phase plan exit criteria are each a query a TAM can run
 - [ ] Bootstrap appears only in non-goals and Phase 0, never as the definition of done
+- [ ] `Business Value Realization` is section 26, the last body section, with all six subsections
+- [ ] Every business figure carries a `stated` / `measured` / `public` / `derived` label, and no industry benchmark appears anywhere
+- [ ] Every value claim names a mechanism that exists in this document
+- [ ] Every public-record entry carries a URL, a publication, a date, and its source class
+- [ ] Measured performance states the conditions it was measured under, and what instrumentation will not change
+- [ ] No licensing, consumption, or overage number appears in this document
+- [ ] Entitlement exposure document written when entitlement was supplied, referenced in one document-control line, and not otherwise cited
 - [ ] Appendix A dictionary agrees with `attribute-schema.json`
 - [ ] Appendix C work order lists slices, files, CI checks, and acceptance evidence
 - [ ] Appendix E open items are answerable questions

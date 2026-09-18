@@ -68,15 +68,28 @@ tenancy:
   tokens_held_by: ""           # who can issue an ingest token when Phase 0 starts
 
 # ---------------------------------------------------------------------------
-# Entitlement. This is the section that changes the design.
+# Entitlement. Reference, not a ceiling on what may be recommended.
 #
-# Cardinality is not a style preference, it is a budget: every tag promoted to a
-# metric dimension multiplies metric time series, and MTS is what the contract
-# is billed and throttled on. A run given these numbers can compute whether a
-# proposed dimension fits. A run without them can only warn in the abstract, so
-# `unknown` here is the single most expensive blank in the file.
+# Supplied, these numbers let the run price its own recommendations: every tag
+# promoted to a metric dimension multiplies metric time series, and MTS is what
+# the contract is billed and throttled on. The projected cost and any overage go
+# into a SEPARATE document for the account team — see
+# references/entitlement-exposure.md — and the recommendations themselves are
+# not trimmed to fit. A customer deciding to buy more is as valid an outcome as
+# a customer deciding to promote fewer dimensions, and that is their decision to
+# make with a number in front of them.
+#
+# Left `unknown`, the run recommends what the application needs and says the
+# budget was not supplied. It does not guess at a limit and design around it.
+#
+# Set `fit_to_entitlement: true` only when the customer has ASKED for the
+# recommendation to fit inside what they already own. Then it becomes a
+# constraint, the run cuts to fit, and it records what it cut and what that
+# costs in observability terms.
 # ---------------------------------------------------------------------------
 entitlement:
+  fit_to_entitlement: false          # true only on explicit customer request
+
   observability_cloud:
     custom_mts_included: unknown       # licensed custom metric time series
     custom_mts_in_use: unknown         # current consumption, from Org Metrics
@@ -137,3 +150,70 @@ outcomes:
   first_journey: ""            # leave blank to have the run rank candidates and propose one
   known_pain: []               # incidents that prompted the engagement
   audiences: ["sre", "engineer", "executive"]
+
+# ---------------------------------------------------------------------------
+# Business context, in the customer's words and numbers.
+#
+# This is the input to the deliverable's Business Value Realization section.
+# Without it that section can still be written, but only from public evidence
+# and measured performance — it cannot say what an hour of downtime costs this
+# business, because nobody outside it knows.
+#
+# Prose is welcome. A paragraph of commentary from the person who lives with the
+# problem is worth more than a number with no story attached, and the run quotes
+# it rather than paraphrasing it away.
+#
+# Every number here is `unknown` until the customer says it. None is inferred
+# from industry benchmarks: a benchmark in a customer document is a guess with a
+# citation, and the first executive to recognise it stops trusting the rest.
+# ---------------------------------------------------------------------------
+business_context:
+  commentary: ""               # free text: what hurts, in their words. Quoted, not paraphrased.
+  incident_experience:
+    mttd_minutes: unknown      # detect: outage starts -> somebody knows
+    mtta_minutes: unknown      # acknowledge: knows -> owner engaged
+    mttr_minutes: unknown      # restore: owner engaged -> customers served again
+    mtti_minutes: unknown      # identify/isolate, where they track it separately
+    incidents_per_month: unknown
+    sev1_per_quarter: unknown
+    responders_per_incident: unknown     # how many people join a bridge
+    war_room_hours_per_month: unknown
+    pct_incidents_found_by_customers: unknown   # the number executives react to
+  operating_cost:
+    observability_tools_in_use: []       # every tool paid for, including the overlaps
+    annual_tooling_spend: unknown        # all of them, not just Splunk
+    duplicate_agents_on_page: unknown    # from the scan, but record what they believe
+    engineering_hours_per_month_on_triage: unknown
+    fully_loaded_hourly_cost: unknown    # what an engineering hour costs this business
+    opex_challenges: ""                  # prose: contract pressure, headcount, audit burden
+  revenue_context:
+    revenue_per_hour_online: unknown     # or per day; say which
+    orders_per_day: unknown
+    average_order_value: unknown
+    conversion_rate_pct: unknown
+    cart_abandonment_pct: unknown
+    peak_events: []                      # named sales events and their dates
+    revenue_challenges: ""               # prose: where they are losing, and to what
+  business_information:
+    business_model: ""                   # how money actually reaches this company
+    seasonality: ""
+    growth_or_margin_pressure: ""
+    regulatory_exposure: ""
+    strategic_initiatives: []            # replatform, market entry, app launch
+
+# ---------------------------------------------------------------------------
+# Public-record research. The analysis reads the last twelve months of public
+# evidence — outage coverage, status-page history, customer complaints, field
+# performance data — so the value case rests on something other than the
+# customer's own recollection.
+#
+# Set `allowed: false` for an engagement where searching in the open is
+# inappropriate, and the run uses only what it measured and what it was told.
+# ---------------------------------------------------------------------------
+public_evidence:
+  allowed: true
+  window_months: 12
+  brand_terms: []              # names to search, including sub-brands and local sites
+  status_page_urls: []         # the customer's own status or incident history pages
+  exclude_domains: []          # sources the customer considers noise
+  competitors: []              # optional, for field-performance comparison only

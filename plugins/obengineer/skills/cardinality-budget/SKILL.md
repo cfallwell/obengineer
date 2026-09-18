@@ -26,9 +26,20 @@ chart by order identifier, because it offers no number.
 
 This skill replaces the advice with a budget. Given the entitlement in
 `engagement-inputs.yaml`, a proposed promotion has a **cost in metric time series**, and
-that cost either fits the remaining allowance or it does not. A guide that shows the
-arithmetic gets a decision in the review meeting. A guide that says "avoid high
-cardinality" gets an exception.
+that cost is stated. A guide that shows the arithmetic gets a decision in the review
+meeting. A guide that says "avoid high cardinality" gets an exception.
+
+**Cost is not a veto.** Entitlement is reference: the recommendation is what the application
+needs, priced, and where the price exceeds what the customer owns that goes into the
+separate account-team document at
+[`../references/entitlement-exposure.md`](../references/entitlement-exposure.md). A promotion
+a named indicator depends on is recommended and costed, not dropped because the headroom
+looks tight — the customer may buy headroom, and they cannot decide that about a dimension
+nobody told them existed.
+
+Two exceptions, and both are explicit rather than inferred: `fit_to_entitlement: true` in the
+inputs, set because the customer asked for a design that fits what they already own; and a
+promotion with **no named consumer**, which is dropped on its own merits at any budget.
 
 ## The cost model
 
@@ -58,22 +69,32 @@ headroom = custom_mts_included - custom_mts_in_use
 and keep a reserve — the estate grows, and a promotion is far harder to withdraw than
 to make, because withdrawing it breaks the dashboards that came to depend on it.
 
+When the total exceeds the headroom, the output is a **priced overage with options**, not a
+shorter dimension list. Write it up in the exposure document: the overage, what triggers it,
+which phase it lands in, and the levers — raise the entitlement, aggregate with a Metrics
+Pipeline Management rule, or drop specific promotions with the question each drop makes
+unanswerable. Recommend one.
+
 ### When the numbers are `unknown`
 
-Do not stall on a procurement question and do not silently proceed. Apply these
-defaults, and state in the deliverable that the budget is assumed rather than measured:
+There is then **no exposure document and no assumed limit**. Recommend what the application
+needs, state in the deliverable that the budget was not supplied, and record the ask.
 
-| Assumption | Default |
-|---|---|
-| Total new MTS across every promotion in the contract | ≤ 25,000 |
-| Distinct values of any single promoted tag | ≤ 100 |
-| Monitoring MetricSets created by the contract | ≤ 10 |
-| Per-tag ceiling for a Troubleshooting MetricSet | ≤ 10,000 distinct values |
-| Reserve left unallocated | 30% of headroom |
+The defaults below are not a budget to design against; they are the sanity bounds that apply
+regardless of entitlement, because a design that breaks them is badly shaped rather than
+merely expensive. Keep the arithmetic visible either way — an unpriced promotion cannot be
+reviewed even when nothing constrains it.
 
-Every one of these is a number a customer can disagree with, which is the point. An
-assumption stated as a number gets corrected; an assumption stated as a principle gets
-ignored.
+| Sanity bound | Default | Why it holds at any entitlement |
+|---|---|---|
+| Distinct values of any single promoted tag | ≤ 100 | Past that, a chart grouped by it is unreadable and a detector grouped by it is unroutable |
+| Per-tag ceiling for a Troubleshooting MetricSet | ≤ 10,000 distinct values | Beyond it, Tag Spotlight stops being a tool and becomes a search |
+| Identity keys promoted to dimensions | 0 | Unbounded by construction |
+| Promotions with no named consumer | 0 | Nothing reads them, so nothing is lost by not having them |
+| Total new MTS across the contract, when reporting only | stated, not capped | The number goes in the exposure document; the recommendation is not cut to reach it |
+
+Every one of these is a number a customer can disagree with, which is the point. A bound
+stated as a number gets corrected; a bound stated as a principle gets ignored.
 
 ## Process
 
@@ -91,7 +112,7 @@ The test for dimension-eligible is all four of:
 
 1. **The value set is bounded by construction**, not by observation. "We only see about twenty" is not a bound; an enum in code, a classifier function, or a Collector transform is.
 2. **A named alert or dashboard variable needs it.** A detector cannot `group by` an attribute-only key, so this is the only reason a promotion is ever necessary.
-3. **The computed MTS cost fits the headroom** with the reserve intact.
+3. **The MTS cost is computed and stated.** Stated, not necessarily affordable: a promotion that exceeds the headroom is recommended and priced, and the overage goes to the account team. It is cut here only under `fit_to_entitlement`.
 4. **It is not an identity.** Account, order, cart, session, and request identifiers are attribute-only regardless of how convenient a dimension would be. Promoting an identity key is the single most expensive mistake available in this design, and it is usually made in the first week by someone being helpful.
 
 ### Step 2 — Replace every unbounded value with a classifier
@@ -115,7 +136,7 @@ no way to see the cost, so nobody objects.
 
 ### Step 3 — Size the MetricSets, do not just name them
 
-- **Monitoring MetricSets** produce the metrics detectors and dashboards read. They are a bounded resource: count the slots already used, and fit the contract's promotions into what remains. If the contract needs more than `mms_slots_remaining`, say which promotions were deferred and why, rather than listing all of them and letting the TAM discover the limit.
+- **Monitoring MetricSets** produce the metrics detectors and dashboards read. They are a bounded resource, and unlike MTS a shortage is not a bill — it is a MetricSet that cannot be created. Count the slots already used. If the contract needs more than `mms_slots_remaining`, say so with the number, order the promotions so the ones an SLI depends on come first, and put the shortfall in the exposure document. What must not happen is the TAM discovering the limit during configuration.
 - **Troubleshooting MetricSets** serve Tag Spotlight and ad-hoc grouping. Cheaper, still not free, and governed by the agreed per-tag ceiling. This is where identity-adjacent keys go when someone needs to slice by them — the honest answer to "but I need to group by tenant" is usually a TMS, not an MMS.
 - **The workflow tag is a special case.** Exactly one span tag becomes the APM Business Workflow. Name it explicitly, say which value shape it carries, and state that the workflow name is itself a bounded enum. An unbounded workflow tag is a cardinality incident with a dashboard attached to it.
 
@@ -145,6 +166,17 @@ search filtered by the identity key, or a Related Content jump into logs.
 Then state the total: proposed MTS, headroom, reserve remaining. One line, and the
 review meeting has a number to argue with instead of a principle.
 
+### Step 6 — Hand the commercial half to the account team
+
+The customer document carries the two lists and the arithmetic behind each promotion, because
+that is a technical decision the customer's engineers should see. It does **not** carry the
+licensed totals, the current consumption, or the overage.
+
+Those go to `docs/observability/entitlement-exposure-<app>-<date>.md`, in the shape specified
+by [`../references/entitlement-exposure.md`](../references/entitlement-exposure.md): position
+today, what the recommendation adds, projected position, the overage with options and a
+recommendation, and growth headroom. No entitlement supplied, no document.
+
 ## Warning signs
 
 - **A dimension list with no MTS arithmetic anywhere in the document.** The list is a wish; nobody can approve it.
@@ -153,9 +185,13 @@ review meeting has a number to argue with instead of a principle.
 - **The workflow tag is described but never named.** The TAM cannot configure a Business Workflow from a description.
 - **Cardinality is discussed only as a risk.** Risk language produces exceptions. Numbers produce decisions.
 - **The contract's promotions exceed `mms_slots_remaining` and the document does not mention it.** The limit will be discovered during configuration, by the person least able to renegotiate it.
+- **A promotion an SLI depends on quietly became attribute-only.** Something was cut to fit a budget nobody was asked about. Recommend it, price it, and let the customer choose.
+- **A licensed total or an overage figure appears in the customer document.** Wrong artifact and wrong audience; it reads as a sales motion inside a technical review.
+- **An exposure document exists with no supplied entitlement.** Every number in it is invented and it will be quoted as though it were not.
 
 ## Non-goals
 
 - Does not decide what rides in the baggage header. That is [`../baggage-propagation/SKILL.md`](../baggage-propagation/SKILL.md), against a byte budget rather than an MTS budget.
 - Does not collect the entitlement numbers. That is [`../engagement-intake/SKILL.md`](../engagement-intake/SKILL.md).
+- Does not construct a commercial proposal. It prices resources; the account team prices products.
 - Does not create MetricSets or rulesets in a tenant. It produces the lists a TAM configures, or that [`../observability-as-code/SKILL.md`](../observability-as-code/SKILL.md) renders as Terraform.

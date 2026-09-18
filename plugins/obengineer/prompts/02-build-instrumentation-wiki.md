@@ -41,7 +41,8 @@ and MetricSet built on it.
 | `engagement.customer`, `.application` | The wiki path — `wiki/<Customer>/<app>/`. Customer first, then application, because tenancy and entitlement are customer-level facts that must not be duplicated per app |
 | `artifacts.prior_contract`, `.prior_schema` | The naming authority when one exists |
 | `backends.languages`, `.buses` | Which language ports and bus notes must exist |
-| `entitlement.*` | The arithmetic behind `contract/mpm.md` |
+| `entitlement.*` | The arithmetic behind `contract/mpm.md`, and — only when supplied — `business/entitlement-exposure.md` |
+| `business_context.*`, `public_evidence.*` | `business/value-model.md`, `business/public-evidence.md`, and `business/asks.md` |
 | `standards.*` | The percentile and naming conventions the notes state once |
 
 ## First: is this a first run or a delta?
@@ -54,7 +55,7 @@ it nothing. Rules: [`../skills/references/incremental-runs.md`](../skills/refere
 
 ## Task
 
-1. **The tree**, exactly as `agent-wiki.md` specifies: `meta/`, `architecture/`, `findings/`, `contract/`, `business-transactions/`, `workflows/`, `use-cases/`, `metrics/`, `detectors/`, `slos/`, `implementation/`, `as-code/`.
+1. **The tree**, exactly as `agent-wiki.md` specifies: `meta/`, `architecture/`, `findings/`, `contract/`, `business-transactions/`, `workflows/`, `use-cases/`, `metrics/`, `detectors/`, `slos/`, `business/`, `implementation/`, `as-code/`.
 
 2. **`index.md` as a map of content, not a summary.** The one note an agent may load unconditionally, so it stays short: the application in a paragraph, counts, the current run version, and a table of entry points by task. A summary in the index is a fact with two homes.
 
@@ -66,17 +67,19 @@ it nothing. Rules: [`../skills/references/incremental-runs.md`](../skills/refere
 
 6. **`detectors/` and `slos/`** — one note each. A detector note carries its threshold **and that threshold's provenance**: measured baseline, agreed target, or labelled placeholder with the query that will replace it. An SLI note carries the user-facing statement, the good and total event queries, the objective, the window, the error budget, and the burn-rate rules.
 
-7. **`implementation/work-orders/<nn>-<slice>.md`** — one per pull-request-sized slice, ordered so each is independently reviewable and independently revertible. Each names the contract sections it implements, the files and packages it touches, new dependencies, the CI checks it adds, the acceptance evidence, and what it must not do without a human decision. These are what Prompt 03 executes.
+7. **`business/`** — `value-model.md` with the value arithmetic and every coefficient labelled `stated` | `measured` | `public` | `derived`, the unfilled ones left visibly unfilled; `public-evidence.md` with each cited source, its class, and **the date it was read**; `asks.md` with the inputs that would make the case quantitative. Add `entitlement-exposure.md` only when the customer supplied entitlement numbers — written without them it is invented, and the next run inherits the invention as fact. This directory is why a later run updates a coefficient instead of re-researching a quarter.
 
-8. **`implementation/enforcement.md`** — the layer-1 contract checks, from [`../skills/references/ci-integration.md`](../skills/references/ci-integration.md). Schema agreement and single-init first; they catch real defects and need no model.
+8. **`implementation/work-orders/<nn>-<slice>.md`** — one per pull-request-sized slice, ordered so each is independently reviewable and independently revertible. Each names the contract sections it implements, the files and packages it touches, new dependencies, the CI checks it adds, the acceptance evidence, and what it must not do without a human decision. These are what Prompt 03 executes.
 
-9. **`meta/versions.md`** — a row per component with a **provenance** column, and an `## Upgrade path` entry for every breaking change since the last run, naming the affected notes, the code action, the configuration action, their ordering, and the verification. Spec: [`../skills/references/version-currency.md`](../skills/references/version-currency.md). `unknown` is acceptable; an absent row is not.
+9. **`implementation/enforcement.md`** — the layer-1 contract checks, from [`../skills/references/ci-integration.md`](../skills/references/ci-integration.md). Schema agreement and single-init first; they catch real defects and need no model.
 
-10. **`docs/observability/attribute-schema.json`** — every attribute, its type, dimension eligibility, and the deny list. This is the file the CI checks read, so it is why those checks can exist. It and the document's Appendix A are generated from each other and may not disagree.
+10. **`meta/versions.md`** — a row per component with a **provenance** column, and an `## Upgrade path` entry for every breaking change since the last run, naming the affected notes, the code action, the configuration action, their ordering, and the verification. Spec: [`../skills/references/version-currency.md`](../skills/references/version-currency.md). `unknown` is acceptable; an absent row is not.
 
-11. **The host memory pointers** — `.cursor/rules/obengineer-wiki.mdc`, `CLAUDE.md`, `AGENTS.md` — each a **pointer** to the index note carrying the retrieval rule verbatim, never a copy of the wiki. A copy is a second authority that drifts.
+11. **`docs/observability/attribute-schema.json`** — every attribute, its type, dimension eligibility, and the deny list. This is the file the CI checks read, so it is why those checks can exist. It and the document's Appendix A are generated from each other and may not disagree.
 
-12. **Close the run** — `meta/run-log.md` gains a row; `meta/decisions.md` gains what the human accepted **and what they rejected**, because that diff is the only preference data this project generates and it is otherwise lost when the session ends.
+12. **The host memory pointers** — `.cursor/rules/obengineer-wiki.mdc`, `CLAUDE.md`, `AGENTS.md` — each a **pointer** to the index note carrying the retrieval rule verbatim, never a copy of the wiki. A copy is a second authority that drifts.
+
+13. **Close the run** — `meta/run-log.md` gains a row; `meta/decisions.md` gains what the human accepted **and what they rejected**, because that diff is the only preference data this project generates and it is otherwise lost when the session ends.
 
 ## Acceptance
 
