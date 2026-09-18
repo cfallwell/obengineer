@@ -484,6 +484,21 @@ def test_wiki_is_addressable_and_host_readable():
     )
 
 
+def test_the_grader_grades_both_artifacts_it_claims_to():
+    """The reviewer's description offers to grade "an analysis document or a
+    wiki". It graded only the document, so a wiki with broken links and stub
+    notes passed review."""
+    skill = (SKILLS / "deliverable-review" / "SKILL.md").read_text()
+    assert "a wiki" in skill
+    wiki_pass = skill[skill.index("Grade the wiki"):]
+    wiki_pass = wiki_pass[:wiki_pass.index("\n### ")]
+    for check in ("wikilink", "index is a map", "counts", "Host pointers",
+                  "credential", "updated"):
+        assert check in wiki_pass, f"the wiki pass does not check {check}"
+    # The rubric owns the section list; the grader must not restate it.
+    assert "document-template.md" in skill and "the rubric wins" in skill
+
+
 def test_a_note_earns_its_file():
     """One note per subject is not one note per name. An application with four
     hundred workflows would otherwise open with four hundred frontmatter stubs,

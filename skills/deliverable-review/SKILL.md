@@ -105,13 +105,28 @@ part of the pass:
 - **Every `Use Case:` opens with `Narrative`**, in plain language, with no attribute or span names in it.
 - **Versions recorded with provenance**, and any breaking change since the last run present as an upgrade-path entry naming affected notes, the code action, the configuration action, and their ordering.
 
-### Step 4 — Verify the rendered artifact, not just the Markdown
+### Step 4 — Grade the wiki, when the run produced one
+
+The wiki fails differently from the document, so it needs its own pass rather than the same
+one. Against [`../references/agent-wiki.md`](../references/agent-wiki.md):
+
+- **Every wikilink resolves.** A link that goes nowhere is worse than no link: an agent follows it, finds nothing, and concludes the subject was never analysed. Check them all — there is no reason to sample when the check is mechanical.
+- **Every note has `type`, `status`, and `updated`.** A note with no `updated` field makes the next delta run unable to tell stale from current, so it re-derives everything and produces a full rewrite.
+- **The index is a map, not a summary.** Links plus counts plus entry points by task. If it summarises each workflow it has become the document again, and the whole point was that a run loads three notes.
+- **The index's counts match the notes on disk** — BTs, workflows named, workflows with their own note, findings open, objectives. Counts that disagree with the tree are worse than absent ones.
+- **No note duplicates a document section verbatim.** Two authorities, and the wiki loses, because nobody re-renders it.
+- **A promoted note earns its promotion.** A `workflows/` note that carries only a name is a stub the rule exists to prevent; fold it back into its BT note.
+- **Host pointers exist and are pointers.** `.cursor/rules/`, `CLAUDE.md`, `AGENTS.md`, each carrying the retrieval rule and the same-commit update rule, none of them carrying a copy of the contract.
+- **No credential in any note**, and this matters more here than in the document, because a wiki is loaded into agent context by default.
+- **`meta/versions.md` has a row per component with provenance**, `unknown` included. An absent row is the defect; nobody checks a component that is not listed.
+
+### Step 5 — Verify the rendered artifact, not just the Markdown
 
 Run `verify_render.py`. Then confirm what it does not: the `.docx` is newer than the
 Markdown it came from, and no one has hand-edited it. A `.docx` edited after rendering is a
 second source of truth, and it will disagree with the Markdown within a week.
 
-### Step 5 — Report
+### Step 6 — Report
 
 ```
 FAIL — 4 defects, 1 blocking
