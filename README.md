@@ -8,6 +8,36 @@ Canonical skills under `skills/`, a self-contained bundle under `plugins/obengin
 installable commands under `commands/`, host wiring for Cursor, Codex, and Claude Code,
 and deterministic tests over the agentry itself.
 
+## Where this lives, and where the work lands
+
+This project is its own checkout and belongs to no engagement. A customer
+engagement is a separate repository, and the deliverables land there:
+
+```
+~/ps-repo/
+├── obengineer/                     # this project — reusable across every engagement
+└── Customers/<Customer>/           # one repository per engagement
+    ├── docs/observability/         # the customer document and its .docx
+    ├── wiki/<Customer>/<app>/      # the agent wiki: working memory for later runs
+    ├── AGENTS.md · CLAUDE.md       # host pointers into that wiki
+    └── terraform/                  # what observability-as-code emits
+```
+
+The split is the point. A toolkit that lives inside one customer's repository gets
+customer-specific edits, and the next engagement either forks it or inherits them.
+Paths in the skills — `docs/observability/…`, `wiki/<Customer>/<app>/…` — are always
+relative to the **engagement** repository, never to this one.
+
+Point `ENGAGEMENT` at the engagement and every path stays short:
+
+```bash
+export ENGAGEMENT=~/ps-repo/Customers/Nu_Skin
+make render FILE=docs/observability/analysis-<app>-<date>.md
+make verify-wiki WIKI="wiki/<Customer>/<app>"
+```
+
+An absolute path always wins, and with `ENGAGEMENT` unset nothing changes.
+
 ## Install
 
 ```bash
@@ -183,7 +213,7 @@ pipeline possible at all. See
 make test                # contract tests over the agentry and the renderer round-trip
 make check               # packaging consistency: plugin mirror, manifest versions
 make sync-plugin-skills  # refresh plugin copies and host links from canonical skills
-make render FILE=../docs/observability/analysis-<app>-<date>.md
+make render FILE=docs/observability/analysis-<app>-<date>.md  # ENGAGEMENT=<repo>
 ```
 
 `skills/` is the single source. The plugin carries copies so an installed bundle is

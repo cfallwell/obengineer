@@ -2,8 +2,10 @@
 
 Repo instructions for coding and reviewing agents working on this agentry. Keep
 changes small, evidence-based, and aligned with the existing structure. This
-directory is the home of the instrumentation architecture agents, skills, and
-plugins; the customer deliverables they produce live under `../docs/observability/`.
+repository is the home of the instrumentation architecture agents, skills, and
+plugins. It belongs to no engagement: the deliverables it produces land in the
+engagement's own repository, under `docs/observability/` and `wiki/<Customer>/<app>/`
+there. Paths in the skills are relative to that repository, not to this one.
 
 ## Project Map
 

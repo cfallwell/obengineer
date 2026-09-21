@@ -1,9 +1,10 @@
 # Contributing
 
-This directory holds the instrumentation architecture agentry: agent definitions,
+This repository holds the instrumentation architecture agentry: agent definitions,
 the three-run prompt workflow, canonical skills, and the plugin bundle that
-distributes them to Cursor, Codex, and Claude Code. Customer deliverables live under
-`../docs/observability/`.
+distributes them to Cursor, Codex, and Claude Code. It belongs to no engagement —
+customer deliverables live in the engagement's own repository, under
+`docs/observability/` and `wiki/<Customer>/<app>/` there.
 
 ## Setup
 
