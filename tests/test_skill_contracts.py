@@ -946,11 +946,21 @@ CREDENTIAL_PATTERNS = [
 ]
 
 
-def test_no_credentials_committed():
+# Machine-generated trees hold credentials that were never committed: a remote URL in
+# .git/config carries whatever the clone authenticated with, and a cache holds whatever
+# the source held one revision ago. Scanning them reports a finding nobody can fix by
+# editing a file, which is how a scan gets muted.
+UNSCANNED_DIRS = {".git", ".pytest_cache", "__pycache__", "node_modules", ".venv", "venv"}
+
+
+def credential_findings(root):
+    """Credential-shaped values in the source under root, machine trees excluded."""
     findings = []
-    for path in ROOT.rglob("*"):
+    for path in sorted(root.rglob("*")):
         if not path.is_file() or path.suffix not in {".md", ".json", ".py", ".yaml",
                                                      ".yml", ".cjs", ".mk", ""}:
+            continue
+        if UNSCANNED_DIRS & set(path.relative_to(root).parts):
             continue
         if path.name == Path(__file__).name:
             continue
@@ -960,5 +970,20 @@ def test_no_credentials_committed():
             continue
         for label, pattern in CREDENTIAL_PATTERNS:
             if pattern.search(text):
-                findings.append(f"{path.relative_to(ROOT)}: {label}")
+                findings.append(f"{path.relative_to(root)}: {label}")
+    return findings
+
+
+def test_no_credentials_committed():
+    findings = credential_findings(ROOT)
     assert not findings, "credential-shaped values committed: " + "; ".join(findings)
+
+
+def test_the_credential_scan_reads_the_source_and_not_the_clone(tmp_path):
+    url = "https://x-access-token:" + "d" * 36 + "@github.com/org/repo"
+    (tmp_path / ".git").mkdir()
+    (tmp_path / ".git" / "config").write_text(f"[remote]\n\turl = {url}\n")
+    assert credential_findings(tmp_path) == []
+
+    (tmp_path / "skill.md").write_text(f"Clone it: `git clone {url}`\n")
+    assert credential_findings(tmp_path) == ["skill.md: basic-auth url"]
