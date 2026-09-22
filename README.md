@@ -1,7 +1,7 @@
 # obengineer
 
 Agents, skills, and plugins that turn an application into an **openTelemetry instrumentation
-contract** — one a team can implement, CI can enforce, and a TAM can configure in
+contract** — one a team can implement, CI can enforce, and configure in
 Splunk Observability Cloud.
 
 Canonical skills under `skills/`, a self-contained bundle under `plugins/obengineer/`,
