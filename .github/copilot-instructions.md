@@ -1,6 +1,6 @@
 # Copilot instructions
 
-This directory holds instrumentation architecture agentry: agent definitions,
+This repository holds instrumentation architecture agentry: agent definitions,
 prompts, canonical skills, and a plugin bundle. Read `AGENTS.md` before making a
 change; it owns the review rules.
 
@@ -18,4 +18,5 @@ Key constraints:
 - Do not name a customer's journeys, business transactions, or metric names in a skill
   or agent. Examples are generic or labelled as examples of shape.
 
-Run `make test` and `make check` before handing work back.
+Run `make test` and `make check` before handing work back. `.github/workflows/ci.yml`
+runs both on every pull request, along with an install and uninstall round-trip.

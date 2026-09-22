@@ -1,0 +1,58 @@
+# The agentry's own checks. Not to be confused with `examples/ci/`, which is what this
+# project tells a customer to put in their application repository.
+#
+# Everything here runs by hand today, which is why CONTRIBUTING asks for it and why a
+# hand edit to a plugin copy has survived a commit before: `make check` catches drift
+# between `skills/` and the bundle, and nothing was running it.
+
+name: checks
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  agentry:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install the two dependencies
+        run: python -m pip install python-docx pytest
+
+      # Contract tests over the agents, prompts, skills, and the wiki format, plus the
+      # renderer round-trip: Markdown in, .docx out, verifier over the result. The
+      # credential scan lives here too, so a pasted token fails the build.
+      - name: make test
+        run: make test
+
+      # `skills/` is the single source; the plugin carries copies. This fails when the
+      # copies drift or the Claude and Codex manifests disagree on a version.
+      - name: make check
+        run: make check
+
+      # A fresh clone has to install and uninstall cleanly into a project, because that
+      # is how anyone adopts this. The dry run first: it prints every action without
+      # taking one, so a broken path resolution shows up before anything is written.
+      - name: Installer round-trip
+        run: |
+          host="$(mktemp -d)"
+          ./install.sh --project "$host" --all --dry-run
+          ./install.sh --project "$host" --all
+          ./install.sh --project "$host" --list
+          ./install.sh --project "$host" --all --uninstall
+          # The host directories stay; the manifest and everything it tracked must go.
+          leftovers="$(find "$host" -mindepth 2 | sort)"
+          if [[ -n "$leftovers" ]]; then
+            echo "uninstall left files behind:"
+            echo "$leftovers"
+            exit 1
+          fi

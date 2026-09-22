@@ -55,7 +55,8 @@ duplicated into each skill.
 ## Pull requests
 
 - One logical change per commit; one concern per PR.
-- `make test` and `make check` pass.
+- `make test` and `make check` pass. CI runs both, plus an install and uninstall
+  round-trip into a scratch project, so a fresh clone that cannot install fails the PR.
 - If a skill changed, the sync ran and its output is committed.
 - If the document template changed, a re-render is attached or described.
 - No customer PII, credentials, or scan artifacts containing either.

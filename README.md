@@ -216,6 +216,11 @@ make sync-plugin-skills  # refresh plugin copies and host links from canonical s
 make render FILE=docs/observability/analysis-<app>-<date>.md  # ENGAGEMENT=<repo>
 ```
 
+`make test` and `make check` run on every pull request, along with an install and
+uninstall round-trip into a scratch project — see `.github/workflows/ci.yml`. The
+round-trip is there because a fresh clone that cannot install is the failure nobody
+notices locally, where the skills are already installed.
+
 `skills/` is the single source. The plugin carries copies so an installed bundle is
 self-contained; refresh them with `make sync-plugin-skills` and never edit them
 directly. See [`AGENTS.md`](AGENTS.md) for the review rules,
