@@ -10,8 +10,9 @@ and deterministic tests over the agentry itself.
 
 ## Where this lives, and where the work lands
 
-This project is its own checkout and belongs to no engagement. A customer
-engagement is a separate repository, and the deliverables land there:
+This is [`cfallwell/obengineer`](https://github.com/cfallwell/obengineer), its own
+repository, and it belongs to no engagement. A customer engagement is a separate
+repository, and the deliverables land there:
 
 ```
 ~/ps-repo/
@@ -41,7 +42,7 @@ An absolute path always wins, and with `ENGAGEMENT` unset nothing changes.
 ## Install
 
 ```bash
-git clone <this repo> && cd obengineer
+git clone https://github.com/cfallwell/obengineer.git && cd obengineer
 
 ./install.sh --cursor            # this user, Cursor
 ./install.sh --claude --codex    # this user, two hosts
