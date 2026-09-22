@@ -85,7 +85,7 @@ this document is where its output is totalled.
 
 | Item | Where it comes from | Arithmetic | MTS added | Cumulative |
 |---|---|---|---|---|
-| `nuskin.market` on 6 meters × 4 services | Custom Metrics | 14 × 6 × 4 | 336 | 336 |
+| `<org>.market` on 6 meters × 4 services | Custom Metrics | 14 × 6 × 4 | 336 | 336 |
 
 Rules for this table:
 

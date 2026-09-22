@@ -30,13 +30,13 @@ verify = _load("verify_render")
 Document = pytest.importorskip("docx").Document
 qn = pytest.importorskip("docx.oxml.ns").qn
 
-FIXTURE = """# Application Analysis — Acme Storefront — 2026-01-01 — v1
+FIXTURE = """# Application Analysis — <app> — 2026-01-01 — v1
 
 <!-- title-page
 subtitle: Observed architecture, findings, and instrumentation recommendations
 tagline: Splunk Observability Cloud • OpenTelemetry • RUM
 author: A. Engineer, Technical Account Manager
-audience: Acme storefront engineering
+audience: <app> engineering
 date: 2026-01-01
 version: v1
 header: Application Analysis
@@ -44,7 +44,7 @@ header: Application Analysis
 
 ## Purpose and Scope
 
-This specifies instrumentation for the **Acme** storefront. Money is in minor units.
+This specifies instrumentation for the application. Money is in minor units.
 See the [Splunk RUM docs](https://docs.splunk.com/observability/) for the agent.
 
 The attribute dictionary is Appendix A, the processor is described in section 2, and
@@ -55,7 +55,7 @@ sections 1 and 3 carry the scope and the detectors. Naming follows
 A literal `section 3` inside a query is a string, not a reference.
 
 Severity follows a rule: *Critical* means a customer cannot finish, *Minor* means a
-ticket. The `acme.market` wildcard `cart.item.*` is an identifier, not emphasis.
+ticket. The `<org>.market` wildcard `cart.item.*` is an identifier, not emphasis.
 
 - `checkout.review.load` *(`reviewOrder` — **today returns 400 in production**)*
 
@@ -66,7 +66,7 @@ ticket. The `acme.market` wildcard `cart.item.*` is an identifier, not emphasis.
 
 | Field | Value |
 |---|---|
-| Application identifier | `acme-storefront` |
+| Application identifier | `<app>` |
 | Percentile standard | **p90** |
 
 ## Cross-Cutting Attributes and Baggage Propagation
@@ -78,15 +78,15 @@ ticket. The `acme.market` wildcard `cart.item.*` is an identifier, not emphasis.
 
 | Attribute | Type | Set at | Dimension? | Notes |
 |---|---|---|---|---|
-| `acme.account_id` | string | login success | No | Mirrored to `enduser.id` |
-| `acme.market` | string | Collector (OTTL) | Yes | Derived from `url.path` |
+| `<org>.account_id` | string | login success | No | Mirrored to `enduser.id` |
+| `<org>.market` | string | Collector (OTTL) | Yes | Derived from `url.path` |
 
 ### The SpanProcessor
 
 #### Provider bootstrap
 
 ```ts
-const KEYS = ['acme.account_id'] as const;
+const KEYS = ['<org>.account_id'] as const;
 
 export class BaggageStampProcessor {
   onStart(span, ctx) {
@@ -100,8 +100,8 @@ export class BaggageStampProcessor {
 
 | Detector | Trigger | Group by |
 |---|---|---|
-| Order error rate | > 2% for 5 min | `acme.market` |
-| Cardinality guard | promoted keys per Appendix A | `acme.market` |
+| Order error rate | > 2% for 5 min | `<org>.market` |
+| Cardinality guard | promoted keys per Appendix A | `<org>.market` |
 
 ## Appendix A: Master Attribute Dictionary
 
@@ -176,7 +176,7 @@ def test_title_page_is_simple_and_precedes_the_contents(rendered):
     toc = next(i for i, p in enumerate(paragraphs)
                if p.text.strip() == "Table of Contents")
     lines = [p.text.strip() for p in paragraphs[:toc] if p.text.strip()]
-    assert lines[0].startswith("Application Analysis — Acme Storefront")
+    assert lines[0].startswith("Application Analysis — <app>")
     assert "Author: A. Engineer, Technical Account Manager" in lines
     assert "Version: v1" in lines
     assert len(lines) <= verify.MAX_TITLE_PAGE_LINES
@@ -201,7 +201,7 @@ def test_prose_above_the_first_section_is_rejected(tmp_path):
     md = tmp_path / "crowded.md"
     md.write_text(
         "# Title\n\n"
-        "**Application identifier:** `acme` — taken from the resource tag.\n"
+        "**Application identifier:** `<app>` — taken from the resource tag.\n"
         "**Realm observed:** `us1`.\n\n"
         "## Section\n\ntext\n"
     )
@@ -238,7 +238,7 @@ def test_italics_render_as_italics_and_not_as_asterisks(rendered):
     assert {"Critical", "Minor"} <= emphasised
 
     # A wildcard inside an identifier is monospace, not emphasis, and the two
-    # must not be confused: `cart.item.*` … `acme.market` would otherwise read
+    # must not be confused: `cart.item.*` … `<org>.market` would otherwise read
     # as one italic span swallowing the text between them.
     wildcard = next(r for r in runs if r.text == "cart.item.*")
     assert wildcard.font.name == "Consolas" and not wildcard.italic
@@ -261,7 +261,7 @@ def test_bold_and_code_spans_may_wrap_across_source_lines(tmp_path):
     md.write_text(
         "# Title\n\n## Section\n\n"
         "**No message bus is observable from the browser, so the bus technology\n"
-        "is Not in evidence** and the `nuskin.market` key must arrive by\n"
+        "is Not in evidence** and the `<org>.market` key must arrive by\n"
         "baggage instead.\n"
     )
     docx = tmp_path / "wrapped.docx"

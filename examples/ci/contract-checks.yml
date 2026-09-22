@@ -20,7 +20,7 @@ permissions:
 env:
   # Where the contract lives. Adjust if the wiki is a submodule or a separate repo.
   SCHEMA: docs/observability/attribute-schema.json
-  WIKI: wiki/ACME/storefront # <- customer/app
+  WIKI: wiki/<Customer>/<app>  # replace with the engagement wiki path
 
 jobs:
   contract:

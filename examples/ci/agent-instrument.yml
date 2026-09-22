@@ -71,11 +71,11 @@ jobs:
           # Explicit input wins; otherwise the lowest-numbered work order whose
           # status is not implemented.
           if [ -n "${{ inputs.work_order }}" ]; then
-            echo "order=wiki/ACME/storefront/implementation/work-orders/${{ inputs.work_order }}.md" >> "$GITHUB_OUTPUT"
+            echo "order=wiki/<Customer>/<app>/implementation/work-orders/${{ inputs.work_order }}.md" >> "$GITHUB_OUTPUT"
             exit 0
           fi
           next=$(grep -l 'status: \(proposed\|accepted\)' \
-                   wiki/ACME/storefront/implementation/work-orders/*.md | sort | head -1)
+                   wiki/<Customer>/<app>/implementation/work-orders/*.md | sort | head -1)
           if [ -z "$next" ]; then
             echo "No open work order. Nothing to propose."
             echo "order=" >> "$GITHUB_OUTPUT"

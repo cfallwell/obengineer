@@ -811,10 +811,14 @@ def test_house_style_is_committed_not_remembered():
     assert spec["styles"]["Heading 1"]["size_pt"] == 16.0
     assert spec["sections"]["section_style"] == "Heading 1"
     assert "pageBreakBefore" in spec["sections"]["renderer_uses"]
-    # Formatting only: tenant labels and author names have no place in a template.
+    # Formatting only: tenant labels, author names, and customer filenames
+    # have no place in a template.
     blob = spec_path.read_text()
     for leak in ("MSIP_Label", "siteId", "lastModifiedBy"):
         assert leak not in blob, f"{leak} leaked into the committed format spec"
+    assert spec.get("derived_from") == "approved-house-style.docx", (
+        "derived_from must be a generic house-style name, not a customer document"
+    )
 
 
 def test_title_page_contract_is_stated_everywhere_it_is_enforced():
@@ -987,3 +991,53 @@ def test_the_credential_scan_reads_the_source_and_not_the_clone(tmp_path):
 
     (tmp_path / "skill.md").write_text(f"Clone it: `git clone {url}`\n")
     assert credential_findings(tmp_path) == ["skill.md: basic-auth url"]
+
+
+# --------------------------------------------------------------------------- #
+# no personal home directories
+# --------------------------------------------------------------------------- #
+# A public bundle is cloned onto other machines. /Users/you is the documented
+# installer example; any other /Users/<name> or /home/<name> is a leak.
+# ~/... is allowed: that is how a portable home-relative path is written.
+PORTABILITY_PATTERNS = [
+    ("home directory", re.compile(r"/Users/(?!you\b)[A-Za-z0-9._-]+")),
+    ("home directory", re.compile(r"/home/(?!you\b)[A-Za-z0-9._-]+")),
+]
+
+
+def portability_findings(root):
+    """Personal home paths in the source under root."""
+    findings = []
+    for path in sorted(root.rglob("*")):
+        if not path.is_file() or path.suffix not in {".md", ".json", ".py", ".yaml",
+                                                     ".yml", ".cjs", ".mk", ""}:
+            continue
+        if UNSCANNED_DIRS & set(path.relative_to(root).parts):
+            continue
+        if path.name == Path(__file__).name:
+            continue
+        try:
+            text = path.read_text()
+        except (UnicodeDecodeError, OSError):
+            continue
+        for label, pattern in PORTABILITY_PATTERNS:
+            if pattern.search(text):
+                findings.append(f"{path.relative_to(root)}: {label}")
+    return findings
+
+
+def test_no_personal_home_paths():
+    findings = portability_findings(ROOT)
+    assert not findings, (
+        "personal home path committed: " + "; ".join(findings)
+    )
+
+
+def test_the_portability_scan_reads_the_source(tmp_path):
+    (tmp_path / "ok.md").write_text(
+        "export ENGAGEMENT=/path/to/engagement-repo\n"
+        "obengineer at /Users/you/src/obengineer\n"
+    )
+    assert portability_findings(tmp_path) == []
+    (tmp_path / "leak.md").write_text("clone it under /Users/someone/work\n")
+    assert portability_findings(tmp_path) == ["leak.md: home directory"]

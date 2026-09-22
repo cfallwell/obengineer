@@ -10,14 +10,12 @@ and deterministic tests over the agentry itself.
 
 ## Where this lives, and where the work lands
 
-This is [`cfallwell/obengineer`](https://github.com/cfallwell/obengineer), its own
-repository, and it belongs to no engagement. A customer engagement is a separate
-repository, and the deliverables land there:
+This is `obengineer`, its own repository, and it belongs to no engagement. A
+customer engagement is a separate repository, and the deliverables land there:
 
 ```
-~/ps-repo/
-├── obengineer/                     # this project — reusable across every engagement
-└── Customers/<Customer>/           # one repository per engagement
+obengineer/                         # this project — clone it anywhere
+<engagement-repo>/                  # one repository per engagement, anywhere
     ├── docs/observability/         # the customer document and its .docx
     ├── wiki/<Customer>/<app>/      # the agent wiki: working memory for later runs
     ├── AGENTS.md · CLAUDE.md       # host pointers into that wiki
@@ -32,7 +30,7 @@ relative to the **engagement** repository, never to this one.
 Point `ENGAGEMENT` at the engagement and every path stays short:
 
 ```bash
-export ENGAGEMENT={Path to engagement}
+export ENGAGEMENT=/path/to/engagement-repo
 make render FILE=docs/observability/analysis-<app>-<date>.md
 make verify-wiki WIKI="wiki/<Customer>/<app>"
 ```
@@ -42,7 +40,7 @@ An absolute path always wins, and with `ENGAGEMENT` unset nothing changes.
 ## Install
 
 ```bash
-git clone https://github.com/cfallwell/obengineer.git && cd obengineer
+git clone <this-repository> && cd obengineer
 
 ./install.sh --cursor            # this user, Cursor
 ./install.sh --claude --codex    # this user, two hosts
