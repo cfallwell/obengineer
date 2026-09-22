@@ -32,7 +32,7 @@ relative to the **engagement** repository, never to this one.
 Point `ENGAGEMENT` at the engagement and every path stays short:
 
 ```bash
-export ENGAGEMENT=~/ps-repo/Customers/Nu_Skin
+export ENGAGEMENT={Path to engagement}
 make render FILE=docs/observability/analysis-<app>-<date>.md
 make verify-wiki WIKI="wiki/<Customer>/<app>"
 ```
