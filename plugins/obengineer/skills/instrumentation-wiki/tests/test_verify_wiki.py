@@ -30,7 +30,7 @@ verify = _load("verify_wiki")
 
 POINTER = """# Agents
 
-Before changing instrumentation, read `wiki/Acme/storefront/index.md`, then only the notes
+Before changing instrumentation, read `wiki/Customer/app/index.md`, then only the notes
 for the BTs and workflows in scope. Do not load the whole wiki. After a change lands, update
 the `status` and `updated` fields of the notes you touched in the same commit.
 """
@@ -41,8 +41,8 @@ def note(title: str, kind: str, status: str, body: str = "Content line.\n") -> s
         "---\n"
         f"title: {title}\n"
         f"type: {kind}\n"
-        "customer: Acme\n"
-        "app: storefront\n"
+        "customer: Customer\n"
+        "app: app\n"
         f"status: {status}\n"
         "updated: 2026-01-01\n"
         "run: v1\n"
@@ -53,13 +53,13 @@ def note(title: str, kind: str, status: str, body: str = "Content line.\n") -> s
 
 @pytest.fixture
 def wiki(tmp_path: Path) -> Path:
-    app = tmp_path / "wiki" / "Acme" / "storefront"
+    app = tmp_path / "wiki" / "Customer" / "app"
     for directory in ("meta", "contract", "findings", "business-transactions",
                       "use-cases", "slos", "business", "implementation/work-orders"):
         (app / directory).mkdir(parents=True, exist_ok=True)
 
     (app / "index.md").write_text(
-        note("storefront — index", "index", "designed", body="""One paragraph about the target.
+        note("app — index", "index", "designed", body="""One paragraph about the target.
 
 | | Count |
 |---|---|
@@ -136,7 +136,7 @@ def test_an_ambiguous_bare_wikilink_is_caught(wiki: Path):
 
 def test_missing_frontmatter_fields_are_caught(wiki: Path):
     (wiki / "slos" / "checkout-success.md").write_text(
-        "---\ntitle: checkout-success\ntype: sli\ncustomer: Acme\napp: storefront\n---\n\n# x\n")
+        "---\ntitle: checkout-success\ntype: sli\ncustomer: Customer\napp: app\n---\n\n# x\n")
     found = failures(wiki)
     assert any("has no status" in f for f in found)
     assert any("has no updated" in f for f in found)
@@ -185,7 +185,7 @@ def test_a_missing_host_pointer_is_caught(wiki: Path):
 
 def test_a_pointer_without_the_retrieval_rule_is_caught(wiki: Path):
     (wiki.parent.parent.parent / "AGENTS.md").write_text(
-        "Read `wiki/Acme/storefront/index.md` and update notes in the same commit.\n")
+        "Read `wiki/Customer/app/index.md` and update notes in the same commit.\n")
     assert any("AGENTS.md does not carry the retrieval rule" in f for f in failures(wiki))
 
 

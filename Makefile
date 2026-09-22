@@ -7,8 +7,8 @@ PY ?= python3
 # own. Set ENGAGEMENT to the engagement repository and every FILE, DOCX, and
 # WIKI path is read relative to it, so the daily commands stay short:
 #
-#   export ENGAGEMENT=~/ps-repo/Customers/Nu_Skin
-#   make render FILE=docs/observability/analysis-equinox-storefront-2026-09-17.md
+#   export ENGAGEMENT=/path/to/engagement-repo
+#   make render FILE=docs/observability/analysis-<app>-<date>.md
 #
 # An absolute path always wins, and with ENGAGEMENT unset nothing changes.
 ENGAGEMENT ?=
