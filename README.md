@@ -1,12 +1,61 @@
 # obengineer
 
-Agents, skills, and plugins that turn an application into an **openTelemetry instrumentation
-contract** — one a team can implement, CI can enforce, and configure in
-Splunk Observability Cloud.
+A Splunk OpenTelemetry agentic plugin. Give it as much as you have about an
+application — source, diagrams, a live URL, existing telemetry, the inputs no
+scan can measure — and it writes a **development contract** a coding agent can
+implement: curated, high-fidelity instrumentation around custom code. Landed and
+enforced, that contract produces a measurable, verifiable improvement in MTTx
+(mean time to detect, acknowledge, and resolve), because every dashboard
+variable, detector grouping, and Related-Content link is a key the application
+actually emits.
 
-Canonical skills under `skills/`, a self-contained bundle under `plugins/obengineer/`,
-installable commands under `commands/`, host wiring for Cursor, Codex, and Claude Code,
-and deterministic tests over the agentry itself.
+Zero-code agents tell you a service is slow. They do not tell you which
+checkout, which tenant, which workflow, or which custom path failed, and they
+do not put those keys on every span a later hop will need. That is why
+incidents stay long: the telemetry is present and the question is still
+unanswerable. This repository exists so the missing contract is written once,
+from evidence, in a form a reviewer can accept and a coding agent can land
+without inventing a taxonomy.
+
+It installs as skills and commands for Cursor, Claude Code, and Codex.
+Canonical skills live under `skills/`; `plugins/obengineer/` is the
+self-contained bundle a marketplace install gets. The plugin belongs to no
+engagement. The document, the wiki, and the pull requests land in the
+engagement's own repository.
+
+## How to use it
+
+Work from the **engagement** repository (or the application you are
+instrumenting), not from this one. Paths in the skills are relative to that
+workspace.
+
+1. **Install** the plugin into your agent host — see [Install](#install).
+   Restart the host so it picks up the commands.
+2. **Collect what a scan cannot measure** with `/obengineer-intake`. Realm,
+   percentile standard, diagram paths, entitlement, current MTTx, who deploys
+   what. One file, `engagement-inputs.yaml`. `unknown` is a valid answer.
+3. **Analyze** with `/obengineer-analyze`. Point it at the application: front
+   end, backends, diagrams, the existing Splunk and ThousandEyes footprint. It
+   writes one customer document, a `.docx` rendered from that Markdown, and
+   `attribute-schema.json`.
+4. **Accept the contract**, then `/obengineer-wiki`. That breaks the document
+   into one note per business transaction, workflow, finding, detector, and
+   objective, plus work orders a coding agent can pick up.
+5. **Implement** with `/obengineer-implement` against a single work order. The
+   coding agent opens a small pull request and the CI check that keeps that
+   slice enforced. Repeat. `/obengineer-as-code` can run in parallel once the
+   analysis is accepted — it configures the tenant, not the application.
+6. **Grade before a human sees it** with `/obengineer-review`. Re-render any
+   document with `/obengineer-render`.
+
+The first five commands are a sequence. Nothing is pasted into a chat: each
+command reads its prompt file in place, so the run contract under review is the
+one that ran.
+
+Give it as much as you have. Source and a live URL beat a narrative. A diagram
+beats a recollection. Existing dashboards and detectors are inventory, not a
+ceiling. What you do not give, the run records as an open item rather than
+inventing.
 
 ## Where this lives, and where the work lands
 
@@ -92,10 +141,11 @@ claude plugin marketplace add /path/to/obengineer
 # then install the obengineer plugin
 ```
 
-## Invoke
+## Commands
 
-Seven commands; the first five run in order. They read the prompt files in place, so the run
-contract has exactly one copy and it is the copy under review — nothing is pasted into a chat.
+The sequence in [How to use it](#how-to-use-it), in full. Seven commands; the
+first five run in order. They read the prompt files in place, so the run
+contract has exactly one copy and it is the copy under review.
 
 | Command | Does | Produces |
 |---|---|---|
