@@ -6,7 +6,7 @@
   "author": {
     "name": "Splunk Observability Practice"
   },
-  "license": "Apache-2.0",
+  "license": "MIT",
   "keywords": [
     "opentelemetry",
     "observability",

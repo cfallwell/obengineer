@@ -76,16 +76,6 @@ customer-specific edits, and the next engagement either forks it or inherits the
 Paths in the skills — `docs/observability/…`, `wiki/<Customer>/<app>/…` — are always
 relative to the **engagement** repository, never to this one.
 
-Point `ENGAGEMENT` at the engagement and every path stays short:
-
-```bash
-export ENGAGEMENT=/path/to/engagement-repo
-make render FILE=docs/observability/analysis-<app>-<date>.md
-make verify-wiki WIKI="wiki/<Customer>/<app>"
-```
-
-An absolute path always wins, and with `ENGAGEMENT` unset nothing changes.
-
 ## Install
 
 ```bash
@@ -262,7 +252,6 @@ pipeline possible at all. See
 make test                # contract tests over the agentry and the renderer round-trip
 make check               # packaging consistency: plugin mirror, manifest versions
 make sync-plugin-skills  # refresh plugin copies and host links from canonical skills
-make render FILE=docs/observability/analysis-<app>-<date>.md  # ENGAGEMENT=<repo>
 ```
 
 `make test` and `make check` run on every pull request, along with an install and
@@ -310,3 +299,37 @@ OpenTelemetry audit-and-verify server, Splunk Observability Cloud, the Splunk pl
 and ThousandEyes — with what each is for and the environment variables it needs. Copy an
 entry into `.mcp.json` to enable it. **Never** put a token value in either file;
 `${VAR}` references only, since both are committed.
+
+## Operating on an engagement from this checkout
+
+Not setup. The `/obengineer-*` commands write the document and the wiki into the
+engagement repository. These `make` targets are for later, when you are standing
+in *this* checkout — where the renderer and the wiki verifier live — and you
+want to rebuild or check those artifacts without starting an agent session.
+
+`ENGAGEMENT` is how a path that lives in the other repository stays short.
+Substitute the real analysis filename and wiki directory; `<app>`, `<date>`,
+and `<Customer>` are placeholders.
+
+```bash
+export ENGAGEMENT=/path/to/engagement-repo
+make render FILE=docs/observability/analysis-<app>-<date>.md
+make verify-wiki WIKI="wiki/<Customer>/<app>"
+```
+
+- **`make render`** rebuilds the customer `.docx` from the Markdown analysis and
+  proves the Word file matches its source (headings, page breaks, links, no
+  leftover markers). Same job as `/obengineer-render`, without a chat.
+- **`make verify-wiki`** checks the agent wiki: wikilinks resolve, frontmatter
+  is complete, index counts match the tree, host pointers exist, no
+  credential-shaped values. Run it before you trust `/obengineer-implement`
+  to read those notes.
+
+An absolute path always wins. With `ENGAGEMENT` unset, the same relative paths
+are resolved from the current directory, so they only work if the files are
+here — which they are not. The env var is what lets the toolkit and the
+deliverables stay in two repositories.
+
+## License
+
+This repository is licensed under the [MIT License](LICENSE).
