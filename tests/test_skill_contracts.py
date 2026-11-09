@@ -623,6 +623,39 @@ def test_business_transactions_use_a_bounded_global_tag():
     assert "'<org>.bt'" in cross_cutting
 
 
+def test_persona_requests_trigger_bounded_discovery():
+    personas = (SKILLS / "references" / "persona-levels.md").read_text()
+    assert "Three is the default, not a ceiling" in personas
+    assert "up to seven questions" in personas
+    for number in range(1, 8):
+        assert f"{number}." in personas
+    for required in (
+        "reporting outputs", "Terraform", "exclude", "acceptance",
+        "ongoing maintenance",
+    ):
+        assert required in personas
+
+
+def test_entitlement_is_read_before_human_gap_questions():
+    intake = (SKILLS / "engagement-intake" / "SKILL.md").read_text()
+    inputs = (SKILLS / "references" / "engagement-inputs.md").read_text()
+    assert "Read entitlement before asking" in intake
+    assert "Remaining entitlement gaps" in intake
+    assert "Read the tenant before asking the human" in inputs
+    assert "measured value outranks a stated one" in inputs.lower()
+
+
+def test_outcome_records_are_anonymized_project_issues():
+    review = (SKILLS / "deliverable-review" / "SKILL.md").read_text()
+    assert "cfallwell/obengineer" in review
+    assert "Deduplicate by" in review
+    for forbidden in (
+        "customer name", "production URL", "tenant or account id", "credential",
+    ):
+        assert forbidden in review
+    assert "issue-ready title and body" in review
+
+
 def test_project_path_and_retired_command_migration_are_documented():
     makefile = (ROOT / "Makefile").read_text()
     installer = (ROOT / "scripts" / "install.py").read_text()
