@@ -595,9 +595,21 @@ def test_bounded_targets_multi_repo_and_jira_fallback_have_one_authority():
                  "detector", "objective", "config"):
         assert f"{kind}:<" in authority or f"`{kind}:<" in implement
     assert "one pull request per repository" in authority.lower()
-    assert "named Jira" in authority and "Jira MCP is connected" in authority
+    assert "named Jira" in authority
+    assert '{tool: "jira", via: "mcp"' in authority
     assert "copy/paste-ready issue text" in authority
     assert "Connected-but-unnamed" in mcp
+
+
+def test_developer_tool_matches_use_one_object_schema():
+    template = (ROOT / "inputs" / "engagement-inputs.template.yaml").read_text()
+    intake = (SKILLS / "engagement-intake" / "SKILL.md").read_text()
+    engagement = (SKILLS / "references" / "engagement-inputs.md").read_text()
+    mcp = (SKILLS / "references" / "mcp-servers.md").read_text()
+    for text in (template, intake, engagement, mcp):
+        assert "tool" in text and "via" in text and "key" in text
+    assert "Record the server key or the\nvariable name" not in mcp
+    assert "records a server key or an environment variable name" not in engagement
 
 
 def test_business_transactions_use_a_bounded_global_tag():

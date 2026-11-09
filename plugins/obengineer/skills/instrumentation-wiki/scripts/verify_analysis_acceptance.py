@@ -11,6 +11,10 @@ import sys
 from pathlib import Path
 
 FULL_SHA = re.compile(r"^[0-9a-f]{40}$")
+RFC3339 = re.compile(
+    r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}"
+    r"(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})$"
+)
 COMPANIONS = ("attribute-schema.json", "implementation-map.json")
 
 
@@ -35,10 +39,16 @@ def read_record(path: Path) -> tuple[Path | None, str | None, list[str]]:
     failures: list[str] = []
     if fields.get("status") != "accepted":
         failures.append("acceptance record status must be accepted")
-    if not fields.get("analysis"):
-        failures.append("acceptance record has no analysis path")
-    if not fields.get("analysis_commit"):
-        failures.append("acceptance record has no analysis_commit")
+    for field in (
+        "analysis", "analysis_commit", "analysis_pr", "accepted_by", "accepted_at"
+    ):
+        if not fields.get(field):
+            failures.append(f"acceptance record has no {field}")
+    for field in ("qualifications", "rejected_decisions"):
+        if not re.search(rf"^{field}:\s*(?:.*)?$", text, re.M):
+            failures.append(f"acceptance record has no {field}")
+    if fields.get("accepted_at") and not RFC3339.fullmatch(fields["accepted_at"]):
+        failures.append("acceptance record accepted_at must be RFC3339")
     analysis = Path(fields["analysis"]) if fields.get("analysis") else None
     return analysis, fields.get("analysis_commit"), failures
 

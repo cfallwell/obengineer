@@ -92,7 +92,43 @@ def test_acceptance_record_cli_is_supported(tmp_path):
         "status: accepted\n"
         "analysis: docs/observability/analysis-app-2026-01-01.md\n"
         f"analysis_commit: {commit}\n"
+        "analysis_pr: https://example.invalid/pr/1\n"
+        "accepted_by: reviewer\n"
+        "accepted_at: 2026-01-01T00:00:00Z\n"
+        "qualifications: []\n"
+        "rejected_decisions: []\n"
     )
     assert verify_acceptance.main([
         "--record", str(record), "--repo", str(repo)
     ]) == 0
+
+
+def test_incomplete_acceptance_record_is_rejected(tmp_path):
+    record = tmp_path / "acceptance.yaml"
+    record.write_text(
+        "status: accepted\n"
+        "analysis: docs/observability/analysis-app-2026-01-01.md\n"
+        f"analysis_commit: {'a' * 40}\n"
+    )
+    _, _, failures = verify_acceptance.read_record(record)
+    for field in (
+        "analysis_pr", "accepted_by", "accepted_at", "qualifications",
+        "rejected_decisions",
+    ):
+        assert f"acceptance record has no {field}" in failures
+
+
+def test_acceptance_timestamp_must_be_rfc3339(tmp_path):
+    record = tmp_path / "acceptance.yaml"
+    record.write_text(
+        "status: accepted\n"
+        "analysis: docs/observability/analysis-app-2026-01-01.md\n"
+        f"analysis_commit: {'a' * 40}\n"
+        "analysis_pr: 1\n"
+        "accepted_by: reviewer\n"
+        "accepted_at: yesterday\n"
+        "qualifications: []\n"
+        "rejected_decisions: []\n"
+    )
+    _, _, failures = verify_acceptance.read_record(record)
+    assert "acceptance record accepted_at must be RFC3339" in failures

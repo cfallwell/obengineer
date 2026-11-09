@@ -165,6 +165,8 @@ def wiki(tmp_path: Path) -> Path:
         "analysis_pr: https://example.invalid/pr/1\n"
         "accepted_by: reviewer\n"
         "accepted_at: 2026-01-01T00:00:00Z\n"
+        "qualifications: []\n"
+        "rejected_decisions: []\n"
     )
     (root / ".cursor" / "rules").mkdir(parents=True)
     (root / ".cursor" / "rules" / "obengineer-wiki.mdc").write_text(

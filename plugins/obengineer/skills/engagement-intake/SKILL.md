@@ -88,7 +88,11 @@ Before asking, look at the MCP servers already connected in this session.
 
 - **Splunk Observability Cloud and Splunk Enterprise are mandatory.** If either is absent, the gap report says so and points at copying that entry from `plugins/obengineer/.mcp.optional.json` with the organisation's own command. Do not invent a command. Tenant facts gathered without them are `stated`, not `measured`.
 - **Memory repository `.env`.** API keys for those two servers live in `.env`, copied from `templates/memory-repo/.env.template` in the toolkit. Tell the human to fill that file. Do not read the values into the inputs file. The variable names and the analyze pass are [`existing-telemetry.md`](../references/existing-telemetry.md).
-- **Developer tools.** Ask which tools they use — examples of shape: Jira, GitHub, GitLab, Artifactory — and match the list to MCP servers already connected and to environment variable names already present. Record the server key or the variable name in `developer_tools`. Never read or store a value. Do not add a server that is not already connected. The procedure is [`mcp-servers.md`](../references/mcp-servers.md).
+- **Developer tools.** Ask which tools they use — examples of shape: Jira, GitHub,
+  GitLab, Artifactory — and match only those names to MCP servers and environment
+  variable names already present. Record each match in `developer_tools.matched` as
+  `{tool, via: mcp|env, key}`. Never read or store a value or add a server that is not
+  already connected. The procedure is [`mcp-servers.md`](../references/mcp-servers.md).
 - **Jira, only when named and connected.** Read matching issue keys only when the human named Jira and a Jira MCP is already connected. Connected-but-unnamed and named-but-unavailable Jira are not used. Generating backlog issues is engineering's option after the contract exists, and only when they ask. Intake does not create issues or start coding. The rule is [`mcp-servers.md`](../references/mcp-servers.md).
 - **Repository hosts, if present.** When a GitHub, GitLab, or other repository MCP is already connected, match it to the named tool list. Do not choose `initial_scope` here, and do not adopt every repository it can reach. Scope authorization is the instrumentation phase.
 - **Recommend, do not require,** the other servers in [`mcp-servers.md`](../references/mcp-servers.md): local OpenTelemetry tools, ThousandEyes when an off-box hop is in scope, and a cloud inventory MCP for whatever cloud this site runs on so analyze can generate the production diagram.

@@ -115,7 +115,8 @@ verification are visible.
 Jira is enabled only when both are true:
 
 1. the human named Jira under `developer_tools.named`; and
-2. a Jira MCP is connected and recorded under `developer_tools.matched`.
+2. `developer_tools.matched` contains
+   `{tool: "jira", via: "mcp", key: "<connected server key>"}`.
 
 Connected-but-unnamed Jira is not used. Named-but-unavailable Jira is not used. Never
 guess a project key from a repository name.

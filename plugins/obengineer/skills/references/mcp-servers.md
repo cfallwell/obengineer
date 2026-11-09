@@ -54,8 +54,9 @@ repository, and do not guess a command.
 
 Intake asks the human which tools they use. Examples of shape: Jira, GitHub,
 GitLab, Artifactory. Match that list to MCP servers already connected and to
-environment variable names already present. Record the server key or the
-variable name in `developer_tools.matched`. Do not read the value, do not write it into
+environment variable names already present. Record each match as
+`{tool: "<named tool>", via: "mcp" | "env", key: "<server or variable name>"}` in
+`developer_tools.matched`. Do not read the value, do not write it into
 `engagement-inputs.yaml`, and do not ask the human to paste it. A credential
 stays in the user environment or in the MCP server that already holds it.
 
@@ -64,7 +65,8 @@ A named tool with no match is not installed by the run.
 ### Jira
 
 Jira is enabled only when the human named Jira under `developer_tools.named`
-**and** `developer_tools.matched` records a connected Jira MCP. At intake, only
+**and** `developer_tools.matched` contains
+`{tool: "jira", via: "mcp", key: "<connected server key>"}`. At intake, only
 then read issue keys that match `outcomes.known_pain`. Connected-but-unnamed
 Jira and named-but-unavailable Jira are not used. Do not ask for a token.
 

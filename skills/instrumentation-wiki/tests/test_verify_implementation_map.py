@@ -45,7 +45,7 @@ def valid_map() -> dict:
     }
 
 
-def write(tmp_path: Path, data: dict) -> Path:
+def write(tmp_path: Path, data: object) -> Path:
     path = tmp_path / "implementation-map.json"
     path.write_text(json.dumps(data))
     return path
@@ -59,6 +59,13 @@ def test_empty_map_fails(tmp_path):
     failures = verifier.verify(write(tmp_path, {}))
     assert "repositories must be a list" in failures
     assert "targets must be a non-empty list" in failures
+
+
+def test_non_object_top_level_fails_cleanly(tmp_path):
+    for value in ([], None):
+        assert verifier.verify(write(tmp_path, value)) == [
+            "implementation map top level must be an object"
+        ]
 
 
 def test_dangling_repository_fails(tmp_path):

@@ -20,6 +20,8 @@ def verify(path: Path) -> list[str]:
         data = json.loads(path.read_text())
     except (OSError, json.JSONDecodeError) as exc:
         return [f"implementation map is not valid JSON: {exc}"]
+    if not isinstance(data, dict):
+        return ["implementation map top level must be an object"]
 
     failures: list[str] = []
     if data.get("schema_version") != 1:

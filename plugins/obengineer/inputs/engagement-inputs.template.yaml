@@ -255,8 +255,9 @@ outcomes:
 
 # ---------------------------------------------------------------------------
 # Developer tools the human names. Intake asks for the list, then matches it
-# to MCP servers and environment variable names already present. Record the
-# server key or the variable name. Never a token, password, or API key.
+# to MCP servers and environment variable names already present. Record one
+# object per match: tool, via (`mcp` or `env`), and the server key or variable
+# name in `key`. Never a token, password, or API key.
 # Examples of shape, not a required set: jira, github, gitlab, artifactory.
 # ---------------------------------------------------------------------------
 developer_tools:

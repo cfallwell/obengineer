@@ -228,8 +228,8 @@ every field means nothing was submitted; leave `rotate_on_completion` as
 
 `tenancy.tokens_held_by` is a different fact: who can issue the ingest token
 when instrumentation starts. It is a name, not a token.
-`developer_tools.matched` records a server key or an environment variable name
-already present. It is not permission to read that variable.
+`developer_tools.matched` records `{tool, via, key}` for a server key or environment
+variable name already present. It records no value and is not permission to read one.
 
 Splunk API credentials are the memory repository `.env`, copied from
 `templates/memory-repo/.env.template`. They are not new fields.
