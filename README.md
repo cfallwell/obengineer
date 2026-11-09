@@ -52,7 +52,7 @@ Do these two steps in this order.
 
    Pass `--claude`, `--codex`, or `--all` in place of `--cursor` when those hosts should receive the same install. Restart the host so it loads the new skills and commands. Open the memory repository in the host and run the commands there. They write `docs/observability/`, the wiki, and `terraform/apps/<app>/` into that repository.
 
-   When your checkout contains `templates/memory-repo/`, copy its `.gitignore` and `.env.template` into the memory repository. Then copy `.env.template` to `.env` and fill it. `.env` is gitignored. That directory is not on this branch. It is added on `memory-repo-env-template`.
+   Copy `templates/memory-repo/.gitignore` and `templates/memory-repo/.env.template` into the memory repository. Then copy `.env.template` to `.env` and fill it. `.env` is gitignored.
 
 ## Install
 
@@ -136,13 +136,13 @@ It writes three files under `docs/observability/`:
 
 When entitlement or a supplied traffic baseline is present, it also writes `entitlement-exposure-<app>-<date>.md` for the account team. That file is Markdown only.
 
-The analyze run uses `.env`, the `splunk-observability` and `splunk-platform` MCP servers, and the API endpoints to inventory telemetry the tenant already collects. The procedure is `skills/references/existing-telemetry.md`. That file is not on this branch. It is added with the env template on `memory-repo-env-template`.
+The analyze run uses `.env`, the `splunk-observability` and `splunk-platform` MCP servers, and the API endpoints to inventory telemetry the tenant already collects. The procedure is `skills/references/existing-telemetry.md`.
 
 ### `/ob-wiki`
 
 Run this after a person has accepted the analysis. If the analysis is not accepted, the command stops.
 
-It writes one note per business transaction, workflow, use case, finding, detector, and objective under `wiki/<Customer>/<app>/`, plus work orders and tracked versions. It does not write a second customer document. Hosts get a short pointer at the index note (`.cursor/rules/obengineer-wiki.mdc`, `CLAUDE.md`, `AGENTS.md`), not a copy of the wiki.
+It writes one note per business transaction, workflow, use case, finding, detector, and objective under `wiki/apps/<app>/services/<service>/`, plus work orders and tracked versions. It does not write a second customer document. Hosts get a short pointer at the index note (`.cursor/rules/obengineer-wiki.mdc`, `CLAUDE.md`, `AGENTS.md`), not a copy of the wiki.
 
 A later analyze run reads those notes and reports what changed. See [`skills/references/agent-wiki.md`](skills/references/agent-wiki.md).
 
@@ -186,16 +186,16 @@ obengineer/                         # toolkit repository
     ├── .env.template               # copied from templates/memory-repo/ when that directory exists
     ├── .env                        # local only; gitignored
     ├── docs/observability/         # the customer document and its .docx
-    ├── wiki/<Customer>/<app>/      # the agent wiki
+    ├── wiki/apps/<app>/services/<service>/      # the agent wiki
     ├── AGENTS.md · CLAUDE.md       # host pointers into that wiki
     └── terraform/apps/<app>/       # one Terraform directory per application
 ```
 
-Paths in the skills — `docs/observability/…`, `wiki/<Customer>/<app>/…` — are relative to that repository. The wiki path on this branch is `wiki/<Customer>/<app>/`.
+Paths in the skills — `docs/observability/…`, `wiki/apps/<app>/services/<service>/…` — are relative to that repository. The wiki path is `wiki/apps/<app>/services/<service>/`.
 
 ## Environment file
 
-`templates/memory-repo/` holds `.env.template` and a `.gitignore` for a new memory repository. That directory is not on this branch. Copy both into the memory repository when your checkout has them, then:
+`templates/memory-repo/` holds `.env.template` and a `.gitignore` for a new memory repository. Copy both into the memory repository, then:
 
 ```bash
 cp .env.template .env
@@ -229,13 +229,13 @@ Four runs, each with a prompt and an agent definition:
 | Run | Prompt | Command | Output |
 |---|---|---|---|
 | Analyze | [`prompts/01-analyze-application.md`](prompts/01-analyze-application.md) | `/ob-analyze` | The customer document — architecture observed, critical findings, the recommendation catalogue, and Business Value Realization — plus its `.docx`, `attribute-schema.json`, and, when entitlement or a supplied traffic baseline exists, the account team's entitlement exposure document |
-| Wiki | [`prompts/02-build-instrumentation-wiki.md`](prompts/02-build-instrumentation-wiki.md) | `/ob-wiki` | `wiki/<Customer>/<app>/`: one note per business transaction, workflow, use case, finding, detector, and objective, plus work orders, the value workings, and tracked versions |
+| Wiki | [`prompts/02-build-instrumentation-wiki.md`](prompts/02-build-instrumentation-wiki.md) | `/ob-wiki` | `wiki/apps/<app>/services/<service>/`: one note per business transaction, workflow, use case, finding, detector, and objective, plus work orders, the value workings, and tracked versions |
 | Implement | [`prompts/03-implement-instrumentation.md`](prompts/03-implement-instrumentation.md) | `/ob-implement` | Small reviewable pull requests, one contract slice each |
 | Configure | [`prompts/04-generate-observability-as-code.md`](prompts/04-generate-observability-as-code.md) | `/ob-build-terraform` | `terraform/apps/<app>/` and a plan, in executive, SRE, and engineer modules. No `apply`. |
 
 The customer document has two renderings of one source. Markdown is the source of record. The Word file for architecture review is rendered from that Markdown. Critical findings are section 4, ordered by severity, with the files involved, the exposure, the remediation, and the verification. The body then carries business transactions, workflows, custom metrics, the business-transaction-to-workflow join, detectors with thresholds, indicators and objectives, and the composite use cases. It closes on Business Value Realization.
 
-The wiki sits under that document: one note per subject at `wiki/<Customer>/<app>/`, with frontmatter and wikilinks that Obsidian and the Cursor, Claude, and Codex memory features can read. A later run reads those notes and reports the delta. See
+The wiki sits under that document: one note per subject at `wiki/apps/<app>/services/<service>/`, with frontmatter and wikilinks that Obsidian and the Cursor, Claude, and Codex memory features can read. A later run reads those notes and reports the delta. See
 [`skills/references/agent-wiki.md`](skills/references/agent-wiki.md),
 [`skills/references/incremental-runs.md`](skills/references/incremental-runs.md), and
 [`skills/references/ci-integration.md`](skills/references/ci-integration.md).
@@ -286,12 +286,12 @@ Keep token values out of both files. Use `${VAR}` references. Both files are com
 
 ## Rebuild deliverables from the toolkit checkout
 
-The `/ob-*` commands write the document and the wiki into the repository you installed into. These `make` targets rebuild or check those artifacts from this checkout, where the renderer and the wiki verifier live. `ENGAGEMENT` is the path to that repository. Substitute the real analysis filename and wiki directory. `<app>`, `<date>`, and `<Customer>` are placeholders.
+The `/ob-*` commands write the document and the wiki into the repository you installed into. These `make` targets rebuild or check those artifacts from this checkout, where the renderer and the wiki verifier live. `ENGAGEMENT` is the path to that repository. Substitute the real analysis filename and wiki directory. `<app>`, `<date>`, and `<service>` are placeholders.
 
 ```bash
 export ENGAGEMENT=/path/to/memory-repo
 make render FILE=docs/observability/analysis-<app>-<date>.md
-make verify-wiki WIKI="wiki/<Customer>/<app>"
+make verify-wiki WIKI="wiki/apps/<app>/services/<service>"
 ```
 
 `make render` rebuilds the customer `.docx` from the Markdown analysis and proves the Word file matches its source. `make verify-wiki` checks that wikilinks resolve, frontmatter is complete, index counts match the tree, host pointers exist, and no credential-shaped values are present. An absolute path is used as given. With `ENGAGEMENT` unset, a relative path is resolved from the current directory.

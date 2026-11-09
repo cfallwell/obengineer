@@ -9,7 +9,7 @@ actually ran.
 |---|---|---|---|---|
 | 0 | `/ob-intake` | [`engagement-intake`](../skills/engagement-intake/SKILL.md) | — | `engagement-inputs.yaml` |
 | 1 | `/ob-analyze` | [01](01-analyze-application.md) | Architect | **The customer document** — analysis and recommendations in one file — plus its `.docx` and `attribute-schema.json` (PR 0, docs only) |
-| 2 | `/ob-wiki` | [02](02-build-instrumentation-wiki.md) | Architect | The agent wiki under `wiki/<Customer>/<app>/`, work orders, tracked versions. **No second document.** |
+| 2 | `/ob-wiki` | [02](02-build-instrumentation-wiki.md) | Architect | The agent wiki under `wiki/apps/<app>/services/<service>/`, work orders, tracked versions. **No second document.** |
 | 3 | `/ob-implement` | [03](03-implement-instrumentation.md) | Implementer | Code PRs, one contract slice (or Phase 0) at a time |
 | 4 | `/ob-build-terraform` | [04](04-generate-observability-as-code.md) | Observability as Code | Terraform under `terraform/apps/<app>/`, plus a plan. No `apply`. |
 
