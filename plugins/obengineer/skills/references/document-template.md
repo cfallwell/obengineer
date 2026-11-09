@@ -37,7 +37,8 @@ disagree. Delivered as markdown only it is incomplete; a `.docx` that was not re
 the committed markdown is not reviewable.
 
 Also emitted: `docs/observability/attribute-schema.json`, the machine form of the attribute
-dictionary appendix.
+dictionary appendix, and `docs/observability/implementation-map.json`, which maps accepted
+contract targets to repository legs and optional Jira projects.
 
 **The lower layer is a wiki, not a second document.** Everything an agent needs that a
 customer does not read — per-BT notes, per-workflow notes, work orders, run history, tracked
@@ -175,7 +176,7 @@ Two bulleted lists of real, resolvable URLs. Not a bibliography of everything �
 only documents a recommendation in this guide maps back to.
 
 **Splunk documentation (primary)** covers, at minimum, the products in scope:
-RUM browser install, RUM `setGlobalAttributes`, APM Business Workflows, Tag
+RUM browser install, RUM `setGlobalAttributes`, APM Business Transactions, Tag
 Spotlight and MetricSets, Metrics Pipeline Management, Log Observer Connect,
 Related Content, the Events API, detectors, and the Splunk Collector
 distribution.
@@ -214,8 +215,10 @@ broken trace boundary that makes an SLI unusable — appears here, not in an app
 not in a paragraph two hundred pages in.
 
 Ordered by severity, highest first, never by discovery order or by section of origin.
-Open with a `Severity | Finding | Exposure | Owner surface` summary table, then one H2 per
-finding carrying, in this order and all of them: what was observed with its evidence,
+Open with the complete OWASP Web Top 10:2025 and OWASP API Security Top 10:2023 coverage
+matrix from [`security-assessment.md`](security-assessment.md), then a
+`Severity | Confidence | Priority | Finding class / OWASP | Finding | Exposure | Owner
+surface` summary table. Follow it with one H2 per finding carrying: what was observed with its evidence,
 the file or surface involved, what is exposed and to whom, the risk if unaddressed, the
 remediation path as concrete steps, and how to verify the fix.
 
@@ -227,6 +230,11 @@ say so explicitly with the classes checked. A missing section reads as a scan th
 not look.
 
 ## 5. Course of action
+
+Open with **`### P0 recommended fixes`**. Include every confirmed or high-confidence
+security vulnerability by finding id, with immediate containment, structural repair,
+owner, trigger/deadline, and verification. P0 is remediation priority; it is not
+observability Phase 0.
 
 What is reconstructable today versus what has to be emitted. The decision-engine result
 per question, from [`portfolio-decision-engine.md`](portfolio-decision-engine.md). Phase 0
@@ -379,11 +387,13 @@ description. Per product: what to configure and **the UI path to get there**.
 
 Must state, unambiguously:
 
-- Which span tag becomes the **APM Business Workflow**. One tag, named, with its value shape.
+- Configure `<org>.bt` as the indexed **APM Business Transaction Global tag** include
+  rule, with the bounded value registry and environment scope. List the valid
+  `<org>.bt` / `workflow.name` pairs; `workflow.name` remains finer-grained intent.
 - Which tags are promoted to **Monitoring MetricSets**, which stay **Troubleshooting MetricSets**, and which are attribute-only — with the cardinality arithmetic from [`../cardinality-budget/SKILL.md`](../cardinality-budget/SKILL.md), not an assertion.
 - Which **Related Content** joins exist, and the key each one travels on.
 - Which **ThousandEyes** test type covers each off-box hop.
-- Which parts have **no Terraform support** and are therefore tenant configuration: APM MetricSets, APM Business Workflows, RUM application settings, and the Log Observer Connect connection. Everything else is generated as code by [`../observability-as-code/SKILL.md`](../observability-as-code/SKILL.md).
+- Which parts have **no Terraform support** and are therefore tenant configuration: APM MetricSets, APM Business Transaction rules, RUM application settings, and the Log Observer Connect connection. Everything else is generated as code by [`../observability-as-code/SKILL.md`](../observability-as-code/SKILL.md).
 
 ## 16. Dashboards Overview
 
@@ -435,13 +445,20 @@ a preference.
 ## 19. Business Transactions
 
 The flat, complete list of business transactions — the pages, bundles, apps, and surfaces a
-user can be in — with no workflows in it. One table: `BT (<org>.bt) | Surface | Owning
-artifact | Feature flag | Evidence`. Kebab-case throughout.
+user can be in — with no workflows in it. One table: `BT (<org>.bt) | Global tag set at |
+Surface | Owning artifact | Feature flag | Evidence`. Kebab-case throughout.
 
 Open with one short paragraph separating the two concepts, because every reader confuses
 them once: a **Business Transaction** (`<org>.bt`) is *where the user is*; a **Workflow**
 (`workflow.name`) is *what they are trying to do*. A BT hosts many workflows; a workflow can
 span BTs and backend hops.
+
+`<org>.bt` is a bounded global span tag. It is indexed and configured as the Splunk APM
+Business Transaction **Global tag** include rule, so its value names the transaction.
+Set it at the earliest known business surface, propagate it across relevant boundaries,
+and stamp it on backend spans. `workflow.name` is subordinate intent; one BT can group
+many workflows. Never derive the BT value from a raw URL. Source:
+[Splunk business transaction rules](https://help.splunk.com/en/splunk-observability-cloud/monitor-application-performance/correlate-traces-to-track-business-transactions/configure-business-transaction-rules).
 
 Platform-only artifacts — the boot bundle, a config loader — appear in the table with their
 owning artifact and an explicit note that they emit **no** workflow spans and exist here so
@@ -454,8 +471,8 @@ remembered is the reason half an application ends up uninstrumented.
 
 The flat, complete list of workflows, independent of which BT hosts them, so the reader can
 see the naming scheme as a whole and catch the duplicates that a per-BT view hides. One
-table: `workflow.name | Intent | Entry surface | Crosses accounts? | Bus hops |
-APM Business Workflow?`.
+table: `workflow.name | <org>.bt values | Intent | Entry surface | Crosses repositories? |
+Crosses accounts? | Bus hops`.
 
 Dotted-kebab, `{surface}.{object}.{verb}`, derived from UI copy, analytics event names,
 feature flags, and route registries — not from three generic verbs per BT. `view`, `click`,
@@ -468,7 +485,7 @@ State the naming rule once, here, and state that every later section draws its
 transcribed, which is a fact with two homes. In that case this section carries the naming rule,
 the bounded verb vocabulary, a coverage table of counts per BT with the evidence each count came
 from, and the full row treatment for every workflow whose columns carry information: those that
-cross an account, traverse a bus, or are candidates for the APM Business Workflow. Say
+cross an account, traverse a bus, or belong to a configured APM Business Transaction. Say
 explicitly that the exhaustive enumeration is section 22 and why it is not repeated. The
 coverage counts are the part that cannot be dropped — they are what makes an under-analysed BT
 visible.
@@ -623,10 +640,18 @@ What the implementer agent will do, in the order it will do it, so a human can a
 plan before any code is written and can review the resulting pull requests against
 something.
 
-One H2 per slice, each with: the contract sections it implements, the files and packages it
-will touch, the new dependencies, the CI checks it adds, the acceptance evidence, and the
-estimated review surface as a rough diff size. Slices are ordered so each one is
-independently reviewable and independently revertible.
+One H2 per unified work order. Each names its bounded target selectors, the contract
+sections it implements, the repository legs and authorized paths it will touch, new
+dependencies, CI checks, acceptance evidence, optional Jira projects, and end-to-end
+verification. A work order may cross repositories and produce one linked PR per repository.
+The app-level work order and coordination PR join those repository legs. Full authority:
+[`implementation-work-orders.md`](implementation-work-orders.md).
+
+Also include the implementation-map table:
+`Target | Repositories | Authorized paths | Jira projects | Evidence/owner | Mapping status`.
+After analysis, unresolved rows become one consolidated engineering question. A missing
+repository mapping blocks executable work-order generation; a missing Jira mapping uses the
+manual copy/paste path.
 
 Close with what the agent will **not** do without a human decision: change a public API,
 add a runtime dependency to a shared bundle, touch a payment or identity path, or widen a
@@ -667,6 +692,8 @@ review, so read it before writing rather than after.
 |---|---|
 | **No `Cross-Cutting Attributes and Baggage Propagation` section** | Section 7 exists with the attribute-set table (`Attribute \| Type \| Set at \| Dimension? \| Notes`) and all five code subsections: provider bootstrap, the `SpanProcessor`, login write, backend composite propagator, bus inject/extract |
 | **A critical finding anywhere except section 4** | Section 4 follows the architecture section, ordered by severity, each finding carrying evidence, files, exposure, risk, remediation, and verification. See [`critical-findings.md`](critical-findings.md) |
+| **No OWASP security coverage matrix, or a category silently skipped** | Section 4 records every OWASP Top 10:2025 and OWASP API Security Top 10:2023 category as confirmed, confidence-rated, not found, not in evidence, or not applicable. See [`security-assessment.md`](security-assessment.md) |
+| **A confirmed/high-confidence vulnerability absent from P0** | The finding appears in section 4 and `P0 recommended fixes` in section 5 by the same id; P0 is not observability Phase 0 |
 | **A finding with no remediation path** | Every finding names concrete steps, the surface or file that changes, and how to verify the fix. A finding is not a complaint |
 | **Body content under an appendix heading** | Appendices hold the dictionary, long code, the agent work order, supplementary evidence, and open items — nothing the argument depends on |
 | Stamp processor loops over all baggage entries | `onStart` iterates an **explicit key allowlist**, so a future caller cannot leak an unbounded value or a token into telemetry |
@@ -696,7 +723,9 @@ review, so read it before writing rather than after.
 | No ad/first-touch section on a browser application | Classifier function, `session.ad_attribution`, bounded baggage subset; `direct` when no campaigns were seen |
 | A client router in evidence, only `document-load` in the document | Section 8: host listener, classifier, `setGlobalAttributes`, and a `route.change` span on **every** client navigation |
 | Joins described as "via traceparent and an id" with no join type | Every use-case join labelled **continue trace** \| **span link** \| **attribute pivot** |
-| The APM Business Workflow tag is described but never named | Section 15 names one tag and its value shape. A TAM cannot configure a description |
+| The APM Business Transaction Global tag is described but never named | Section 15 names `<org>.bt`, its bounded values, environment scope, and registered workflow pairs. A TAM cannot configure a description |
+| `<org>.bt` is not a bounded global tag, or `workflow.name` is used as the BT grouping key | Section 19 defines `<org>.bt`, where it is set and propagated, and the Splunk APM Global tag rule; registered workflows remain subordinate intent |
+| Contract targets have no repository ownership map | `implementation-map.json` and Appendix C map every BT, workflow, use case, detector, objective, and config target to repository legs; unresolved mappings are explicit engineering asks |
 | **No recorded versions for the tools the recommendations depend on** | Document control names the collector distribution, SDK, semconv, and provider versions this run was written against. See [`version-currency.md`](version-currency.md) |
 | **A repeat run that reproduces the previous document** | With prior history in the wiki, section 3 carries `Changes since v<N-1>` and the document is a delta. See [`incremental-runs.md`](incremental-runs.md) |
 | **No `Business Value Realization` section** | Section 26 exists as the last body section, with all six subsections. With no business inputs it is short and honest rather than absent. See [`business-value.md`](business-value.md) |
@@ -723,8 +752,11 @@ Appendix E.
 - [ ] Every H1 starts on a new page in the `.docx`, including each `Use Case:` and appendix
 - [ ] Every section and appendix reference is clickable in the `.docx`, and every link lands on a bookmark
 - [ ] `<Frontend> and Backend Architecture (Observed)` is section 3, a body section, not an appendix
-- [ ] `Critical Findings` is section 4, severity-ordered, with remediation, files, exposure, risk, and verification per finding
-- [ ] Findings at or above the agreed severity bar appear as Phase 0 items in section 17
+- [ ] `Critical Findings` is section 4, severity-ordered, with confidence, priority, OWASP mapping, remediation, files, exposure, risk, and verification per finding
+- [ ] OWASP Top 10:2025 and OWASP API Security Top 10:2023 coverage matrices account for every category and state limitations
+- [ ] Every confirmed or high-confidence vulnerability appears in section 4 and `P0 recommended fixes` in section 5 by finding id
+- [ ] P0 remediation priority is not confused with observability Phase 0
+- [ ] Findings that block signal trust also appear as Phase 0 items in section 17
 - [ ] Course of action and Missing portfolio components follow the architecture and findings
 - [ ] `Cross-Cutting Attributes and Baggage Propagation` present, with the attribute-set table and all five code subsections
 - [ ] Stamp processor shown as `SpanProcessor.onStart` over an explicit key allowlist
@@ -735,7 +767,7 @@ Appendix E.
 - [ ] Attribution section present if a browser exists, with the classifier function and a bounded baggage subset
 - [ ] Collector OTTL derive + redaction, with processor placement and the distribution version stated
 - [ ] MPM dimension-eligible and attribute-only lists, each promotion with its arithmetic
-- [ ] `Splunk portfolio mapping` names the one span tag that becomes the APM Business Workflow
+- [ ] `<org>.bt` is bounded, global, propagated, indexed, and named as the Splunk APM Business Transaction Global tag rule; valid `<org>.bt` / `workflow.name` pairs are registered
 - [ ] Release-event overlay wiring
 - [ ] Log Observer Connect panel shape with `trace_id` join
 - [ ] Catalogue sections 19–25 present, contiguous, and in order
@@ -754,7 +786,8 @@ Appendix E.
 - [ ] No licensing, consumption, or overage number appears in this document
 - [ ] Entitlement exposure document written when entitlement or a supplied traffic baseline exists (a factor neither `unknown` nor an empty collection), referenced in one document-control line, and not otherwise cited. Absent when neither was supplied
 - [ ] Appendix A dictionary agrees with `attribute-schema.json`
-- [ ] Appendix C work order lists slices, files, CI checks, and acceptance evidence
+- [ ] `implementation-map.json` maps every supported target to repository legs and optional Jira projects; unresolved ownership is one consolidated engineering ask
+- [ ] Appendix C work orders list target selectors, repository legs, linked PR coordination, CI checks, and acceptance evidence
 - [ ] Appendix E open items are answerable questions
 - [ ] Tool, SDK, semconv, and provider versions recorded; breaking changes since the last run called out
 - [ ] No ingest token, secret, or credential value anywhere — placeholders only

@@ -55,15 +55,23 @@ import { useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
 import SplunkRum from '@splunk/otel-web';
 import { trace } from '@opentelemetry/api';
-import { classifyPage } from '@<org>/otel-common';
+import { classifyRoute, setBaggageEntry } from '@<org>/otel-common';
 
 export function RumRouteChange() {
   const location = useLocation();
   useEffect(() => {
-    const pageType = classifyPage(location.pathname); // bounded enum, never raw path
-    SplunkRum.setGlobalAttributes({ 'page.type': pageType });
+    const { pageType, businessTransaction } = classifyRoute(location.pathname);
+    // Both are bounded registry values, never the raw path.
+    SplunkRum.setGlobalAttributes({
+      'page.type': pageType,
+      '<org>.bt': businessTransaction,
+    });
+    setBaggageEntry('<org>.bt', businessTransaction);
     const span = trace.getTracer('<org>-rum').startSpan('route.change', {
-      attributes: { 'page.type': pageType },
+      attributes: {
+        'page.type': pageType,
+        '<org>.bt': businessTransaction,
+      },
     });
     span.end();
   }, [location.pathname]);

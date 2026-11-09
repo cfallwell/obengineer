@@ -1,0 +1,124 @@
+# Docs-only analysis PR. A separate intake run uploads engagement-inputs.yaml as a
+# workflow artifact; intake itself creates no branch, commit, or PR.
+# Replace each approved-agent-runner command with your organization's runner.
+name: obengineer analysis
+
+on:
+  workflow_dispatch:
+    inputs:
+      application:
+        description: "engagement.application (lowercase kebab-case)"
+        required: true
+      intake_run_id:
+        description: "workflow run id that uploaded the validated intake artifact"
+        required: true
+      intake_artifact:
+        description: "artifact name containing engagement-inputs.yaml"
+        required: true
+        default: obengineer-intake
+
+permissions:
+  actions: read
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: obengineer-analysis-${{ inputs.application }}
+  cancel-in-progress: false
+
+jobs:
+  analyze:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: materialize intake without committing to the default branch
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ inputs.intake_artifact }}
+          path: /tmp/obengineer-intake
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          run-id: ${{ inputs.intake_run_id }}
+
+      - name: create the analysis branch
+        id: branch
+        env:
+          APP_INPUT: ${{ inputs.application }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          app=$(printf '%s' "$APP_INPUT" | tr '[:upper:]_' '[:lower:]-')
+          if git cat-file -e "origin/${{ github.event.repository.default_branch }}:wiki/apps/$app" 2>/dev/null; then
+            branch="ci-initiated-$app-analysis"
+          else
+            branch="initial-$app-analysis"
+          fi
+          if git ls-remote --exit-code --heads origin "$branch" >/dev/null 2>&1; then
+            echo "Analysis branch already exists: $branch"
+            exit 1
+          fi
+          test "$(gh pr list --state open --head "$branch" --json number --jq length)" -eq 0
+          git checkout -b "$branch"
+          mkdir -p docs/observability
+          cp /tmp/obengineer-intake/engagement-inputs.yaml \
+            docs/observability/engagement-inputs.yaml
+          echo "name=$branch" >> "$GITHUB_OUTPUT"
+
+      - name: phase 1 — evidence and security findings
+        env:
+          AGENT_API_KEY: ${{ secrets.AGENT_API_KEY }}
+        run: |
+          # approved-agent-runner /ob-analyze --ci-phase evidence --branch-owned-by-runner
+          git add docs/observability
+          git diff --cached --quiet && { echo "Evidence phase produced nothing"; exit 1; }
+          git commit -m "analysis(${{ inputs.application }}): capture evidence and security findings"
+          git push -u origin "${{ steps.branch.outputs.name }}"
+
+      - name: open the docs-only PR after phase 1
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          BRANCH: ${{ steps.branch.outputs.name }}
+        run: |
+          gh pr create \
+            --head "$BRANCH" \
+            --base "${{ github.event.repository.default_branch }}" \
+            --title "docs: analyze ${{ inputs.application }}" \
+            --body "Docs-only obengineer analysis. Human acceptance is required before /ob-generate; CI does not approve or merge this PR."
+
+      - name: phase 2 — instrumentation contract and mapping
+        env:
+          AGENT_API_KEY: ${{ secrets.AGENT_API_KEY }}
+        run: |
+          # approved-agent-runner /ob-analyze --ci-phase contract --branch-owned-by-runner
+          git add docs/observability
+          git diff --cached --quiet && { echo "Contract phase produced nothing"; exit 1; }
+          git commit -m "analysis(${{ inputs.application }}): add instrumentation contract"
+          git push
+
+      - name: phase 3 — render, review, and verify
+        env:
+          AGENT_API_KEY: ${{ secrets.AGENT_API_KEY }}
+        run: |
+          # approved-agent-runner /ob-analyze --ci-phase verify --branch-owned-by-runner
+          git add docs/observability
+          git diff --cached --quiet && { echo "Verification phase produced nothing"; exit 1; }
+          git commit -m "analysis(${{ inputs.application }}): render and verify deliverables"
+          git push
+
+      - name: enforce phase history and artifact allowlist
+        run: |
+          git log -3 --format=%s | grep -Fx \
+            "analysis(${{ inputs.application }}): capture evidence and security findings"
+          git log -3 --format=%s | grep -Fx \
+            "analysis(${{ inputs.application }}): add instrumentation contract"
+          git log -3 --format=%s | grep -Fx \
+            "analysis(${{ inputs.application }}): render and verify deliverables"
+          unexpected=$(git diff --name-only \
+            "origin/${{ github.event.repository.default_branch }}...HEAD" |
+            grep -Ev '^(docs/observability/|docs/observability$)' || true)
+          test -z "$unexpected" || {
+            echo "Analysis changed paths outside docs/observability:"
+            echo "$unexpected"
+            exit 1
+          }

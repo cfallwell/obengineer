@@ -2,17 +2,19 @@
 
 **Agent:** [`../agents/observability-as-code.agent.md`](../agents/observability-as-code.agent.md)  
 **Skills:** `observability-as-code`, `cardinality-budget`  
-**Inputs:** `docs/observability/engagement-inputs.yaml` + the accepted guide and schema  
-**Depends on:** an accepted analysis document and `attribute-schema.json`. Runs in parallel with Prompt 03 — configuration and instrumentation do not block each other.  
+**Inputs:** exact-commit acceptance record, analysis, schema, implementation map, and engagement inputs
+**Depends on:** a passing `verify_analysis_acceptance.py` check. Runs in parallel with Prompt 03 — configuration and instrumentation do not block each other.
 **Output:** `terraform/apps/<app>/` (one directory per application, so a later apply does not include the others), a `terraform plan`, and a handover. **No `apply`.** The directory shape is Step 3 of `skills/observability-as-code/SKILL.md`.
 
-**Invoke it, do not paste it.** `/ob-build-terraform` reads this file in place.
+**Invoke it, do not paste it.** `/ob-terraform` reads this file in place.
 
 ---
 
 ## System reminder
 
-Follow `observability-as-code.agent.md`. The contract is the source: every dashboard,
+Follow `observability-as-code.agent.md`. Before generating, run
+`python3 <obengineer-root>/skills/instrumentation-wiki/scripts/verify_analysis_acceptance.py --record docs/observability/analysis-<app>-<date>.acceptance.yaml --repo .`.
+The contract is the source: every dashboard,
 detector, SLO, and check traces to a named section of the accepted guide and to a key in
 `attribute-schema.json`. A panel with no origin in the contract is scope you invented.
 
@@ -62,7 +64,8 @@ In this order:
 1. What `apply` will change, in resource counts by type and by persona.
 2. What was imported rather than created, and what is still `TODO`.
 3. What was refused, with the contract section and the missing key for each.
-4. What has **no Terraform support** and is a TAM task in the tenant: APM MetricSets, APM Business Workflows, RUM application and session-replay settings.
+4. What has **no Terraform support** and is a TAM task in the tenant: APM MetricSets,
+   APM Business Transaction rules, RUM application and session-replay settings.
 5. Which thresholds are placeholders awaiting a baseline.
 6. Cost implications: Synthetics runs times locations, and any ruleset that raises MTS rather than lowering it.
 

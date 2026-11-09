@@ -56,6 +56,7 @@ estate. A working baseline:
 
 | Attribute | Type | Set at | Dimension? | Notes |
 |---|---|---|---|---|
+| `<org>.bt` | enum | initial route and route change | Yes | Bounded global tag used by the Splunk APM Business Transaction include rule; never a raw URL |
 | `<org>.account_id` | string | login success (browser) | No (attr only; bounded MetricSet for troubleshooting) | Mirror to `enduser.id` for semconv parity |
 | `<org>.market` (or tenant/region) | string | Collector (OTTL) | Yes | Derived from the URL path segment; see the Collector section |
 | `<org>.attribution.source` | enum | first pageview | Yes | Bounded channel enum |
@@ -69,6 +70,9 @@ estate. A working baseline:
 
 Rules for this table:
 
+- `<org>.bt` is the stable business grouping. The route classifier returns its bounded
+  value, writes it with `setGlobalAttributes`, adds it to baggage when backend grouping
+  is required, and the stamp processor places it on downstream spans.
 - The identity key is **attribute-only**. It is high cardinality; promoting it to a
   global metric dimension is the single most expensive mistake available here. The
   troubleshooting path is a dedicated bounded MetricSet plus Tag Spotlight, and the
@@ -81,7 +85,8 @@ Rules for this table:
 ### H2 — `Shared <language> library: @<org>/otel-common`
 
 One paragraph: a single shared library owns baggage read/write, the stamp
-processor, and the helpers (`startWorkflow`, attribution capture). Every business
+processor, and the helpers (`startWorkflow({ businessTransaction, name }, fn)`,
+attribution capture). Every business
 bundle or service depends on it, and **exactly one artifact** calls the provider
 `init`. Name that artifact.
 
@@ -148,6 +153,7 @@ import { Context, SpanProcessor, Span } from '@opentelemetry/sdk-trace-base';
 import { propagation } from '@opentelemetry/api';
 
 const KEYS = [
+  '<org>.bt',
   '<org>.account_id',
   '<org>.market',
   '<org>.attribution.source',

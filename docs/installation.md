@@ -42,7 +42,7 @@ python3 -m pip install python-docx
 `python-docx` is required only for rendering and verifying `.docx` files. Maintainers
 can run `make deps` to install both `python-docx` and `pytest`.
 
-Install the Terraform CLI when using `/ob-build-terraform`; analysis, wiki, review,
+Install the Terraform CLI when using `/ob-terraform`; analysis, generation, review,
 rendering, and application implementation do not require it.
 
 ## 3. Install into one or more hosts
@@ -107,6 +107,11 @@ Re-run installation after:
   absolute path; or
 - receiving skill changes when the original install used `--copy`.
 
+Reinstalling this release migrates `/ob-wiki` to `/ob-generate` and
+`/ob-build-terraform` to `/ob-terraform`. The installer removes retired command files
+only when the prior obengineer manifest proves it created them; same-named user files that
+were not installed by obengineer are left alone.
+
 The installer replaces an existing destination with the same skill or command name.
 Uninstall removes the replacement; it cannot restore content that existed before the
 install. Review a `--dry-run` before installing into a host with custom files of the
@@ -135,7 +140,8 @@ claude plugin marketplace add /path/to/obengineer
 # Install the obengineer plugin from the added marketplace.
 ```
 
-The plugin includes agents, prompts, hooks, skills, and MCP declarations. Its committed
+The plugin includes commands (with `${CLAUDE_PLUGIN_ROOT}` paths), agents, prompts, hooks,
+skills, and MCP declarations. Its committed
 `.mcp.json` is empty by design; tenant-specific server commands still require operator
 configuration.
 

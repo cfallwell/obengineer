@@ -34,15 +34,15 @@ Ordinary instrumentation gaps do **not** belong here. "RUM has no identity attri
 subject of the whole document; promoting it to a critical finding devalues the section, and
 a section that cries wolf gets skipped exactly like a page-180 paragraph.
 
-## Severity ladder
+## Severity, confidence, OWASP class, and priority
 
 Four levels, and the definition is about consequence and time, not about how alarming it
 sounds:
 
 | Severity | Definition | Placement |
 |---|---|---|
-| **Critical** | Exploitable or exposing now, with no compensating control. Assume it is known to someone outside the team | Phase 0. Named in the phased plan by finding id |
-| **High** | Real exposure or a materially misleading signal, but gated by something — an authenticated path, a low-traffic surface, a partial control | Phase 0 if it blocks trusting the telemetry; otherwise first journey |
+| **Critical** | Exploitable or exposing now, with no compensating control. Assume it is known to someone outside the team | P0 recommended fixes and the phased plan by finding id |
+| **High** | Real exposure or a materially misleading signal, but gated by something — an authenticated path, a low-traffic surface, a partial control | P0 when confirmed or high confidence; otherwise the earliest owned phase |
 | **Medium** | Wrong and worth fixing, with bounded blast radius. It will cost an investigation later | Scheduled, named owner |
 | **Low** | Hygiene. Record it so it does not get rediscovered as new every run | Open items, section 30 |
 
@@ -50,15 +50,24 @@ Order the section by severity descending. Never by discovery order, never groupe
 body section they came from — a reader scanning for the worst thing should find it in the
 first table row.
 
+Confidence is `confirmed`, `high`, `medium`, or `low` and describes the evidence, not
+the consequence. Record the finding class (`exposure`, `privacy`, `misleading signal`,
+`availability`, or `security vulnerability`), the applicable OWASP Top 10:2025 and OWASP
+API Security Top 10:2023 categories, and remediation priority (`P0`, `P1`, `P2`, or
+`backlog`). Every confirmed or high-confidence vulnerability is P0.
+
+**P0 is not observability Phase 0.** P0 is remediation urgency. Phase 0 is the work that
+establishes signal trust. A security fix may be P0 even when telemetry is already trusted.
+
 ## Shape
 
 Open with the summary table, so the whole picture fits on one page:
 
 ```markdown
-| # | Severity | Finding | Exposure | Owning surface |
-|---|---|---|---|---|
-| F-01 | Critical | Third-party API key served in the boot bundle | Any visitor; key grants <scope> | `apps/web/boot/config.ts` |
-| F-02 | High | Consent resolves 1.8s after the first RUM beacon | EU visitors; <n> attributes sent pre-consent | RUM init order |
+| # | Severity | Confidence | Priority | Finding class / OWASP | Finding | Exposure | Owning surface |
+|---|---|---|---|---|---|---|---|
+| F-01 | Critical | confirmed | P0 | Exposure / A02:2025, API8:2023 | Third-party API key served in the boot bundle | Any visitor; key grants <scope> | `apps/web/boot/config.ts` |
+| F-02 | High | high | P0 | Privacy / A01:2025 | Consent resolves 1.8s after the first RUM beacon | EU visitors; <n> attributes sent pre-consent | RUM init order |
 ```
 
 Stable ids (`F-01`) matter more than they look: the phased plan, the work order appendix, the
@@ -91,9 +100,10 @@ credential into a follow-up run to "confirm" it.
 
 ## Where findings go afterwards
 
-A finding is not done when it is written. It has three destinations, and all three:
+A finding is not done when it is written. It has these destinations:
 
-- **Phase 0 or the phased plan** (section 17), by id, at Critical and blocking-High. A documented exposure with no schedule is documented, not addressed.
+- **`P0 recommended fixes` at the start of section 5**, by id, for every confirmed or high-confidence vulnerability. The row names containment, structural repair, owner, and verification.
+- **Phase 0 or the phased plan** (section 17), by id, when the finding blocks signal trust or implementation. A documented exposure with no schedule is documented, not addressed.
 - **A wiki note** under `findings/`, so the next run knows it existed and can report it as still-open, fixed, or regressed rather than discovering it again as new. See [`agent-wiki.md`](agent-wiki.md).
 - **The delta section of the next document** (`Changes since v<N-1>`), with its current state. A finding that silently disappears between two versions of a document is the worst outcome available: the reader cannot tell whether it was fixed or dropped.
 

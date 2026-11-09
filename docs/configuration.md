@@ -98,8 +98,8 @@ The analysis records a disagreement when measured evidence overrides a stated in
 | `engagement.scope` | The application and surfaces the analysis describes. It is not implementation authorization. |
 | `initial_scope.authorized` | Whether implementation may touch `full` scope, named `repositories`, or named `parent_folders`. `unknown` stops implementation and asks engineering to authorize scope. Intake intentionally does not set this. |
 | `initial_scope.repositories` | Repository allowlist when authorization is `repositories`. |
-| `initial_scope.parent_folders` | Repository-relative path allowlist when authorization is `parent_folders`. |
-| `initial_scope.branch` | Branch to inspect or modify. Empty means the current checkout, including an unmerged branch. |
+| `initial_scope.parent_folders` | Repository-qualified `{repository, path}` allowlist when authorization is `parent_folders`. |
+| `initial_scope.branches` | Optional `{repository, branch}` mappings. Missing entries mean each current checkout, including an unmerged branch. |
 
 A connected repository host is discovery, not permission. obengineer never interprets
 access to several repositories as authorization to instrument all of them.
@@ -120,6 +120,11 @@ access to several repositories as authorization to instrument all of them.
 
 The production scan is read-only: no destructive form submission, load generation, or
 state changes.
+
+`security_assessment.mode` is `passive`, `safe-active`, or `none`. Passive reviews source
+and normal traffic. Safe-active additionally requires explicit authorized origins,
+excluded paths, and request/rate limits, and remains non-mutating. The analysis records
+credential/API checks and complete OWASP Top 10:2025 and API Security Top 10:2023 coverage.
 
 ### Authenticated analysis access
 
@@ -211,13 +216,14 @@ views the contract and Terraform need.
 ### Developer tools
 
 `developer_tools.named` records tools the human says they use.
-`developer_tools.matched` records an already-connected MCP server key or environment
-variable name. It never stores a value. A named but unmatched tool is not installed
+`developer_tools.matched` records `{tool, via, key}` for an already-connected MCP server
+or environment variable name. It never stores a value. A named but unmatched tool is not installed
 automatically.
 
-Jira issue creation is opt-in after acceptance: one requested backlog issue per accepted
-work order. Moving that issue into a sprint can queue implementation in an engineering
-workflow, but obengineer does not create or move issues without explicit direction.
+Jira is usable only when the human named Jira and `matched` records a Jira MCP. Issue
+creation is opt-in after acceptance: at most one linked issue per mapped Jira project for
+a unified work order. If Jira is unavailable or another tool is used, obengineer does not
+attempt Jira; the app-level wiki work order provides copy/paste-ready issue text.
 
 ### Business value and public evidence
 
@@ -238,9 +244,9 @@ Installed commands append free-form invocation text to their run contract:
 |---|---|
 | `/ob-intake` | An alternate output path or relevant context not already represented in the workspace. |
 | `/ob-analyze` | The application or service focus when the inputs file covers several supplied artifacts. |
-| `/ob-wiki` | The accepted analysis path when more than one version is present. |
-| `/ob-implement` | Optional slice identity, such as `workflow: <accepted-name>`. If omitted, the run follows the accepted phase plan: Phase 0 first, then the highest-ranked journey, then meters. One invocation still implements one slice. |
-| `/ob-build-terraform` | Application or environment focus already authorized by the accepted contract. |
+| `/ob-generate` | Required `accept <analysis-path> at <analysis-commit-sha>`; verifies and records exact-commit acceptance before generating the wiki. |
+| `/ob-implement` | Optional bounded selector: work order, BT, workflow, use case, detector, objective, or config target. It must resolve to one accepted unified work order; if omitted, the accepted phase plan selects one. |
+| `/ob-terraform` | Application or environment focus already authorized by the accepted contract. |
 | `/ob-review` | Deliverable path; defaults to the analysis under `docs/observability/`. |
 | `/ob-render` | Markdown source path; defaults to the analysis under `docs/observability/`. |
 

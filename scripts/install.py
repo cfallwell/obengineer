@@ -39,6 +39,10 @@ CANONICAL_SKILLS = ROOT / "skills"
 COMMANDS = ROOT / "commands"
 MANIFEST_NAME = ".obengineer-install.json"
 ROOT_TOKEN = "{{OBENGINEER_ROOT}}"
+LEGACY_COMMAND_STEMS = {
+    "ob-generate": ("ob-wiki",),
+    "ob-terraform": ("ob-build-terraform",),
+}
 
 
 @dataclass(frozen=True)
@@ -76,7 +80,7 @@ HOSTS: dict[str, Host] = {
         label="Cursor",
         user_dir=".cursor",
         project_dir=".cursor",
-        notes=("Type /ob to list /ob-intake, /ob-analyze, /ob-wiki, /ob-implement, /ob-build-terraform, /ob-review, and /ob-render.",),
+        notes=("Type /ob to list /ob-intake, /ob-analyze, /ob-generate, /ob-implement, /ob-terraform, /ob-review, and /ob-render.",),
     ),
     "claude": Host(
         key="claude",
@@ -151,11 +155,28 @@ class Planner:
         dst.parent.mkdir(parents=True, exist_ok=True)
         dst.write_text(text)
 
+    def remove(self, dst: Path) -> None:
+        self.note(f"remove retired command {dst}")
+        if self.dry_run:
+            return
+        if dst.is_symlink() or dst.exists():
+            shutil.rmtree(dst) if dst.is_dir() and not dst.is_symlink() else dst.unlink()
+
 
 def install_host(host: Host, scope_root: Path, project: bool, copy: bool,
                  planner: Planner) -> None:
     skills_dir = host.skills_dir(scope_root, project)
     commands_dir = host.commands_dir(scope_root, project)
+    previous = read_manifest(host.base(scope_root, project) / MANIFEST_NAME)
+    previously_created = set(previous.get("created", []))
+
+    for replacement, retired_stems in LEGACY_COMMAND_STEMS.items():
+        if not (COMMANDS / f"{replacement}.md").is_file():
+            continue
+        for retired in retired_stems:
+            retired_path = commands_dir / f"{retired}.md"
+            if str(retired_path) in previously_created:
+                planner.remove(retired_path)
 
     for name in skill_names() + shared_reference_dirs():
         planner.link_or_copy(CANONICAL_SKILLS / name, skills_dir / name, copy)

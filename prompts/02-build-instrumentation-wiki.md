@@ -3,10 +3,11 @@
 **Agent:** [`../agents/instrumentation-architect.agent.md`](../agents/instrumentation-architect.agent.md)  
 **Skills:** `instrumentation-wiki`, `baggage-propagation`, `cardinality-budget`  
 **Inputs:** `docs/observability/engagement-inputs.yaml` + the accepted Prompt 01 analysis document  
-**Depends on:** the Prompt 01 analysis, accepted by the human.  
-**Output:** PR 0 — documentation only. The wiki under `wiki/apps/<app>/services/<service>/`, `attribute-schema.json`, and the host memory pointers.
+**Depends on:** the Prompt 01 analysis, explicitly accepted at an exact commit.
+**Output:** generation PR — acceptance record, wiki, app-level work orders, and host pointers.
 
-**Invoke it, do not paste it.** `/ob-wiki` reads this file in place. Inputs come
+**Invoke it, do not paste it.** `/ob-generate accept <analysis-path> at <analysis-commit-sha>`
+reads this file in place. Inputs come
 from `engagement-inputs.yaml`, so nothing is re-attached and nothing is re-typed; the
 analysis document and diagram paths are already in that file from run 1.
 
@@ -33,6 +34,11 @@ That file owns the tree; do not invent a different one.
 strings, attribute keys, and finding ids from the document exactly. Extend from new evidence;
 never rename for taste. Renaming an accepted `workflow.name` breaks every dashboard, detector,
 and MetricSet built on it.
+
+Acceptance is the YAML record defined by
+[`../skills/references/analysis-run-lifecycle.md`](../skills/references/analysis-run-lifecycle.md).
+Verify the exact commit before writing it. A file's presence, a render pass, or a generic PR
+approval is not acceptance.
 
 ## Inputs
 
@@ -63,13 +69,20 @@ it nothing. Rules: [`../skills/references/incremental-runs.md`](../skills/refere
 
 4. **`contract/`** — `cross-cutting.md` with all five code patterns from [`../skills/references/cross-cutting-attributes.md`](../skills/references/cross-cutting-attributes.md); `baggage.md` with the budget and **each key's named consumer**; `collector.md` with the config and why each processor sits where it does; `mpm.md` with the dimension-eligible and attribute-only lists **and their arithmetic**.
 
-5. **`findings/`** — one note per finding from section 4 of the document, same ids, with `status: open | fixed | regressed | accepted`. This is what lets the next run report on a finding instead of rediscovering it as new.
+5. **`findings/`** — one note per finding from section 4 of the document, same ids,
+   with `status: open | fixed | regressed | risk-accepted`. Risk acceptance records who,
+   when, and why; it is not contract acceptance.
 
 6. **`detectors/` and `slos/`** — one note each. A detector note carries its threshold **and that threshold's provenance**: measured baseline, agreed target, or labelled placeholder with the query that will replace it. An SLI note carries the user-facing statement, the good and total event queries, the objective, the window, the error budget, and the burn-rate rules.
 
 7. **`business/`** — `value-model.md` with the value arithmetic and every coefficient labelled `stated` | `measured` | `public` | `derived`, the unfilled ones left visibly unfilled; `public-evidence.md` with each cited source, its class, and **the date it was read**; `asks.md` with the inputs that would make the case quantitative. Add `entitlement-exposure.md` only when the customer supplied entitlement numbers — written without them it is invented, and the next run inherits the invention as fact. This directory is why a later run updates a coefficient instead of re-researching a quarter.
 
-8. **`implementation/work-orders/<nn>-<slice>.md`** — one per pull-request-sized slice, ordered so each is independently reviewable and independently revertible. Each names the contract sections it implements, the files and packages it touches, new dependencies, the CI checks it adds, the acceptance evidence, and what it must not do without a human decision. These are what Prompt 03 executes.
+8. **`wiki/apps/<app>/implementation/work-orders/<id>.md`** — one unified work order per
+   accepted bounded target or coordinated target set. Follow
+   [`../skills/references/implementation-work-orders.md`](../skills/references/implementation-work-orders.md).
+   A work order may have several repository legs and one linked PR per repository. Include
+   target selectors, repository ids/paths, dependencies, coordination links, optional Jira
+   projects, and copy/paste-ready issue text. Service notes link to these app-level orders.
 
 9. **`implementation/enforcement.md`** — the layer-1 contract checks, from [`../skills/references/ci-integration.md`](../skills/references/ci-integration.md). Schema agreement and single-init first; they catch real defects and need no model.
 

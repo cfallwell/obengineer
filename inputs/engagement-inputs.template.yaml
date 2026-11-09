@@ -18,9 +18,9 @@
 # A token, an API key, or a login may be submitted so the analysis can see
 # authenticated surfaces. Record a reference under analysis_access, never the
 # secret. A login is a dummy account used for testing only. Whatever was
-# submitted is rotated when the analysis completes. unknown is valid.
+# submitted must be rotated by its owner when analysis completes. unknown is valid.
 
-schema_version: 1
+schema_version: 2
 
 engagement:
   application: ""              # the identifier used in every filename and heading
@@ -39,8 +39,8 @@ engagement:
 initial_scope:
   authorized: unknown          # unknown | full | repositories | parent_folders
   repositories: []             # owner/name, when authorized is repositories
-  parent_folders: []           # repo-relative parent folders, when authorized is parent_folders
-  branch: ""                   # empty means the current checkout, including an unmerged branch
+  parent_folders: []           # [{repository: "owner/name", path: "src/"}]
+  branches: []                 # [{repository: "owner/name", branch: "feature"}]; empty means each current checkout
 
 # ---------------------------------------------------------------------------
 # Artifacts the human supplies. Paths relative to the workspace root.
@@ -78,13 +78,28 @@ surfaces:
   edge_cdn: ""
 
 # ---------------------------------------------------------------------------
+# Security assessment authorization. The default is passive observation of
+# source and normal application traffic. safe-active permits only non-mutating
+# checks against the explicit origins/paths and within these limits. none opts
+# out and records the resulting coverage gap. This is not penetration-test
+# authorization.
+# ---------------------------------------------------------------------------
+security_assessment:
+  mode: passive                # passive | safe-active | none
+  authorized_origins: []       # required for safe-active
+  excluded_paths: []
+  max_requests: 100
+  max_requests_per_second: 1
+  notes: ""
+
+# ---------------------------------------------------------------------------
 # Analysis access. OPTIONAL. Every field may stay `unknown`.
 #
 # Submitted so the scan can see authenticated surfaces. A reference only:
 # ${ENV_VAR} or a secret name. Never the secret value. Login is a dummy
 # account used for testing only. When any reference below is supplied,
 # rotate_on_completion is true: that token, API key, login ID, and password
-# are rotated when the analysis completes. What this decides:
+# must be rotated by their owner when analysis completes. What this decides:
 # skills/references/engagement-inputs.md
 #
 # Splunk API access is not a second secret scheme. The values live in the
@@ -246,7 +261,7 @@ outcomes:
 # ---------------------------------------------------------------------------
 developer_tools:
   named: []                    # what the human says they use
-  matched: []                  # server key or env var name already present. Never a value.
+  matched: []                  # [{tool: "jira", via: "mcp", key: "jira"}]; names only, never values
 
 # ---------------------------------------------------------------------------
 # Business context, in the customer's words and numbers.

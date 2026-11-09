@@ -10,6 +10,8 @@ verifier that cannot fail is decoration.
 from __future__ import annotations
 
 import importlib.util
+import json
+import subprocess
 import sys
 from pathlib import Path
 
@@ -55,8 +57,10 @@ def note(title: str, kind: str, status: str, body: str = "Content line.\n") -> s
 def wiki(tmp_path: Path) -> Path:
     app = tmp_path / "wiki" / "apps" / "app" / "services" / "payments"
     for directory in ("meta", "contract", "findings", "business-transactions",
-                      "use-cases", "slos", "business", "implementation/work-orders"):
+                      "use-cases", "slos", "business"):
         (app / directory).mkdir(parents=True, exist_ok=True)
+    work_orders = app.parents[1] / "implementation" / "work-orders"
+    work_orders.mkdir(parents=True, exist_ok=True)
 
     (app / "index.md").write_text(
         note("app — index", "index", "designed", body="""One paragraph about the target.
@@ -74,7 +78,7 @@ def wiki(tmp_path: Path) -> Path:
 - [[business-transactions/checkout]]
 - [[use-cases/checkout-flow-f1]]
 - [[slos/checkout-success]]
-- [[implementation/work-orders/01-the-shared-library]]
+- [[apps/app/implementation/work-orders/01-the-shared-library]]
 """))
     (app / "meta" / "versions.md").write_text(note("versions", "reference", "verified", body="""| Component | Version | Checked | Provenance |
 |---|---|---|---|
@@ -94,8 +98,19 @@ def wiki(tmp_path: Path) -> Path:
         note("Checkout", "use-case", "proposed"))
     (app / "slos" / "checkout-success.md").write_text(
         note("checkout-success", "sli", "proposed"))
-    (app / "implementation" / "work-orders" / "01-the-shared-library.md").write_text(
-        note("The shared library", "work-order", "proposed"))
+    (work_orders / "01-the-shared-library.md").write_text(
+        note(
+            "The shared library",
+            "work-order",
+            "proposed",
+            body=(
+                "## Target selectors\n\n- workflow:checkout.submit\n\n"
+                "## Repository legs\n\n- payments: src/\n\n"
+                "## Acceptance evidence\n\n- analysis commit\n\n"
+                "## Coordination\n\n- coordination PR and sibling links\n\n"
+                "## Manual issue text\n\nCopy this work order into the selected tool.\n"
+            ),
+        ))
     (app / "business" / "value-model.md").write_text(note(
         "value model", "reference", "proposed",
         body="Incidents per month: not supplied (`stated` when the customer gives it).\n"))
@@ -104,6 +119,53 @@ def wiki(tmp_path: Path) -> Path:
         body="- Status page, https://status.example.com, 2026-01-01, read 2026-01-02.\n"))
 
     root = tmp_path
+    docs = root / "docs" / "observability"
+    docs.mkdir(parents=True)
+    analysis = docs / "analysis-app-2026-01-01.md"
+    analysis.write_text("# Analysis\n")
+    (docs / "attribute-schema.json").write_text("{}\n")
+    (docs / "implementation-map.json").write_text(json.dumps({
+        "schema_version": 1,
+        "repositories": [{
+            "id": "payments",
+            "remote": "owner/payments",
+            "authorized_paths": ["src/"],
+        }],
+        "targets": [{
+            "selector": "workflow:checkout.submit",
+            "work_order": "01-the-shared-library",
+            "repositories": ["payments"],
+            "mapping_status": "complete",
+            "evidence": ["source:src/checkout.ts"],
+        }],
+    }))
+    subprocess.run(["git", "-C", str(root), "init", "-q"], check=True)
+    subprocess.run(
+        ["git", "-C", str(root), "config", "user.email", "test@example.invalid"],
+        check=True,
+    )
+    subprocess.run(
+        ["git", "-C", str(root), "config", "user.name", "Test"],
+        check=True,
+    )
+    subprocess.run(["git", "-C", str(root), "add", "docs"], check=True)
+    subprocess.run(
+        ["git", "-C", str(root), "commit", "-qm", "analysis"], check=True
+    )
+    commit = subprocess.run(
+        ["git", "-C", str(root), "rev-parse", "HEAD"],
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.strip()
+    (docs / "analysis-app-2026-01-01.acceptance.yaml").write_text(
+        "status: accepted\n"
+        "analysis: docs/observability/analysis-app-2026-01-01.md\n"
+        f"analysis_commit: {commit}\n"
+        "analysis_pr: https://example.invalid/pr/1\n"
+        "accepted_by: reviewer\n"
+        "accepted_at: 2026-01-01T00:00:00Z\n"
+    )
     (root / ".cursor" / "rules").mkdir(parents=True)
     (root / ".cursor" / "rules" / "obengineer-wiki.mdc").write_text(
         "---\nalwaysApply: true\n---\n\n" + POINTER)
@@ -123,6 +185,49 @@ def failures(app: Path) -> list[str]:
 
 def test_a_conforming_wiki_passes(wiki: Path):
     assert failures(wiki) == []
+
+
+def test_missing_acceptance_is_caught(wiki: Path):
+    acceptance = repo_root(wiki) / "docs" / "observability" / (
+        "analysis-app-2026-01-01.acceptance.yaml"
+    )
+    acceptance.unlink()
+    assert "missing exact-commit analysis acceptance record" in failures(wiki)
+
+
+def test_another_app_acceptance_does_not_satisfy_the_gate(wiki: Path):
+    docs = repo_root(wiki) / "docs" / "observability"
+    acceptance = docs / "analysis-app-2026-01-01.acceptance.yaml"
+    other = docs / "analysis-app-admin-2026-01-01.acceptance.yaml"
+    other.write_text(acceptance.read_text().replace(
+        "analysis-app-2026-01-01.md",
+        "analysis-app-admin-2026-01-01.md",
+    ))
+    acceptance.unlink()
+    assert "missing exact-commit analysis acceptance record" in failures(wiki)
+
+
+def test_app_work_order_frontmatter_is_checked(wiki: Path):
+    order = wiki.parents[1] / "implementation" / "work-orders" / (
+        "01-the-shared-library.md"
+    )
+    order.write_text("# Missing frontmatter\n")
+    assert any("no YAML frontmatter" in failure for failure in failures(wiki))
+
+
+def test_app_work_order_links_and_secrets_are_checked(wiki: Path):
+    order = wiki.parents[1] / "implementation" / "work-orders" / (
+        "01-the-shared-library.md"
+    )
+    order.write_text(note(
+        "The shared library",
+        "work-order",
+        "proposed",
+        body="[[missing/note]]\n0123456789abcdef0123456789abcdef\n",
+    ))
+    result = failures(wiki)
+    assert any("broken wikilink" in failure for failure in result)
+    assert any("possible opaque token" in failure for failure in result)
 
 
 def test_a_broken_wikilink_is_caught(wiki: Path):

@@ -123,9 +123,9 @@ obengineer stores state in the artifact repository rather than in a chat session
 - `meta/decisions.md` records accepted and rejected decisions; and
 - host pointer files tell future agents to load the index and only relevant notes.
 
-This design makes completed runs inspectable and diffable. Acceptance itself is not stored
-before the wiki run: the human must explicitly reassert acceptance when `/ob-wiki` starts.
-The wiki then records the accepted and rejected decisions durably.
+This design makes completed runs inspectable and diffable. Acceptance is explicit and
+commit-bound: `/ob-generate accept <analysis-path> at <analysis-commit-sha>` verifies the
+reviewed artifacts and writes the acceptance record before generating the wiki.
 
 ## Analysis operation
 
@@ -155,6 +155,10 @@ The run combines:
 - customer-stated constraints and business context; and
 - permitted public evidence.
 
+Within `security_assessment.mode`, the run also inventories APIs and assesses exposed
+credentials/sensitive data, OWASP Top 10:2025, and OWASP API Security Top 10:2023.
+Confirmed or high-confidence vulnerabilities route to Critical Findings and P0 fixes.
+
 Production front-end analysis considers load order, provider initialization, competing
 RUM/EUM agents, routing, CSP, consent, browser-to-backend continuity, and whether HTTP
 success pages contain valid content. Tenant inventory is bounded by configured MCP
@@ -168,7 +172,7 @@ it. It is not silently converted into a claim.
 The analysis turns evidence into:
 
 - observed architecture and critical findings;
-- business transactions and bounded workflow names;
+- bounded `<org>.bt` global-tag business transactions and subordinate workflow names;
 - cross-cutting attributes and their propagation paths;
 - span trees, events, metrics, and Collector transformations;
 - dimension eligibility with cardinality arithmetic;
@@ -202,12 +206,17 @@ The verifier compares source and output structure and scans for credential-shape
 The independent reviewer then checks semantic completeness against the canonical rubric.
 Successful rendering proves format consistency, not human acceptance.
 
+Analysis then creates `initial-<app>-analysis` or `ci-initiated-<app>-analysis`,
+commits each analysis phase, and opens one docs-only PR containing
+the validated intake artifact. Intake itself performs no git operation.
+
 ## Acceptance and wiki operation
 
 Human acceptance is a hard boundary. Before it, obengineer may analyze and revise
-documentation. After it, accepted names and schema decisions become dependencies.
-Because the inputs schema has no acceptance field, the wiki gate relies on an explicit
-human statement rather than inferring acceptance from the presence of generated files.
+documentation. After it, accepted names, mappings, and schema decisions become dependencies.
+The analysis PR is reviewed and merged first; the exact analysis path and commit SHA are
+then recorded. File presence, rendering, merge alone, or a generic approval does not
+satisfy the gate.
 
 The wiki run lifts rather than redesigns the accepted contract. It creates:
 
@@ -230,21 +239,29 @@ and whether notes accurately reflect code.
 
 ## Implementation operation
 
-Implementation consumes one accepted work order and changes one authorized slice. It
+Implementation consumes one accepted unified work order. A bounded selector may name a
+work order, BT, workflow, use case, detector, objective, or config target. The order may
+span repositories and produce one linked PR per repository plus a coordination PR. It
 reads:
 
 - the analysis for intent;
 - `attribute-schema.json` for allowed keys and dimensions;
 - the relevant workflow and contract notes;
 - the work order for boundaries and acceptance evidence; and
-- `initial_scope` for repository and path authorization.
+- `implementation-map.json` and `initial_scope` for repository and path authorization.
 
 It stops when required design is missing. This is intentional: inventing an attribute in
 code would make the accepted document, schema, wiki, dashboards, and code disagree.
 
 Changes are ordered by dependency and trust. Shared helpers and single initialization
 precede journeys; identity and propagation precede meters; signal production precedes
-alerting. One slice per pull request keeps review and rollback bounded.
+alerting. One unified work order and at most one PR per repository keeps review and
+rollback bounded while preserving end-to-end coordination.
+
+Splunk APM Business Transactions are grouped by the bounded propagated global tag
+`<org>.bt`; `workflow.name` remains subordinate intent, and registered pairs are enforced.
+Jira is used only when named and connected. Otherwise work orders provide manual
+copy/paste-ready issue text for the team's chosen system.
 
 Deterministic checks eventually enforce the contract on every application change. Model
 assistance may propose instrumentation, but schema agreement, initialization count,

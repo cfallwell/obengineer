@@ -25,3 +25,9 @@ a production URL with a session in it.
 `$instrumentation-analyze` reads production surfaces. It is read-only by design: it
 does not submit forms destructively, run load, or modify state. Provide a test account
 for authenticated scans, and rotate its credential afterwards.
+
+The analysis performs passive security screening by default: exposed credentials and
+sensitive data, API inventory, OWASP Top 10:2025, and OWASP API Security Top 10:2023.
+Safe-active checks require explicitly authorized origins and request limits and remain
+non-mutating. Confirmed/high-confidence vulnerabilities are Critical Findings and P0
+recommended fixes; the plugin records but does not remediate them.

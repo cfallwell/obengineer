@@ -3,7 +3,7 @@
 **Agent:** [`../agents/instrumentation-architect.agent.md`](../agents/instrumentation-architect.agent.md)  
 **Skills:** `engagement-intake`, `instrumentation-analyze`, `baggage-propagation`, `cardinality-budget`, `customer-doc-render`, `deliverable-review`  
 **Inputs:** `docs/observability/engagement-inputs.yaml`  
-**Human:** TAM + customer architect. Docs-only. No application code changes.
+**Human:** TAM + customer architect. Docs-only analysis PR. No application code changes.
 
 **Invoke it, do not paste it.** `/ob-analyze` reads this file in place, so
 there is one copy of the run contract and it is the copy under review. If your host
@@ -14,11 +14,13 @@ read this file.
 
 ## System reminder
 
-Follow `instrumentation-architect.agent.md`. You are analyzing, not opening application PRs. Auto-instrumentation is a bootstrap, never a complete design. **"Analysis" does not mean inventory-only** — this document carries the full contract: the business-transaction and workflow catalogue, custom metrics, detectors with thresholds, SLIs and SLOs, composite use cases, and the enablement code with token placeholders.
+Follow `instrumentation-architect.agent.md`. You are analyzing and will open the
+docs-only analysis PR defined by `analysis-run-lifecycle.md`, never an application-code
+PR. Auto-instrumentation is a bootstrap, never a complete design. **"Analysis" does not mean inventory-only** — this document carries the full contract: the business-transaction and workflow catalogue, custom metrics, detectors with thresholds, SLIs and SLOs, composite use cases, and the enablement code with token placeholders.
 
 **This is the only customer-facing document.** There is no separate instrumentation-recommendations deliverable; the lower-layer, per-note detail the coding agents work from is built by Prompt 02 as a wiki, not as a second document.
 
-Choose the course of action from **how Splunk Observability Cloud, Splunk Enterprise, and Cisco ThousandEyes work** (RUM, APM, Infrastructure, Log Observer Connect, Synthetics, MetricSets, APM Business Workflows, Related Content, Events API, MPM, Enterprise indexes/`trace_id`, ThousandEyes path tests) plus the evidence in this session. Do not assume an industry, a storefront, named journeys, a cloud, or a prior customer document. The design runs against any site this engagement names. A scan, diagram, or taxonomy from a different site is not evidence. Previous scans of this site are inputs; compare them with the current production scan by the procedure in `incremental-runs`. The live production site scan is required unless the inputs record `no browser` with a reason. Test and QA environments are not the scan. Discover journeys from this site's diagrams and production scan. When a cloud inventory MCP is already connected, generate the production diagram by the procedure in `instrumentation-analyze`. Assign each question to one platform: journeys/code → Observability Cloud; durable logs/audit → Enterprise; internet/CDN/SaaS path → ThousandEyes.
+Choose the course of action from **how Splunk Observability Cloud, Splunk Enterprise, and Cisco ThousandEyes work** (RUM, APM, Infrastructure, Log Observer Connect, Synthetics, MetricSets, APM Business Transactions, Related Content, Events API, MPM, Enterprise indexes/`trace_id`, ThousandEyes path tests) plus the evidence in this session. Do not assume an industry, a storefront, named journeys, a cloud, or a prior customer document. The design runs against any site this engagement names. A scan, diagram, or taxonomy from a different site is not evidence. Previous scans of this site are inputs; compare them with the current production scan by the procedure in `incremental-runs`. The live production site scan is required unless the inputs record `no browser` with a reason. Test and QA environments are not the scan. Discover journeys from this site's diagrams and production scan. When a cloud inventory MCP is already connected, generate the production diagram by the procedure in `instrumentation-analyze`. Assign each question to one platform: journeys/code → Observability Cloud; durable logs/audit → Enterprise; internet/CDN/SaaS path → ThousandEyes.
 
 Do not search the workspace for unrelated documents. If an existing schema or wiki is present for this customer and application, extend that taxonomy.
 
@@ -44,6 +46,7 @@ The fields this run depends on:
 | `artifacts.diagrams`, `.narrative` | The diagram-driven backend map |
 | `artifacts.prior_contract`, `.prior_schema` | An existing taxonomy to **extend**, never rename for taste |
 | `surfaces.*` | Whether there is a front-end deep scan, and whether authenticated journeys are reachable |
+| `security_assessment.*` | Passive, safe-active, or opted-out security screening and its authorized boundary |
 | `backends.languages`, `.buses`, `.cloud_accounts`, `.gateway` | Which SDK and bus subsections must exist |
 | `tenancy.o11y_realm`, `.environments` | Whether exit criteria can be phrased as queries |
 | `entitlement.*` | **Pricing, not a ceiling.** What the recommendation will consume, written up for the account team in a separate document. It does not shrink the recommendation unless `fit_to_entitlement` is true |
@@ -73,13 +76,25 @@ Check for `wiki/apps/<app>/services/<service>/index.md`.
 
 ## Task
 
-If URLs were provided, **deep-scan** the front end (HTML, script order, competing agents, bundle placement of RUM, CSP, 404 shells, consent, third-party pixels, and anything reachable that should not be). Combine with a **diagram-driven** backend map.
+If URLs were provided, **deep-scan** the front end (HTML, script order, competing agents,
+bundle placement of RUM, CSP, 404 shells, consent, third-party pixels, exposed credentials,
+and anything reachable that should not be). Inventory APIs and assess the authorized source
+and runtime surfaces against OWASP Top 10:2025 and OWASP API Security Top 10:2023 using
+[`../skills/references/security-assessment.md`](../skills/references/security-assessment.md).
+Combine with a **diagram-driven** backend map.
 
 Produce `docs/observability/analysis-<app>-<date>.md` and the `.docx` rendered from it, with **every section** from [`../skills/references/document-template.md`](../skills/references/document-template.md) in that order. That table is the only section list; do not restate it here and do not reorder it. If evidence is missing, keep the heading and write **Not in evidence** plus the evidence that would settle it.
 
 Eight things this run gets wrong if it is not deliberate about them:
 
-1. **Critical Findings is section 4** — immediately after the architecture it was found in, ordered by severity, each with observation and evidence, the files and surfaces involved, what is exposed and to whom, the risk, the remediation path split into stop-the-bleeding and structural, and how to verify. Stable ids from the start. A credential is recorded by shape and location, never by value. Spec: [`../skills/references/critical-findings.md`](../skills/references/critical-findings.md).
+1. **Critical Findings is section 4** — immediately after the architecture it was found
+   in, with complete OWASP coverage matrices and findings ordered by severity. Each finding
+   has confidence, class, OWASP mapping, priority, evidence, files/surfaces, exposure, risk,
+   stop-the-bleeding and structural remediation, and verification. Every confirmed or
+   high-confidence vulnerability is referenced in `P0 recommended fixes` in section 5.
+   P0 is not observability Phase 0. A credential is recorded by shape and location, never
+   by value. Specs: [`../skills/references/critical-findings.md`](../skills/references/critical-findings.md)
+   and [`../skills/references/security-assessment.md`](../skills/references/security-assessment.md).
 2. **Nothing in the body sits under an appendix heading.** Appendices are the attribute dictionary, long code variants, the agent work-order plan, supplementary evidence, and open items — five topic-scoped appendices, not a container for the analysis.
 3. **The catalogue is sections 19–25, contiguous and in this order**: Business Transactions (flat), Workflows (flat), Custom Metrics, BT-Aligned Workflows (the join), Detectors and Thresholds, Service Level Indicators and Objectives, Composite Use Cases. Each is defined in terms of the one before it.
 4. **Every detector has a threshold** that is a measured baseline, a customer-agreed target traced to an SLO, or a labelled placeholder with the query that will replace it. There is no fourth option.
@@ -92,8 +107,20 @@ Eight things this run gets wrong if it is not deliberate about them:
 
 Also required, and easy to drop because they are not sections: record the tool, SDK, semconv, collector, and provider **versions** this document was designed against in `### Document control and evidence basis`, and call out any breaking change since the last run. Spec: [`../skills/references/version-currency.md`](../skills/references/version-currency.md).
 
+Emit `docs/observability/implementation-map.json` and map every BT, workflow, use case,
+detector, objective, and configuration target to repository legs and optional Jira projects.
+Use `<org>.bt` as the bounded propagated global tag configured by the Splunk APM Business
+Transaction Global tag rule; `workflow.name` remains subordinate intent. Ask engineering
+once after analysis for unresolved repository/Jira ownership. Spec:
+[`../skills/references/implementation-work-orders.md`](../skills/references/implementation-work-orders.md).
+
 ## Acceptance
 
-A reader who stops after six pages leaves knowing the architecture and every finding worth acting on this week. A staff engineer can implement Phase 0 and the first workflow without asking what a `workflow.step` value is, how baggage is stamped, or whether a join continues the trace. A TAM can configure MetricSets and Business Workflows from the portfolio mapping. An executive reading only section 26 sees their own words, cited public evidence, measured numbers, and no benchmark. Every row of the pre-delivery checklist in Appendix E is `yes`, and `verify_render.py` exits 0.
+A reader who stops after six pages leaves knowing the architecture and every finding worth acting on this week. A staff engineer can implement Phase 0 and the first workflow without asking what a `workflow.step` value is, how baggage is stamped, or whether a join continues the trace. A TAM can configure MetricSets and Business Transaction rules from the portfolio mapping. An executive reading only section 26 sees their own words, cited public evidence, measured numbers, and no benchmark. Every row of the pre-delivery checklist in Appendix E is `yes`, and `verify_render.py` exits 0.
 
-Do not modify application source. Do not produce a second customer-facing document. The entitlement exposure document is for the account team, is markdown only, and is not part of the customer review.
+Follow [`../skills/references/analysis-run-lifecycle.md`](../skills/references/analysis-run-lifecycle.md):
+include the intake artifact, create `initial-<app>-analysis` for the first run or
+`ci-initiated-<app>-analysis` for later CI runs, commit each analysis phase, push, and open
+one docs-only PR. Do not modify application source, merge the PR, or produce a second
+customer-facing document. The entitlement exposure document is for the account team, is
+markdown only, and is not part of the customer review.

@@ -47,6 +47,9 @@ it is the only way a disagreement becomes visible.
 | SDKs per language, front-end routers, clouds, platform log contract, ThousandEyes design | `skills/references/platform-expertise.md` |
 | The cross-cutting section and its five code subsections | `skills/references/cross-cutting-attributes.md` |
 | Baggage byte and key budget | `skills/references/baggage-budget.md` |
+| Security assessment scope, OWASP coverage, confidence, and P0 routing | `skills/references/security-assessment.md` |
+| Analysis branches, phase commits, PRs, and explicit acceptance | `skills/references/analysis-run-lifecycle.md` |
+| Target selectors, implementation mapping, multi-repository work orders, and Jira fallback | `skills/references/implementation-work-orders.md` |
 | Terraform resource names across the three Splunk providers | `skills/references/splunk-terraform-providers.md` |
 | The `.docx` layout | `skills/customer-doc-render/references/document-format.json` |
 | What the human must supply | `inputs/engagement-inputs.template.yaml` |
