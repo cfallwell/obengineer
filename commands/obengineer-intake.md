@@ -12,7 +12,9 @@ Write the result to `docs/observability/engagement-inputs.yaml` in this workspac
 the user names another path.
 
 Ask for everything missing in **one** numbered message, and do not ask for anything a
-scan can measure. Never request or store a credential value — record who holds it.
+scan can measure. A token, an API key, or a dummy test login may be submitted as a
+reference so the scan can see authenticated surfaces. Never store the secret. Rotate
+whatever was submitted when the analysis completes.
 
 Open that message by telling the human what helps. The design runs against any site.
 Scan the current production site. Test and QA are not the scan. Optional traffic

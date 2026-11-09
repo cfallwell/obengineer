@@ -61,8 +61,8 @@ run contracts.
 ## Secrets
 
 Strip tokens from HAR files, HTML dumps, and env examples. If a crawl artifact contains a
-RUM access token, redact it. The inputs file records who holds a credential, never its
-value.
+RUM access token, redact it. Analysis access in the inputs file is specified in
+`skills/references/engagement-inputs.md`.
 
 ## After each implementation PR
 

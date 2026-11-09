@@ -17,7 +17,9 @@ description: >-
   than guessing. Does not collect instrumentation scope. Use when the user types $engagement-intake,
   starts an engagement, says they have diagrams or a URL to analyze, asks what
   information you need, or when any other skill finds the inputs file absent or
-  incomplete. Never requests or stores a credential value.
+  incomplete. A token, API key, or dummy test login may be submitted as a
+  reference so the scan can see authenticated surfaces. Never stores the secret.
+  Whatever was submitted is rotated when the analysis completes.
 metadata:
   author: obengineer
   version: 0.1.0
@@ -112,7 +114,7 @@ Ask in this order, because early answers make later questions unnecessary:
 1. **Application, customer, and date.** Without the name there is no filename. Do not ask for instrumentation scope. Engineering authorizes that after the contract exists.
 2. **Developer tools.** The list they use. Examples of shape: Jira, GitHub, GitLab, Artifactory. Then match it. A miss is an open item, not a prompt for a token.
 3. **Artifacts.** Diagrams, prior contract, prior schema, earlier scans of this site, house-style `.docx`. Say explicitly that a prior schema will be *extended* and its key names reused, never renamed for taste. Previous scans of this site are compared with the current production scan.
-4. **Surfaces.** The production site scan. Whether a test account exists and who holds it. Ask for the holder, never the credential. An empty production URL list is a gap, not a default. A test or QA URL does not fill it.
+4. **Surfaces.** The production site scan. An empty production URL list is a gap, not a default. A test or QA URL does not fill it. Analysis access, when they have it: a token, an API key, or a dummy test login, each as a reference, never the secret. `unknown` is acceptable. Anything submitted is rotated when the analysis completes. The rule is [`engagement-inputs.md`](../references/engagement-inputs.md).
 5. **Backends and the production cloud diagram.** Languages, deploy targets, buses, account boundaries, what terminates TLS, and whether production can be inventoried for a generated diagram.
 6. **Tenancy.** Realm, org, environments. Identifiers only.
 7. **Entitlement, then the optional traffic baseline.** The entitlement numbers in the table below, then daily sessions, hourly log volume, request rate, and infrastructure integrations. Say the accuracy notice once, not once per field. An empty integration list is unsupplied, the same as `unknown`.
@@ -198,7 +200,7 @@ Full field-by-field meaning:
 
 Refuse to proceed, and say which check failed, when:
 
-- **A value looks like a credential.** Long random strings, anything matching a known token shape, `-----BEGIN`. Strip it, tell the human it was not stored, and ask for the holder's name instead.
+- **A value looks like a credential.** Long random strings, anything matching a known token shape, `-----BEGIN`. Strip it, tell the human it was not stored, and ask for a `${ENV_VAR}` or a secret name. A login that is not a dummy test account is refused. When a reference was accepted, rotation on completion is required. The rule is [`engagement-inputs.md`](../references/engagement-inputs.md).
 - **A referenced path does not exist.** A diagram in the file but not on disk becomes a phantom citation in the deliverable.
 - **`standards.percentile` is not a single value.** One percentile, everywhere. Two percentiles in one contract means two definitions of "slow".
 - **A URL is in `surfaces` but the human said there is no browser.** One of the two is wrong; ask which.
@@ -228,4 +230,4 @@ should not be written twice.
 
 - Does not scan, measure, or infer anything about the application. That is `instrumentation-analyze`.
 - Does not decide dimensions or compute the prediction, only records the optional baselines and the entitlement they are compared with. The formulas live in `cardinality-budget`.
-- Does not hold credentials. It records who holds them.
+- Does not store a credential value. A submitted token, API key, or dummy test login is a reference, and it is rotated when the analysis completes.

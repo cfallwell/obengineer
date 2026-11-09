@@ -15,8 +15,10 @@
 # a different site is not. Delete the other site rather than leaving it for a
 # later run to cite.
 #
-# NEVER put a token, password, or API key in this file. It records whether a
-# credential exists and who holds it, never its value.
+# A token, an API key, or a login may be submitted so the analysis can see
+# authenticated surfaces. Record a reference under analysis_access, never the
+# secret. A login is a dummy account used for testing only. Whatever was
+# submitted is rotated when the analysis completes. unknown is valid.
 
 schema_version: 1
 
@@ -74,10 +76,23 @@ surfaces:
   non_production_urls: []      # not the scan. Recorded only if already named. The design does not use them.
   host_and_remotes: ""         # which bundle owns provider boot, which are remotes
   edge_cdn: ""
-  test_account:
-    available: false
-    held_by: ""                # who to ask. Never the credential itself.
-    rotates_after_run: false
+
+# ---------------------------------------------------------------------------
+# Analysis access. OPTIONAL. Every field may stay `unknown`.
+#
+# Submitted so the scan can see authenticated surfaces. A reference only:
+# ${ENV_VAR} or a secret name. Never the secret value. Login is a dummy
+# account used for testing only. When any reference below is supplied,
+# rotate_on_completion is true: that token, API key, login ID, and password
+# are rotated when the analysis completes. What this decides:
+# skills/references/engagement-inputs.md
+# ---------------------------------------------------------------------------
+analysis_access:
+  token_ref: unknown            # ${ENV_VAR} or secret name. Never the token.
+  api_key_ref: unknown          # ${ENV_VAR} or secret name. Never the key.
+  login_id: unknown             # dummy test account only. Never a production login.
+  password_ref: unknown         # ${ENV_VAR} or secret name for that dummy account.
+  rotate_on_completion: unknown # true once any field above was submitted
 
 # ---------------------------------------------------------------------------
 # Backends, from the diagrams or from the team.

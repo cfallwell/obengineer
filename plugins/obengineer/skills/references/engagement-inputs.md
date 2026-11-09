@@ -28,6 +28,7 @@ gives the engagement an artifact that outlives the chat.
 | `artifacts` | Whether the backend map starts from a diagram the human already has; whether an existing taxonomy of **this** application is extended; which earlier scans of **this** site to compare | Journeys get named from a product playbook instead of this application. A file from a different site is not this row |
 | `cloud_diagrams` | Whether the run may draw production architecture from a cloud inventory MCP already connected for this site. Test and QA inventories are not the diagram | No generated diagram. The human's own diagrams still count. Any cloud |
 | `surfaces` | The live production site scan. Required for whatever site this engagement names, unless `front_end_scan_notes` is `no browser: <reason>`. Test and QA URLs are not the scan | The run stops and asks for the production URL. It does not invent a site and it does not substitute a test or QA environment |
+| `analysis_access` | Whether a token, an API key, or a dummy test login was submitted so the scan can see authenticated surfaces, and that it is rotated when the analysis completes | The scan stays unauthenticated and says so. `unknown` is acceptable. A secret value in the file is not |
 | `traffic_baseline` | The optional averages and peaks the consumption prediction multiplies: daily sessions, hourly log volume, request rate, infrastructure integrations | The expectation is a wide range that names the missing factor. The design is not capped |
 | `backends` | Which SDK sections and which bus inject/extract subsections the guide must contain | The messaging boundary section is written as `Not in evidence` for a bus that exists |
 | `tenancy` | Whether exit criteria can be phrased as queries a TAM can run | Exit criteria become assertions instead of checks |
@@ -192,13 +193,27 @@ is not installed by the run. How a matched server is used:
 
 ## Credentials
 
-The file records **who holds** a credential, never its value. That applies to ingest
-tokens, API tokens, and test-account passwords alike.
+A token, an API key, or a login may be submitted so the analysis can see
+authenticated surfaces. Without one, checkout, subscription, and account
+journeys stay closed, and the scan records that limit.
 
-A test account is worth asking about, because an unauthenticated scan cannot see
-checkout, subscription, or account journeys — which are usually the ones the engagement
-is about. Record `held_by` and `rotates_after_run`, and have the human supply the
-credential in the session rather than in the file. A credential in a file gets committed.
+`analysis_access` stores a **reference**: `${ENV_VAR}` or the name of a secret.
+Never the token, the key, or the password. A value written here gets committed.
+
+`login_id` and `password_ref` are a **dummy account used for testing only**.
+A production login is not an input. `login_id` names that dummy account.
+`password_ref` points at its password and does not contain it.
+
+When any of `token_ref`, `api_key_ref`, `login_id`, or `password_ref` is
+supplied, `rotate_on_completion` is `true`. The token, the API key, the login
+ID, and the password are rotated when the analysis completes. `unknown` on
+every field means nothing was submitted; leave `rotate_on_completion` as
+`unknown`.
+
+`tenancy.tokens_held_by` is a different fact: who can issue the ingest token
+when instrumentation starts. It is a name, not a token.
+`developer_tools.matched` records a server key or an environment variable name
+already present. It is not permission to read that variable.
 
 ## Precedence when sources disagree
 

@@ -387,6 +387,45 @@ def test_inputs_template_captures_what_no_scan_can_measure():
     )
 
 
+def test_analysis_access_is_a_reference_and_rotates_on_completion():
+    """A token, API key, or dummy test login may be submitted so the scan is complete.
+
+    The template used to forbid that submission and left rotation optional.
+    The file stores a reference. The secret is rotated when the analysis
+    completes. unknown stays valid. The field list stays in the template;
+    what it decides stays in engagement-inputs.md.
+    """
+    template = (ROOT / "inputs" / "engagement-inputs.template.yaml").read_text()
+    authority = (SKILLS / "references" / "engagement-inputs.md").read_text()
+    intake = (SKILLS / "engagement-intake" / "SKILL.md").read_text()
+    command = (ROOT / "commands" / "obengineer-intake.md").read_text()
+
+    assert "analysis_access:" in template
+    for field in ("token_ref: unknown", "api_key_ref: unknown", "login_id: unknown",
+                  "password_ref: unknown", "rotate_on_completion: unknown"):
+        assert field in template, f"analysis access must keep {field}"
+    assert "dummy" in template.lower()
+    assert "NEVER put a token" not in template
+    assert "test_account:" not in template
+    assert "rotates_after_run:" not in template
+
+    creds = authority.split("## Credentials", 1)[1].split("## ", 1)[0]
+    assert "analysis_access" in creds
+    assert "dummy account used for testing only" in creds
+    assert "rotate_on_completion" in creds
+    assert "token_ref" in creds and "password_ref" in creds
+    assert "`unknown`" in creds
+    assert "production login is not an input" in creds
+
+    # Intake follows the authority. It does not grow a second field list.
+    for field in ("token_ref", "api_key_ref", "password_ref", "login_id"):
+        assert field not in intake
+    assert "dummy test" in intake.lower()
+    assert "rotated when the analysis completes" in intake
+    assert "Never request or store a credential value" not in command
+    assert "dummy test login" in command
+
+
 def test_prompts_reference_the_inputs_file_instead_of_carrying_placeholders():
     for prompt in sorted(PROMPTS.glob("0*.md")):
         text = prompt.read_text()

@@ -53,8 +53,9 @@ The fields this run depends on:
 | `business_context.*` | Section 26, Business Value Realization: the quoted commentary, the current MTTx, incident volume, triage and tooling cost, revenue exposure |
 | `public_evidence.*` | Whether to read the last twelve months of outage coverage, complaints, and field performance, and which brand terms to search |
 
-Never request or display an ingest token. The inputs file records who holds a
-credential, not its value.
+Never request or display an ingest token. Analysis access is recorded in the
+inputs file; what that section decides is
+[`../skills/references/engagement-inputs.md`](../skills/references/engagement-inputs.md).
 
 ## First: is this a first run or a delta?
 
