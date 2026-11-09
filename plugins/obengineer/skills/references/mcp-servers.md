@@ -101,6 +101,13 @@ CI checks out the pull-request branch with the forge's own credentials. It
 does not shell out to a guessed host command. A path outside the authorized
 scope stays out until engineering adds it.
 
+## Existing telemetry
+
+The analyze inventory of logs, spans, traces, MetricSets, MTS, and `sf.org` usage is
+[`existing-telemetry.md`](existing-telemetry.md). Server keys stay the ones in the
+tables above. The environment variable names are in that procedure and in
+`plugins/obengineer/.mcp.optional.json`. This file does not repeat the queries.
+
 ## Simple setup
 
 The developer environment is the configuration. Connected MCP servers are the

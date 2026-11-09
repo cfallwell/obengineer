@@ -18,6 +18,10 @@ a prompt into the chat.
 
 Every install writes a manifest next to what it created, so `--uninstall` removes what
 this script put there and nothing else.
+
+A memory repository keeps its API keys in `.env`. The committed template is
+`templates/memory-repo/` in this toolkit. Copy `.env.template` to `.env` and fill it.
+This script does not copy that directory and does not write `.env`.
 """
 
 from __future__ import annotations
@@ -290,6 +294,10 @@ def main(argv=None) -> int:
         print(f"  /{command.stem}")
     print("\nOr name a skill directly: $engagement-intake, $baggage-propagation, "
           "$cardinality-budget, ...")
+    if project:
+        print("\nMemory-repo env template: templates/memory-repo/ in this toolkit.")
+        print("Copy .env.template to .env in the memory repository and fill it.")
+        print(".env is gitignored. This install does not write .env.")
     if args.dry_run:
         print("\n(dry run — nothing was written)")
     return 0

@@ -30,6 +30,7 @@ discipline, and each fact has exactly one home.
 | Which keys earn a place in the baggage header | [`../skills/references/baggage-budget.md`](../skills/references/baggage-budget.md) |
 | Dimension versus attribute-only, as arithmetic | [`../skills/cardinality-budget/SKILL.md`](../skills/cardinality-budget/SKILL.md) |
 | What the human must supply, and what a scan must not ask for | [`../skills/references/engagement-inputs.md`](../skills/references/engagement-inputs.md) |
+| Existing telemetry already in the tenant | [`../skills/references/existing-telemetry.md`](../skills/references/existing-telemetry.md) |
 | Section 4 — critical findings: severity, remediation, exposure, the credential rule | [`../skills/references/critical-findings.md`](../skills/references/critical-findings.md) |
 | Section 24 — indicators and objectives in the customer's voice | [`../skills/references/service-levels.md`](../skills/references/service-levels.md) |
 | The agent layer: wiki tree, note frontmatter, host memory pointers | [`../skills/references/agent-wiki.md`](../skills/references/agent-wiki.md) |
@@ -102,7 +103,9 @@ Load the engagement inputs for what no scan can measure. Read collector values, 
 JSON, or an existing schema **only if attached in this session**. List unknowns; invent
 nothing.
 
-**Analyze.** Discover journeys from evidence and rank by impact times blast radius. Expand
+**Analyze.** Inventory existing telemetry before a tenant fact is called measured.
+The procedure is [`../skills/references/existing-telemetry.md`](../skills/references/existing-telemetry.md).
+Discover journeys from evidence and rank by impact times blast radius. Expand
 every BT into an **exhaustive** workflow list *before* ranking — ranking decides which use
 cases get full span trees first, it does not shrink the catalogue. Separate bootstrap from
 contract. Assign each question to exactly one platform. Call Phase 0 blockers only where
