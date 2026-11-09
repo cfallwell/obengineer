@@ -69,28 +69,39 @@ and it names the three placements that are easy to get wrong — architecture ne
 front, the attribute dictionary at the back, and the cross-cutting section between
 them.
 
-## Two decisions worth revisiting
+## Resolved design decisions
 
-**The renderer is line-based rather than a real Markdown parser.** That was cheap and
-it produced two real bugs: inline markers wrapping across source lines, and headings
-counted inside code fences. Both are fixed and both have tests, but a proper parser
-(`markdown-it` plus a docx writer) would have avoided the class. The reason not to
-switch yet is that the current output is exactly the shape customers accept and a
-parser swap would need the same verification suite to prove it.
+**Renderer migration uses a real Markdown parser.** The current line-based renderer is
+the compatibility baseline, not the long-term parsing architecture. New parser work must
+use a CommonMark syntax tree (`markdown-it-py` or an equivalent maintained parser) feeding
+the existing `.docx` writer. The migration is complete only when the current structural,
+cross-reference, credential, and round-trip verification suite passes and visual output
+matches the approved format. Until then, the line-based implementation receives defect
+fixes but no new Markdown syntax. Today, `python-docx` remains the only renderer runtime
+dependency. The parser migration explicitly includes adding and pinning the maintained
+parser dependency and updating the README, `make deps`, plugin bootstrap check, and
+dependency documentation in the same change. The parser direction is settled; output
+compatibility and an atomic dependency-contract update are the migration gates.
 
-**MCP commands are described rather than hardcoded.** A server whose command cannot
-be verified in the environment that authored it should not be declared active: it
-fails at session start, and a plugin that fails at session start gets uninstalled.
-`.mcp.optional.json` documents the entries. Splunk Observability Cloud and Splunk
-Enterprise are mandatory for the operator to copy in. ThousandEyes, a local
-OpenTelemetry tools server, and a cloud inventory MCP are recommended.
-Jira is used only when the human named it and the host already has its MCP. No
-credential values. The classification
-lives in `skills/references/mcp-servers.md`.
+**MCP commands remain operator-supplied rather than hardcoded.** A server command or URL
+cannot be verified by the repository because it is organisation-specific. Hardcoding a
+placeholder makes plugin startup fail, while hardcoding a real endpoint creates customer
+coupling and a credential risk. `.mcp.optional.json` therefore documents entries and
+environment-variable references; the operator supplies the verified command. Splunk
+Observability Cloud and Splunk Enterprise are mandatory to enable. ThousandEyes, local
+OpenTelemetry tools, and cloud inventory are enabled when relevant. Jira is used only when
+the human named it and the host already has its MCP. The classification lives in
+`skills/references/mcp-servers.md`.
 
 ## What this agentry deliberately does not do
 
-- **It does not create dashboards or detectors in a Splunk org.** The guide's portfolio mapping tells a TAM what to configure; the agentry does not reach into the customer's tenant.
+- **It does not apply Terraform automatically.** With tenant access, `/ob-terraform`
+  inventories existing objects, generates import-aware Terraform for dashboards,
+  detectors, SLOs, and other supported artifacts, and produces a reviewed plan. Without
+  MCP or planning credentials, it generates the code with unresolved imports clearly
+  marked and validates provider schemas; it reports that result as schema-checked, not
+  planned. A human supplies the missing access, reviews the eventual plan, and runs
+  `terraform apply` manually. The agent never applies its own plan.
 - **It does not remediate the security findings the analysis surfaces.** The authorized
   OWASP/credential/API assessment records confidence-rated findings and P0 fixes with
   owners; runtime remediation is a separately accepted work order.
