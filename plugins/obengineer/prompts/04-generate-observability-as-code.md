@@ -4,9 +4,9 @@
 **Skills:** `observability-as-code`, `cardinality-budget`  
 **Inputs:** `docs/observability/engagement-inputs.yaml` + the accepted guide and schema  
 **Depends on:** an accepted analysis document and `attribute-schema.json`. Runs in parallel with Prompt 03 — configuration and instrumentation do not block each other.  
-**Output:** a `terraform/` tree, a `terraform plan`, and a handover. **No `apply`.**
+**Output:** `terraform/apps/<app>/` (one directory per application, so a later apply does not include the others), a `terraform plan`, and a handover. **No `apply`.** The directory shape is Step 3 of `skills/observability-as-code/SKILL.md`.
 
-**Invoke it, do not paste it.** `/obengineer-as-code` reads this file in place.
+**Invoke it, do not paste it.** `/ob-build-terraform` reads this file in place.
 
 ---
 

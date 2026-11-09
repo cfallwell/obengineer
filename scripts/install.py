@@ -13,7 +13,7 @@ reinstalling. `--copy` writes copies instead, for a host that cannot follow link
 bundle that will be distributed.
 
 Commands are always written as files, because each one carries this bundle's resolved
-path. They are what makes the runs invokable — `/obengineer-analyze` instead of pasting
+path. They are what makes the runs invokable — `/ob-analyze` instead of pasting
 a prompt into the chat.
 
 Every install writes a manifest next to what it created, so `--uninstall` removes what
@@ -72,7 +72,7 @@ HOSTS: dict[str, Host] = {
         label="Cursor",
         user_dir=".cursor",
         project_dir=".cursor",
-        notes=("Commands appear as /obengineer-* in the chat.",),
+        notes=("Type /ob to list /ob-intake, /ob-analyze, /ob-wiki, /ob-implement, /ob-build-terraform, /ob-review, and /ob-render.",),
     ),
     "claude": Host(
         key="claude",

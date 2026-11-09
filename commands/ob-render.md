@@ -1,5 +1,5 @@
 ---
-description: Render a Markdown deliverable to a customer-review .docx and prove the render matches its source
+description: Render — rebuild the Word file from Markdown and verify it
 ---
 
 Render a deliverable for customer review.

@@ -11,7 +11,7 @@ there. Paths in the skills are relative to that repository, not to this one.
 
 - `agents/` — agent definitions used as system prompts. Each is doctrine plus a routing table, capped at 2,500 words and tested; depth belongs in `skills/references/`. `instrumentation-architect.agent.md` owns the design doctrine, `instrumentation-implementer.agent.md` the PR rules, `observability-as-code.agent.md` the Terraform rules.
 - `prompts/` — the run contracts: analyze, guide, implement, configure. Read in place by the installed commands, never pasted into a chat.
-- `commands/` — installable host commands (`/obengineer-*`). Each is a short invocation carrying `{{OBENGINEER_ROOT}}`; the run contract stays in `prompts/`.
+- `commands/` — installable host commands (`/ob-*`). Each is a short invocation carrying `{{OBENGINEER_ROOT}}`; the run contract stays in `prompts/`.
 - `inputs/` — the engagement inputs template. One file per engagement, written only by `$engagement-intake`.
 - `skills/` — canonical skill sources. One directory per skill with `SKILL.md`, plus `references/`, `scripts/`, `tests/` as needed.
 - `skills/references/` — shared references loaded by more than one skill. `document-template.md` and `cross-cutting-attributes.md` are load-bearing; see below.

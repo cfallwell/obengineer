@@ -78,23 +78,27 @@ before grouping by it, `signalfx_builtin_dashboards` to avoid rebuilding what sh
 
 ```
 terraform/
-  providers.tf        # three providers, pinned; realm from a variable
-  variables.tf        # nothing sensitive has a default
-  data.tf             # dimension_values lookups, team ids, integration ids
-  imports.tf          # import blocks for what the tenant already has
-  modules/
-    executive/        # SLOs, KPI tiles, one dashboard
-    sre/              # golden signals, detectors, muting rules, uptime checks
-    engineer/         # step latency, Tag Spotlight, log views, data links, browser checks
-    platform/         # indexes, HEC, trace_id extraction, saved searches
-  environments/
-    prod/             # one workspace per environment, backend configured
-    stage/
+  apps/
+    <app>/                # one directory per application
+      providers.tf        # three providers, pinned; realm from a variable
+      variables.tf        # nothing sensitive has a default
+      data.tf             # dimension_values lookups, team ids, integration ids
+      imports.tf          # import blocks for what the tenant already has
+      modules/
+        executive/        # SLOs, KPI tiles, one dashboard
+        sre/              # golden signals, detectors, muting rules, uptime checks
+        engineer/         # step latency, Tag Spotlight, log views, data links, browser checks
+        platform/         # indexes, HEC, trace_id extraction, saved searches
+      environments/
+        prod/             # one workspace per environment, backend configured
+        stage/
 ```
 
-One module per persona, one workspace per environment. No `count` on a persona and no
-environment name interpolated from a variable nobody sets — this is code a customer
-inherits, and explicitness beats cleverness in inherited code.
+One directory per application, one module per persona, one workspace per environment.
+Run `terraform apply` from `terraform/apps/<app>/environments/<env>` so the plan
+contains that application only. No `count` on a persona and no environment name
+interpolated from a variable nobody sets — this is code a customer inherits, and
+explicitness beats cleverness in inherited code.
 
 ### Step 4 — Generate, with the decisions visible in the code
 

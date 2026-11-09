@@ -1,5 +1,5 @@
 ---
-description: Build the structured agent wiki and attribute schema from the accepted analysis (run 2 of 4)
+description: Wiki — turn the accepted analysis into one note per subject
 ---
 
 Run obengineer run 2 — the instrumentation wiki.

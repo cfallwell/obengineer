@@ -398,7 +398,7 @@ def test_analysis_access_is_a_reference_and_rotates_on_completion():
     template = (ROOT / "inputs" / "engagement-inputs.template.yaml").read_text()
     authority = (SKILLS / "references" / "engagement-inputs.md").read_text()
     intake = (SKILLS / "engagement-intake" / "SKILL.md").read_text()
-    command = (ROOT / "commands" / "obengineer-intake.md").read_text()
+    command = (ROOT / "commands" / "ob-intake.md").read_text()
 
     assert "analysis_access:" in template
     for field in ("token_ref: unknown", "api_key_ref: unknown", "login_id: unknown",
@@ -458,7 +458,8 @@ def test_commands_invoke_the_run_contracts_rather_than_copying_them():
     for prompt in sorted(PROMPTS.glob("0*.md")):
         referenced = any(prompt.name in c.read_text() for c in commands)
         assert referenced, f"{prompt.name} has no command that invokes it"
-    assert "obengineer-intake" in stems
+    assert "ob-intake" in stems
+    assert "ob-build-terraform" in stems
 
 
 def test_installer_offers_every_host_and_installs_every_skill():
@@ -470,7 +471,8 @@ def test_installer_offers_every_host_and_installs_every_skill():
     assert (ROOT / "install.sh").is_file()
     readme = (ROOT / "README.md").read_text()
     assert "./install.sh" in readme, "the README must show how to install"
-    assert "/obengineer-" in readme, "the README must show how to invoke"
+    assert "/ob-intake" in readme, "the README must show how to invoke"
+    assert "/ob-build-terraform" in readme
 
 
 # --------------------------------------------------------------------------- #
@@ -669,7 +671,7 @@ def test_intake_collects_the_business_context_no_scan_can_reach():
     assert "own words" in intake, (
         "the commentary is quoted, so it has to be asked for as prose"
     )
-    command = (ROOT / "commands" / "obengineer-intake.md").read_text()
+    command = (ROOT / "commands" / "ob-intake.md").read_text()
     assert "what hurts today" in command, (
         "the intake command must prompt for the business commentary itself, since "
         "a host may run the command without reading the skill first"
