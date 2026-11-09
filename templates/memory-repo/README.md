@@ -14,6 +14,6 @@ cp .env.template .env
 
 `.env` is gitignored. Do not commit it. `.env.template` stays in git with empty values.
 
-The analyze run reads these variables from `.env` or from the process environment. It uses them with the `splunk-observability` and `splunk-platform` MCP servers when it inventories existing telemetry. The procedure is `skills/references/existing-telemetry.md` in the toolkit.
+The analyze run reads these variables from `.env` or from the process environment. It uses the `splunk-observability` and `splunk-platform` MCP servers and the Splunk API endpoints (Observability and Enterprise) when it inventories existing telemetry. The procedure is `skills/references/existing-telemetry.md` in the toolkit.
 
 Install does not copy this directory and does not write a filled `.env`.

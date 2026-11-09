@@ -176,16 +176,10 @@ APM, Infrastructure, Synthetics, Log Observer Connect), Splunk Enterprise, and C
 ThousandEyes, with the raw shape of what is collected today. A decoded beacon payload showing
 which attributes are actually populated is worth more than a list of installed products.
 
-**Existing telemetry is required on this step.** Follow
-[`../references/existing-telemetry.md`](../references/existing-telemetry.md). Use the
-`splunk-observability` MCP and the `splunk-platform` MCP. Read `SPLUNK_REALM`,
-`SPLUNK_ACCESS_TOKEN` (the Observability Cloud API key; `Splunk_O11y_API_Key` is the same
-secret), `SPLUNK_HOST`, `SPLUNK_TOKEN` (the Enterprise API token; `SPLUNK_ENTERPRISE_TOKEN`
-is the same secret), and `SPLUNK_ENTERPRISE_INDEXES` from the memory repository `.env` or
-the process environment. Never print the values. Collect log volume, span volume, trace
-volume, Monitoring and Troubleshooting MetricSets, current and max MTS, and `sf.org` usage.
-Run the SignalFlow cross-check of custom metrics and span attributes against the source
-scan. A missing server or variable is **Not in evidence**, and that row stays `stated`.
+**Existing telemetry is required on this step.** The analyze run uses the
+`splunk-observability` and `splunk-platform` MCP servers and the Splunk API endpoints
+(Observability and Enterprise). The procedure is
+[`../references/existing-telemetry.md`](../references/existing-telemetry.md).
 
 Then use [`../references/portfolio-decision-engine.md`](../references/portfolio-decision-engine.md):
 journeys and code execution to Observability Cloud; durable logs, audit, and compliance

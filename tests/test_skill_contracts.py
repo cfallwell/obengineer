@@ -363,35 +363,42 @@ def test_splunk_mcp_servers_are_mandatory_and_jira_is_discovered():
 
 
 def test_analyze_requires_the_existing_telemetry_pass():
-    """The analyze run reads the tenant through both Splunk MCPs.
+    """The analyze run reads the tenant through both Splunk MCPs and the API endpoints.
 
-    The procedure has one home. The skill and the prompt require the pass.
-    The architect points at that home and does not carry the queries.
+    The procedure has one home. The skill and the prompt point at it in one
+    sentence. The architect points at that home and does not carry the queries.
     """
     procedure = (SKILLS / "references" / "existing-telemetry.md").read_text()
     skill = (SKILLS / "instrumentation-analyze" / "SKILL.md").read_text()
     prompt = (PROMPTS / "01-analyze-application.md").read_text()
     architect = (AGENTS / "instrumentation-architect.agent.md").read_text()
+    mcp_ref = (SKILLS / "references" / "mcp-servers.md").read_text()
 
     assert "splunk-observability" in procedure and "splunk-platform" in procedure
+    assert "API endpoints" in procedure
+    assert "https://api.<realm>.signalfx.com" in procedure
     assert "sf.org.numActiveTimeSeries" in procedure
     assert "sf.org.apm.numTracesReceived" in procedure
     assert "sf.org.apm.numSpanBytesReceived" in procedure
     assert "SignalFlow" in procedure
     assert "histogram('spans')" in procedure
     assert "Never print" in procedure
+    for var in ("SPLUNK_REALM", "SPLUNK_ACCESS_TOKEN", "SPLUNK_HOST",
+                "SPLUNK_TOKEN", "SPLUNK_ENTERPRISE_INDEXES"):
+        assert var in procedure, f"the procedure must name {var}"
 
     for name, text in (("analyze skill", skill), ("prompt 01", prompt)):
         assert "existing-telemetry.md" in text, f"{name} must point at the procedure"
         assert "splunk-observability" in text and "splunk-platform" in text, (
-            f"{name} must require both Splunk MCPs"
+            f"{name} must name both Splunk MCPs"
         )
-        for var in ("SPLUNK_REALM", "SPLUNK_ACCESS_TOKEN", "SPLUNK_HOST",
-                    "SPLUNK_TOKEN", "SPLUNK_ENTERPRISE_INDEXES"):
-            assert var in text, f"{name} must name {var}"
-        assert "sf.org" in text, f"{name} must require sf.org usage"
-        assert "SignalFlow" in text, f"{name} must require the SignalFlow cross-check"
+        assert "API endpoints" in text, f"{name} must name the API endpoints"
+        assert "histogram('spans')" not in text, (
+            f"{name} must point at the procedure, not copy the queries"
+        )
+        assert "sf.org.numActiveTimeSeries" not in text
 
+    assert "API endpoints" in mcp_ref.split("## Existing telemetry", 1)[1]
     assert "existing-telemetry.md" in architect
     assert "histogram('spans')" not in architect, (
         "the architect agent routes to the procedure; it does not carry it"
@@ -412,6 +419,9 @@ def test_memory_repo_env_template_lists_the_variables_and_ignores_env():
     assert ".env.template" not in (ROOT / ".gitignore").read_text()
     assert "cp .env.template .env" in readme
     assert "gitignored" in readme.lower() or "gitignore" in readme.lower()
+    assert "splunk-observability" in readme and "splunk-platform" in readme
+    assert "API endpoints" in readme
+    assert "existing-telemetry.md" in readme
 
     for var in ("SPLUNK_REALM", "SPLUNK_ACCESS_TOKEN", "SPLUNK_HOST",
                 "SPLUNK_TOKEN", "SPLUNK_ENTERPRISE_INDEXES", "TE_OAUTH_BEARER_TOKEN"):

@@ -1,6 +1,6 @@
 # Existing telemetry
 
-The analyze pass that reads telemetry already in the tenant. MCP server names, and which servers are mandatory, live in [`mcp-servers.md`](mcp-servers.md). This file is the procedure. Do not copy it into an agent file.
+The analyze pass that reads telemetry already in the tenant. The analyze run uses the `splunk-observability` and `splunk-platform` MCP servers and the Splunk API endpoints (Observability and Enterprise). MCP server names, and which servers are mandatory, live in [`mcp-servers.md`](mcp-servers.md). This file is the procedure. Do not copy it into an agent file.
 
 ## Credentials
 
@@ -21,16 +21,16 @@ The org id stays `tenancy.o11y_org_id` in `engagement-inputs.yaml`.
 
 `analysis_access` does not grow a second secret. When the ref is one of these API credentials, `api_key_ref` is `${SPLUNK_ACCESS_TOKEN}` and `token_ref` is `${SPLUNK_TOKEN}`. The rules for a dummy test login stay in [`engagement-inputs.md`](engagement-inputs.md).
 
-If a variable is empty or a server cannot be reached, write **Not in evidence** for the rows that server would have filled, and label those tenant facts `stated`. Do not invent a volume.
+If a variable is empty, an MCP server cannot be reached, or an API endpoint cannot be reached, write **Not in evidence** for the rows that source would have filled, and label those tenant facts `stated`. Do not invent a volume.
 
-## Servers
+## Servers and API endpoints
 
-Both are required before a figure from the tenant is labelled `measured`:
+Both products are required before a figure from the tenant is labelled `measured`. Each one is read through its MCP server and its API endpoint:
 
-- `splunk-observability` — Observability Cloud API, MetricSets, and SignalFlow
-- `splunk-platform` — Enterprise search and introspection, limited to `SPLUNK_ENTERPRISE_INDEXES`
+- `splunk-observability` and the Observability Cloud API at `https://api.<realm>.signalfx.com` — MetricSets and SignalFlow
+- `splunk-platform` and the Splunk Enterprise API at `SPLUNK_HOST` — search and introspection, limited to `SPLUNK_ENTERPRISE_INDEXES`
 
-Copy the entries from `.mcp.optional.json`. Do not guess a command. Enabling one server is not enough: Observability Cloud does not see Enterprise indexes, and Enterprise does not see spans.
+Copy the MCP entries from `.mcp.optional.json`. Do not guess a command. Enabling one product is not enough: Observability Cloud does not see Enterprise indexes, and Enterprise does not see spans.
 
 ## What to collect
 
@@ -38,7 +38,7 @@ State the time range on every figure. Attribute a figure to `<app>` only when a 
 
 ### Log volume
 
-Through `splunk-platform`, search only the indexes in `SPLUNK_ENTERPRISE_INDEXES`. When the source scan or a diagram names a sourcetype, source, or host for `<app>`, add that constraint. Report the event count and the byte sum when the search returns them.
+Through the `splunk-platform` MCP and the Enterprise API, search only the indexes in `SPLUNK_ENTERPRISE_INDEXES`. When the source scan or a diagram names a sourcetype, source, or host for `<app>`, add that constraint. Report the event count and the byte sum when the search returns them.
 
 Example of shape. Replace the index list from the environment. Do not add indexes that are not in it.
 
@@ -59,7 +59,7 @@ histogram('spans').count().publish(label='spans')
 
 Filter on `sf_service` or `service.name` when that service is in evidence. A tenant that still emits the older non-histogram metric may return `spans.count`; record that name only when the tenant returns it.
 
-No `sf.org` metric for span count was verified for this procedure. Do not invent one. If the MCP returns a span-count series under some other name, record the name it returned.
+No `sf.org` metric for span count was verified for this procedure. Do not invent one. If the MCP or the API returns a span-count series under some other name, record the name it returned.
 
 ### Trace volume
 
@@ -73,7 +73,7 @@ Record these separately. They are not the same number.
 
 ### MetricSets
 
-From `splunk-observability`, list the Monitoring MetricSets and Troubleshooting MetricSets the tenant already has. Do not guess names beyond the defaults below, which Splunk documents as default Monitoring MetricSets: `service.request`, `inferred.services`, `spans`, `traces`, `business.transactions`.
+From the `splunk-observability` MCP and the Observability API, list the Monitoring MetricSets and Troubleshooting MetricSets the tenant already has. Do not guess names beyond the defaults below, which Splunk documents as default Monitoring MetricSets: `service.request`, `inferred.services`, `spans`, `traces`, `business.transactions`.
 
 Org cardinality, from the APM subscription-usage metrics:
 
@@ -100,7 +100,7 @@ These are org-level. Say so unless the series is broken down by a dimension that
 
 Query the metrics named in this file. Where a current metric and a limit metric both return, record the difference as the overage or the headroom. A human-typed entitlement stays `stated` until the same fact comes back from one of these metrics; then it is `measured`.
 
-Do not add an `sf.org.*` name that is not in this file and was not returned by the query. Extra series the MCP returns are recorded under the name the MCP used.
+Do not add an `sf.org.*` name that is not in this file and was not returned by the query. Extra series the MCP or the API returns are recorded under the name that source used.
 
 Checked against Splunk's organization-metrics page and the APM subscription-usage page when this procedure was written:
 
@@ -112,7 +112,7 @@ Checked against Splunk's organization-metrics page and the APM subscription-usag
 
 ### SignalFlow cross-check
 
-Through `splunk-observability`, run SignalFlow against telemetry the tenant already has.
+Through the `splunk-observability` MCP and the Observability API, run SignalFlow against telemetry the tenant already has.
 
 - Custom metrics: names that are not `sf.*` defaults and not the default MetricSet names listed above. Record the names the query returns.
 - Span attributes already indexed: dimensions on Troubleshooting MetricSets and Tag Spotlight, and attributes trace search returns for the services in evidence.

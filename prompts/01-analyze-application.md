@@ -58,13 +58,10 @@ inputs file; what that section decides is
 [`../skills/references/engagement-inputs.md`](../skills/references/engagement-inputs.md).
 Splunk API values are not a second scheme. They live in the memory repository `.env`.
 
-**Existing telemetry is required.** Before the portfolio footprint is written, run the
-pass in [`../skills/references/existing-telemetry.md`](../skills/references/existing-telemetry.md).
-Use the `splunk-observability` MCP and the `splunk-platform` MCP. Read `SPLUNK_REALM`,
-`SPLUNK_ACCESS_TOKEN`, `SPLUNK_HOST`, `SPLUNK_TOKEN`, and `SPLUNK_ENTERPRISE_INDEXES`
-from that `.env` or from the process environment. Never print the values. Collect log
-volume, span volume, trace volume, MetricSets, current and max MTS, and `sf.org` usage.
-Cross-check custom metrics and span attributes with SignalFlow against the source scan.
+**Existing telemetry is required.** Before the portfolio footprint is written,
+the analyze run uses the `splunk-observability` and `splunk-platform` MCP servers
+and the Splunk API endpoints (Observability and Enterprise). The procedure is
+[`../skills/references/existing-telemetry.md`](../skills/references/existing-telemetry.md).
 
 ## First: is this a first run or a delta?
 
