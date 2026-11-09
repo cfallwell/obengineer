@@ -215,6 +215,16 @@ when instrumentation starts. It is a name, not a token.
 `developer_tools.matched` records a server key or an environment variable name
 already present. It is not permission to read that variable.
 
+Splunk API credentials are the memory repository `.env`, copied from
+`templates/memory-repo/.env.template`. They are not new fields.
+`api_key_ref` is `${SPLUNK_ACCESS_TOKEN}` when that secret is the Observability
+Cloud API key (`Splunk_O11y_API_Key` is the same secret). `token_ref` is
+`${SPLUNK_TOKEN}` when that secret is the Enterprise API token
+(`SPLUNK_ENTERPRISE_TOKEN` is the same secret). Indexes to search are
+`SPLUNK_ENTERPRISE_INDEXES` in `.env`, not a key in this file. Realm is
+`SPLUNK_REALM`. Enterprise host is `SPLUNK_HOST`. The analyze pass that reads
+them is [`existing-telemetry.md`](existing-telemetry.md). Do not write the value.
+
 ## Precedence when sources disagree
 
 1. **Measured evidence** from a scan or the tenant. A router observed in the bundle beats a router named in the file.

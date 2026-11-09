@@ -86,10 +86,19 @@ surfaces:
 # rotate_on_completion is true: that token, API key, login ID, and password
 # are rotated when the analysis completes. What this decides:
 # skills/references/engagement-inputs.md
+#
+# Splunk API access is not a second secret scheme. The values live in the
+# memory repository .env, copied from templates/memory-repo/.env.template.
+# Point the refs at those names:
+#   api_key_ref -> ${SPLUNK_ACCESS_TOKEN}  (same secret as Splunk_O11y_API_Key)
+#   token_ref   -> ${SPLUNK_TOKEN}         (same secret as SPLUNK_ENTERPRISE_TOKEN)
+# Indexes to search are SPLUNK_ENTERPRISE_INDEXES in that file, not a field here.
+# Realm is SPLUNK_REALM. Enterprise host is SPLUNK_HOST.
+# The analyze pass is skills/references/existing-telemetry.md.
 # ---------------------------------------------------------------------------
 analysis_access:
-  token_ref: unknown            # ${ENV_VAR} or secret name. Never the token.
-  api_key_ref: unknown          # ${ENV_VAR} or secret name. Never the key.
+  token_ref: unknown            # ${SPLUNK_TOKEN} for the Enterprise API. Never the token.
+  api_key_ref: unknown          # ${SPLUNK_ACCESS_TOKEN} for the Observability Cloud API. Never the key.
   login_id: unknown             # dummy test account only. Never a production login.
   password_ref: unknown         # ${ENV_VAR} or secret name for that dummy account.
   rotate_on_completion: unknown # true once any field above was submitted
