@@ -289,16 +289,18 @@ account team reads. Mixing them turns a technical review into a negotiation.
 
 ## MCP servers
 
-`plugins/obengineer/.mcp.json` declares **no servers by default**, and every skill works
-without any. Each server they can use needs an endpoint, command, or token only your
-organisation can supply, and a server that fails to start is worse than one that was
-never declared.
+`plugins/obengineer/.mcp.json` ships with an empty `mcpServers` object. A placeholder
+command fails plugin startup, so the operator copies an entry from `.mcp.optional.json`
+and supplies their own command. **Splunk Observability Cloud and Splunk Enterprise are
+mandatory.** ThousandEyes, a local OpenTelemetry tools server, and a cloud inventory
+MCP for whatever cloud the site runs on are recommended. A Jira server is used only
+when the host already has one connected. The classification, and what each server is
+read for, lives in
+[`skills/references/mcp-servers.md`](skills/references/mcp-servers.md).
 
-`.mcp.optional.json` describes the four that pair with these skills — a local
-OpenTelemetry audit-and-verify server, Splunk Observability Cloud, the Splunk platform,
-and ThousandEyes — with what each is for and the environment variables it needs. Copy an
-entry into `.mcp.json` to enable it. **Never** put a token value in either file;
-`${VAR}` references only, since both are committed.
+**Never** put a token value in either file. `${VAR}` references only, since both are
+committed. The design runs against any site; do not leave a previous site's endpoint
+in the copied entry.
 
 ## Operating on an engagement from this checkout
 

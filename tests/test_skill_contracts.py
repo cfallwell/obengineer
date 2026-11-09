@@ -267,6 +267,91 @@ def test_terraform_reference_pins_versions_and_records_the_hard_negatives():
 # --------------------------------------------------------------------------- #
 # inputs are collected once, by reference
 # --------------------------------------------------------------------------- #
+def test_any_site_scan_is_required_and_prior_scans_are_not_evidence():
+    """The design runs against whatever site this engagement names.
+
+    A leftover URL or diagram from an already scanned site is not an input, and
+    a run with no URLs and no explicit no-browser reason must stop and ask.
+    """
+    intake = (SKILLS / "engagement-intake" / "SKILL.md").read_text()
+    analyze = (SKILLS / "instrumentation-analyze" / "SKILL.md").read_text()
+    template = (ROOT / "inputs" / "engagement-inputs.template.yaml").read_text()
+    prompt = (PROMPTS / "01-analyze-application.md").read_text()
+
+    for text in (intake, analyze, prompt):
+        assert "any site" in text.lower() or "whatever site" in text.lower(), (
+            "the run must say it applies to whatever site this engagement names"
+        )
+        assert "already scanned" in text or "different site" in text, (
+            "a previous site's scan must be rejected, not cited"
+        )
+    assert "site scan is required" in intake.lower()
+    assert "no browser" in template
+    assert "cloud_diagrams:" in template
+    assert "qa, pre-prod, production" in template
+    assert "generated" in analyze and "pre-production" in analyze, (
+        "analyze must be able to draw QA, pre-production, or production diagrams"
+    )
+
+
+def test_traffic_baseline_feeds_a_prediction_not_a_license_ceiling():
+    """Optional session, log, APM, and infra baselines tighten an expectation.
+
+    They do not cap the design. The multiplications live in one skill.
+    """
+    template = (ROOT / "inputs" / "engagement-inputs.template.yaml").read_text()
+    budget = (SKILLS / "cardinality-budget" / "SKILL.md").read_text()
+    intake = (SKILLS / "engagement-intake" / "SKILL.md").read_text()
+    exposure = EXPOSURE.read_text()
+
+    for field in ("sessions_per_day_avg", "sessions_per_day_peak",
+                  "gb_per_hour_avg", "gb_per_hour_peak",
+                  "requests_per_minute_avg", "infra_integrations"):
+        assert field in template, f"traffic baseline must capture {field}"
+    assert "OPTIONAL" in template and "traffic_baseline:" in template
+    assert "more accurate" in intake.lower()
+    assert "sessions_per_day_avg × 30" in budget
+    assert "gb_per_hour_avg × 24" in budget
+    assert "entities × metrics_per_entity" in budget
+    assert "not a cap" in budget or "does not cap" in budget
+    assert "reference, not a ceiling" in exposure
+    assert "sessions_per_day_avg × 30" in exposure
+
+
+def test_splunk_mcp_servers_are_mandatory_and_jira_is_discovered():
+    """Observability Cloud and Enterprise are required. Jira is used if present.
+
+    .mcp.json stays free of guessed commands and token values.
+    """
+    ref = (SKILLS / "references" / "mcp-servers.md").read_text()
+    intake = (SKILLS / "engagement-intake" / "SKILL.md").read_text()
+    config = json.loads((PLUGIN / ".mcp.json").read_text())
+
+    assert "Mandatory" in ref
+    assert "splunk-observability" in ref and "splunk-platform" in ref
+    assert "Jira" in ref and "already" in ref
+    assert "Jira" in intake and "already connected" in intake
+    assert "mandatory" in intake.lower()
+    assert config["mcpServers"] == {}, (
+        "a guessed MCP command in .mcp.json fails plugin startup; the operator "
+        "copies the entry and supplies the command"
+    )
+
+
+def test_dora_and_mttx_measurement_is_an_m5_objective():
+    """Observability Cloud cannot compute DORA or MTTx. ITSI can compute MTTx.
+
+    DORA cannot be computed in either product today. Section 24 must not grow a
+    false chart for either.
+    """
+    levels = (SKILLS / "references" / "service-levels.md").read_text()
+    assert "M5" in levels
+    assert "ITSI" in levels
+    assert "DORA" in levels
+    assert "Observability Cloud" in levels
+    assert "cannot be computed" in levels
+
+
 def test_inputs_template_captures_what_no_scan_can_measure():
     template = (ROOT / "inputs" / "engagement-inputs.template.yaml").read_text()
     for field in ("custom_mts_included", "custom_mts_in_use", "mms_slots_remaining",

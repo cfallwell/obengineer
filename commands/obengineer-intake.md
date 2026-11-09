@@ -14,6 +14,15 @@ the user names another path.
 Ask for everything missing in **one** numbered message, and do not ask for anything a
 scan can measure. Never request or store a credential value — record who holds it.
 
+Open that message by telling the human what helps. The design runs against any site.
+A live site scan is required: production, pre-production, and QA URLs, and as much
+else as they have. Optional traffic baselines — daily average and peak sessions,
+hourly log volume, request rate, infrastructure integrations — tighten the
+consumption expectation; `unknown` is acceptable and widens the range. Splunk
+Observability Cloud and Splunk Enterprise MCP servers are mandatory. Look for a
+Jira MCP only when one is already connected. Server classes:
+`skills/references/mcp-servers.md`.
+
 Two asks are easy to skip and both change what the deliverable can say:
 
 - **Entitlement**, and say what it is for: these numbers **price** the recommendation rather than cap it. What implementing it consumes, and any overage, goes to the account team in a separate document; the recommendation itself is what the application needs either way. `unknown` is fine — then there is simply no exposure document.

@@ -97,6 +97,25 @@ Resource details: [`splunk-terraform-providers.md`](splunk-terraform-providers.m
 placement — objectives are the executive layer's product, burn rate is the SRE layer's:
 [`persona-levels.md`](persona-levels.md).
 
+## What this portfolio cannot compute yet — milestone M5
+
+Section 24 does not grow a DORA row or an MTTx row in order to look complete.
+Observability Cloud has no metric that is MTTD, MTTA, MTTR, or a DORA measure
+(deployment frequency, lead time for changes, change-failure rate, time to
+restore). Writing a `signalfx_slo` and calling it one of those is a false chart.
+
+**MTTx** can be computed in **ITSI** on Splunk Enterprise, from the incident
+lifecycle that app already tracks. That computation is a milestone **M5**
+objective: an ITSI service and the KPIs that turn the stated
+`mttd_minutes` / `mtta_minutes` / `mttr_minutes` inputs into a measured series.
+Until M5 lands, those inputs stay `stated` in section 26. They are not detectors
+in the Observability Cloud modules.
+
+**DORA** still cannot be computed in Observability Cloud, and it cannot be
+computed in ITSI either. M5 includes the objective of finding a real source —
+change records, deployment events, and failed changes — and of saying so when
+the source does not exist. Do not approximate DORA with a latency SLO.
+
 ## Warning signs
 
 - **An SLI with no owner.** It will not be defended, and an undefended objective is deleted at the first inconvenient breach.

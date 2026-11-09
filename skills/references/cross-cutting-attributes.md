@@ -64,7 +64,7 @@ estate. A working baseline:
 | `<org>.utm.medium` | string | first pageview | Yes | Bounded |
 | `<org>.ads.attributed` | bool | first pageview | Yes | True when any UTM or click ID is present |
 | `<org>.attribution.has_click_id` | bool | first pageview | Yes | Quality signal: click IDs survive redirects that strip UTMs |
-| `session.id` | string | RUM SDK (automatic) | Yes | Provided by the browser SDK |
+| `session.id` | string | RUM SDK (automatic) | No | Attribute-only. A RUM troubleshooting pivot is the semconv exception in the decision engine; do not promote it onto a Monitoring MetricSet |
 | `enduser.id` | string | login success | No | Same value as `<org>.account_id`, kept for semconv compatibility |
 
 Rules for this table:

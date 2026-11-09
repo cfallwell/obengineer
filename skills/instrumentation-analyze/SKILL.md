@@ -70,7 +70,7 @@ in exactly one document-control line.
 
 ## Rules
 
-- **Assume nothing.** Not the industry, not a storefront, not named journeys, not the cloud, not a prior customer's taxonomy. Derive every name from this session's evidence.
+- **Assume nothing.** Not the industry, not a storefront, not named journeys, not the cloud, not a prior customer's taxonomy. The design runs against whatever site this engagement names. A scan, diagram, or schema from an already scanned site is not evidence; do not cite it. Derive every name from this session's evidence.
 - **Never store a credential.** A found token is a finding referenced by shape and location, never by value. See [`../references/critical-findings.md`](../references/critical-findings.md).
 - **Mark gaps as gaps.** "Not in evidence" with a named next step is a finding, not an omission.
 - **Nothing goes under an appendix heading that the argument depends on.** Appendices are the dictionary, long code, the work-order plan, supplementary evidence, and open items.
@@ -112,6 +112,29 @@ or warm cache, authenticated or not. Section 26 reuses these numbers as the perf
 baseline of the value case, and a measurement whose conditions were not recorded is
 unreproducible, which means the first person to re-measure gets a different answer and the
 value case loses its floor.
+
+A live site scan is required. If both URL lists are empty and the inputs do not say
+`no browser` with a reason, stop and run intake. Do not scan a site left over from
+another engagement, and do not proceed from memory of one.
+
+Which MCP servers must be connected before a tenant fact is labelled `measured`:
+[`../references/mcp-servers.md`](../references/mcp-servers.md). Splunk Observability
+Cloud and Splunk Enterprise are mandatory. Jira is read only when a Jira server is
+already connected.
+
+### Step 2a — Generate diagrams from a cloud environment when access exists
+
+When `cloud_diagrams.generate` is true and a cloud inventory MCP for **this** site is
+already connected, draw the architecture from QA, pre-production, or production —
+whichever environments the inputs name — and write
+`docs/observability/diagrams/<env>.md` as mermaid. Label the diagram `generated`, and
+name the environment, the date, and the server it came from. Any cloud. Prefer QA or
+pre-production when several are open, and say which one was drawn.
+
+A diagram the human attached stays their evidence. A generated diagram is additional.
+It does not replace theirs, and it does not contain a credential, account key, or
+token. If generation was requested and no inventory server is connected, record an
+open item and continue the site scan.
 
 ### Step 3 — Raise the critical findings while the evidence is in hand
 
@@ -224,19 +247,23 @@ named and unfilled, and the asks. Short and honest beats fabricated and quantita
 
 ### Step 11 — Price it for the account team, if there is anything to price against
 
-When `entitlement` carries real numbers, write
-`docs/observability/entitlement-exposure-<app>-<date>.md` per
-[`../references/entitlement-exposure.md`](../references/entitlement-exposure.md): position
-today, what the recommendation adds with the arithmetic visible per row, the projected
-position, each overage with options and a recommendation, and growth headroom.
+Write `docs/observability/entitlement-exposure-<app>-<date>.md` only when `entitlement` was supplied
+or when `traffic_baseline` has any value other than `unknown`, per
+[`../references/entitlement-exposure.md`](../references/entitlement-exposure.md). The arithmetic
+is the prediction in `cardinality-budget`: custom MTS from promotions, and — where a baseline
+was given — RUM sessions, APM trace rate, log GB/day, and infrastructure-integration series.
+Show each multiplication. Do not invent a second formula here.
 
-The analysis document gets one line in document control saying the exposure document exists
-and that the recommendation was not trimmed to fit. No licensed totals, no consumption, no
-overage figures in the customer document.
+Entitlement numbers compare that prediction with a license. Baselines with no entitlement
+produce an expectation range and no overage claim. The analysis document gets one line in
+document control saying the exposure document exists and that the recommendation was not
+trimmed to fit. No licensed totals, no consumption, no overage figures in the customer
+document.
 
-When entitlement is `unknown` throughout: no exposure document, no assumed limit, and one
-document-control line saying the budget was not supplied. Recommend as though there is enough
-licensing, because that is the honest position when nobody has said otherwise.
+When entitlement is `unknown` throughout and every traffic baseline is `unknown`: no exposure
+document, no assumed limit, and one document-control line saying the budget was not supplied.
+Recommend as though there is enough licensing, because that is the honest position when
+nobody has said otherwise.
 
 ### Step 12 — Render, verify, and check yourself
 

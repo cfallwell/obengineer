@@ -47,11 +47,13 @@ Shape shortcuts:
 | "What did this user do?" | RUM session plus **Related Content** into APM | One `traceparent` chain, `session.id`, and `enduser.id` as attribute-only |
 | "What changed at 14:02?" | Chart **event overlay** | CD posts to the Events API with `service.version` |
 
-**Cardinality rule of thumb:** a tag that can exceed roughly 1,000 values without a
-bounded enum is attribute-only, or a Troubleshooting MetricSet at most. Identity keys
-— user, account, order, cart, trace, session — are never Monitoring MetricSet
-dimensions on custom business meters. `session.id` as a RUM troubleshooting dimension
-is a semconv-sanctioned exception; do not copy the pattern onto business meters.
+**Cardinality is a prediction, not a ceiling.** Compute it in
+[`cardinality-budget`](../cardinality-budget/SKILL.md): distinct values × metrics ×
+services for a promotion, and the traffic-baseline multiplications for RUM, APM, log
+ingest, and infrastructure integrations. Identity keys — user, account, order, cart,
+trace, session — are never Monitoring MetricSet dimensions on custom business meters.
+`session.id` as a RUM troubleshooting dimension is a semconv-sanctioned exception; do
+not copy the pattern onto business meters.
 
 ## Course-of-action algorithm
 

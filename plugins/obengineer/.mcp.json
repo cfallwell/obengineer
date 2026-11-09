@@ -1,12 +1,13 @@
 {
   "$comment": [
-    "No MCP servers are enabled by default. Every server this plugin can use needs",
-    "an endpoint, command, or token that only the operator can supply, and a server",
-    "that fails to start is worse than one that was never declared.",
+    "mcpServers is empty on purpose. A placeholder command fails plugin startup.",
+    "Splunk Observability Cloud (splunk-observability) and Splunk Enterprise",
+    "(splunk-platform) are mandatory: copy those two entries from .mcp.optional.json",
+    "and supply the command your organisation runs. Do not guess a command.",
     "",
-    "See .mcp.optional.json for the servers that pair with these skills, what each",
-    "one is used for, and the environment variables it needs. Copy an entry here to",
-    "enable it.",
+    "Other servers are recommended or used only when already present. The",
+    "classification is skills/references/mcp-servers.md. Jira is not declared here;",
+    "intake uses a Jira MCP only when the host session already has one.",
     "",
     "Never put a token value in this file. Use ${VAR} references only; this file is",
     "committed to a repository."

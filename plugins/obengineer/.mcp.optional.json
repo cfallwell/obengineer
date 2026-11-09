@@ -1,8 +1,13 @@
 {
   "$comment": [
-    "Optional MCP servers for this plugin. They are NOT in .mcp.json because each",
-    "one needs an endpoint or command that only the operator can supply, and a",
-    "server that fails to start is worse than one that was never declared.",
+    "Server entries for this plugin. They are NOT in .mcp.json because each one",
+    "needs a command only the operator can supply, and a server that fails to start",
+    "is worse than one that was never declared.",
+    "",
+    "Mandatory to copy into .mcp.json: splunk-observability and splunk-platform.",
+    "Recommended: local-otel-tools, thousandeyes, and a cloud inventory MCP for",
+    "whatever cloud the site runs on (do not add a guessed cloud command here).",
+    "Jira is not an entry. If the host already has a Jira MCP, intake reads it.",
     "",
     "To enable a server: copy its entry into .mcp.json, replace the placeholder",
     "command or URL with the one your organisation runs, and export the listed",
@@ -18,7 +23,7 @@
       "url": "http://127.0.0.1:3000/mcp"
     },
     "splunk-observability": {
-      "$comment": "Splunk Observability Cloud: verify a MetricSet exists, read APM workflows and Tag Spotlight cardinality, and check whether an attribute actually landed as a dimension. Used by instrumentation-analyze for the existing-footprint inventory and by instrumentation-guide for portfolio-verifiable exit criteria.",
+      "$comment": "REQUIRED. Splunk Observability Cloud: verify a MetricSet exists, read APM workflows and Tag Spotlight cardinality, RUM and Synthetics configuration, and Subscription Usage. Copy this entry into .mcp.json and supply the command. Do not guess one.",
       "type": "stdio",
       "command": "<command your org runs for the Splunk Observability MCP server>",
       "env": {
@@ -27,7 +32,7 @@
       }
     },
     "splunk-platform": {
-      "$comment": "Splunk Enterprise or Cloud Platform: run the SPL behind a Log Observer Connect panel, and confirm trace_id is indexed on the events a dashboard joins to. Used when the guide specifies the LOC panel shape.",
+      "$comment": "REQUIRED. Splunk Enterprise: indexes, sourcetypes, trace_id extraction, Log Observer Connect SPL, and ITSI when that app is present. Copy this entry into .mcp.json and supply the command. Do not guess one.",
       "type": "stdio",
       "command": "<command your org runs for the Splunk platform MCP server>",
       "env": {

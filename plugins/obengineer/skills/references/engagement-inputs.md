@@ -24,8 +24,10 @@ gives the engagement an artifact that outlives the chat.
 | Section | Decides | Blank means |
 |---|---|---|
 | `engagement` | Filenames, document title, version on the deliverable | The run invents a name, and the next run invents a different one |
-| `artifacts` | Whether the backend map is diagram-driven or guessed; whether an existing taxonomy is extended | Journeys get named from a product playbook instead of this application |
-| `surfaces` | Whether there is a front-end scan at all, and whether authenticated pages can be reached | The scan covers only anonymous surfaces, and the checkout journey is missing |
+| `artifacts` | Whether the backend map starts from a diagram the human already has; whether an existing taxonomy of **this** application is extended | Journeys get named from a product playbook instead of this application. A file from a different site is not this row |
+| `cloud_diagrams` | Whether the run may draw QA, pre-production, or production architecture from a cloud inventory MCP already connected for this site | No generated diagram. The human's own diagrams still count. Any cloud |
+| `surfaces` | The live site scan. Required for whatever site this engagement names, unless `front_end_scan_notes` is `no browser: <reason>` | The run stops and asks for URLs. It does not invent a site and it does not reuse a previous scan |
+| `traffic_baseline` | The optional averages and peaks the consumption prediction multiplies: daily sessions, hourly log volume, request rate, infrastructure integrations | The expectation is a wide range that names the missing factor. The design is not capped |
 | `backends` | Which SDK sections and which bus inject/extract subsections the guide must contain | The messaging boundary section is written as `Not in evidence` for a bus that exists |
 | `tenancy` | Whether exit criteria can be phrased as queries a TAM can run | Exit criteria become assertions instead of checks |
 | `entitlement` | What the recommendation will **cost** in MTS, MMS slots, and runs — priced in a separate document for the account team | No entitlement exposure document; the recommendation stands and says the budget was not supplied |
@@ -66,7 +68,7 @@ A cut nobody can see is worse than an overage somebody has to approve.
 | `hosts_licensed`, `containers_licensed` | Order form; usage on the same page |
 | `traces_per_minute` | APM entitlement on the order form |
 | `mms_slots_remaining` | Settings → **APM MetricSets**: count the Monitoring MetricSets already defined |
-| `tms_cardinality_ceiling` | Not on any page. It is a number the customer agrees to; propose one and get it accepted. |
+| `tms_cardinality_ceiling` | Optional. An observed peak of distinct values on an existing Troubleshooting MetricSet. A baseline the prediction can compare with, not a cap the design must fit under. |
 | `sessions_per_month` (RUM) | Order form; usage in Subscription Usage |
 | Synthetics run quota | Order form; Synthetics usage page |
 | Platform `ingest_gb_per_day`, `retention_days` | The platform license and index definitions |
@@ -83,8 +85,12 @@ proposed MTS for one promotion
 
 Compare the sum of proposed promotions against
 `custom_mts_included - custom_mts_in_use` and keep headroom for growth. The full
-method, including the defaults to use when the numbers are `unknown`, is
-[`../cardinality-budget/SKILL.md`](../cardinality-budget/SKILL.md).
+method is a **prediction**, not a license ceiling: RUM sessions, APM trace rate,
+hourly log volume, and infrastructure-integration metrics are multiplied from
+`traffic_baseline` when the human supplied them. Unknown factors widen the range.
+[`../cardinality-budget/SKILL.md`](../cardinality-budget/SKILL.md) is the only
+formula. More accurate baselines produce a tighter expectation. They do not
+change what the application needs.
 
 Two entitlement answers are hard vetoes rather than budget inputs:
 
@@ -136,6 +142,34 @@ missing the market where customers are actually complaining.
 
 `competitors` is for field-performance comparison only. It is not a competitive teardown,
 and a document that reads as one gets forwarded to the wrong people.
+
+## The site, and nothing from a previous one
+
+The design runs against any site. `engagement.application` and `surfaces` name
+the one this file is about. A URL, diagram, brand term, or schema left over from
+an already scanned site is not evidence. Remove it. `prior_contract` and
+`prior_schema` are earlier revisions of **this** application only.
+
+A live site scan is required. Provide every URL you have — production,
+pre-production, and QA. `front_end_scan_notes: "no browser: <reason>"` is the
+only opt-out.
+
+`cloud_diagrams.generate: true` lets the analyze run draw a mermaid diagram from
+QA, pre-production, or production when a cloud inventory MCP for this site is
+already connected. The capability is any cloud. No access means an open item,
+not a failed intake, and never a stored credential.
+
+Which MCP servers are mandatory, recommended, or used only when already present:
+[`mcp-servers.md`](mcp-servers.md).
+
+## Traffic baseline
+
+Optional, and worth asking for in the same breath as entitlement. Daily average
+and peak sessions, hourly log volume, request rate, spans per trace, and the
+entity count of each infrastructure integration are the factors the prediction
+multiplies. Tell the human that more accurate numbers produce a tighter
+expectation, and that `unknown` is a legitimate answer. A round number they are
+unsure of stays `unknown`.
 
 ## Credentials
 

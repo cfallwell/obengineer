@@ -10,6 +10,10 @@
 # "Open items" rather than inventing a value. What is NOT acceptable is deleting
 # a key: an absent key looks like an oversight, `unknown` looks like a decision.
 #
+# This file describes ONE engagement and whatever site that engagement names.
+# A scan, diagram, or taxonomy from a different site is not an input. Delete
+# it from this file rather than leaving it for a later run to cite.
+#
 # NEVER put a token, password, or API key in this file. It records whether a
 # credential exists and who holds it, never its value.
 
@@ -28,17 +32,30 @@ engagement:
 artifacts:
   diagrams: []                 # C4, sequence, MFE map, account/VPC — paths or "attached in chat"
   narrative: ""                # path to an architecture write-up, if one exists
-  prior_contract: ""           # an existing analysis document to extend, not replace
-  prior_schema: ""             # an existing attribute-schema.json — reuse its key names
+  prior_contract: ""           # an existing analysis of THIS application. A document from another site is not an input
+  prior_schema: ""             # an existing attribute-schema.json for THIS application — reuse its key names
   house_style_docx: ""         # an approved .docx whose layout the output must match
-  front_end_scan_notes: ""     # path, or "no browser", or "" to scan live
+  front_end_scan_notes: ""     # path, or "no browser: <reason>". Empty means the live site scan still has to run
 
 # ---------------------------------------------------------------------------
-# Front-end surfaces to deep-scan. Omit or empty if there is no browser.
+# Cloud diagrams. The run draws these from QA, pre-production, or production
+# when a cloud inventory MCP for THIS site's cloud is already connected.
+# Any cloud. Never a credential. generate true means "try"; it does not block
+# the site scan when no inventory server is connected.
+# ---------------------------------------------------------------------------
+cloud_diagrams:
+  generate: true
+  environments: []             # any of: qa, pre-prod, production
+  notes: ""                    # which account or region, and who can grant read-only access. Never a key.
+
+# ---------------------------------------------------------------------------
+# Front-end surfaces to deep-scan. A live site scan is required.
+# Provide every URL you have — production, pre-production, and QA. The only
+# opt-out is front_end_scan_notes set to "no browser: <reason>".
 # ---------------------------------------------------------------------------
 surfaces:
-  production_urls: []
-  non_production_urls: []
+  production_urls: []          # required unless non_production_urls is set, or there is no browser
+  non_production_urls: []      # QA and pre-production. Bring these too; they are often the safer scan
   host_and_remotes: ""         # which bundle owns provider boot, which are remotes
   edge_cdn: ""
   test_account:
@@ -97,7 +114,7 @@ entitlement:
     containers_licensed: unknown
     traces_per_minute: unknown         # APM TAPM entitlement
     mms_slots_remaining: unknown       # Monitoring MetricSets are a bounded resource
-    tms_cardinality_ceiling: unknown   # per-tag ceiling agreed for Troubleshooting MetricSets
+    tms_cardinality_ceiling: unknown   # optional observed peak distinct values on an existing Troubleshooting MetricSet. A baseline for the prediction, not a cap
   rum:
     entitled: unknown
     sessions_per_month: unknown
@@ -118,6 +135,35 @@ entitlement:
     cloud_agent_units: unknown
     enterprise_agents: unknown
     test_slots_available: unknown
+
+# ---------------------------------------------------------------------------
+# Traffic baseline. OPTIONAL. Every field may stay `unknown`.
+#
+# These numbers feed the consumption prediction (RUM sessions, APM trace rate,
+# log ingest, infrastructure metrics from cloud and host integrations). They
+# do not cap the design. The more accurate they are, the tighter the
+# expectation; unknown widens the range and the run says which factor was
+# missing. A guess presented as a measurement is worse than `unknown`.
+# ---------------------------------------------------------------------------
+traffic_baseline:
+  rum:
+    sessions_per_day_avg: unknown
+    sessions_per_day_peak: unknown
+    page_views_per_session: unknown
+  apm:
+    requests_per_minute_avg: unknown
+    requests_per_minute_peak: unknown
+    spans_per_trace: unknown
+  logs:
+    gb_per_hour_avg: unknown       # hourly log volume, average
+    gb_per_hour_peak: unknown
+  infra_integrations: []
+    # One entry per integration that already emits infrastructure metrics
+    # (kubernetes, a cloud provider, a host agent). Example shape, not a
+    # requirement to invent a vendor:
+    # - name: ""                     # the integration the site actually runs
+    #   entities: unknown            # hosts, containers, or that integration's unit
+    #   metrics_per_entity: unknown
 
 # ---------------------------------------------------------------------------
 # Standards the deliverable must follow.

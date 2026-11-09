@@ -7,8 +7,11 @@ description: >-
   percentile standard, and the business context behind the engagement — current
   MTTx, incident volume, triage and tooling cost, revenue exposure, and the
   customer's own commentary on what hurts — into a single engagement-inputs.yaml.
-  Asks only for what is missing, one short round of questions, and records
-  `unknown` rather than guessing. Use when the user types $engagement-intake,
+  Guides the human on suggested inputs first. A live site scan is required for
+  whatever site this engagement names. Optional traffic baselines (daily sessions,
+  hourly log volume, infrastructure integrations) tighten the consumption
+  prediction; unknown widens it. Asks only for what is missing, one short round
+  of questions, and records `unknown` rather than guessing. Use when the user types $engagement-intake,
   starts an engagement, says they have diagrams or a URL to analyze, asks what
   information you need, or when any other skill finds the inputs file absent or
   incomplete. Never requests or stores a credential value.
@@ -32,6 +35,12 @@ So the inputs live in one file — `engagement-inputs.yaml`, from
 and this skill is the only thing that writes it. Field-by-field meaning and the
 consequence of leaving each blank:
 [`../references/engagement-inputs.md`](../references/engagement-inputs.md).
+Which MCP servers are mandatory, recommended, or used only when already present:
+[`../references/mcp-servers.md`](../references/mcp-servers.md).
+
+The design runs against **any site**. This file is that site. A URL, diagram, or
+schema from an already scanned site is not an input; if one is in the file, remove
+it and say so.
 
 ## The rule that makes this worth having
 
@@ -66,22 +75,40 @@ exists, copy the template and say so — the human should be able to see and edi
 file, not only answer questions into a chat that ends.
 
 If the human attached a filled file or pasted values, load those first and treat the
-questions as gap-filling.
+questions as gap-filling. If that file names a site other than the one this
+engagement is for, drop those values and tell the human they were not kept.
 
-### Step 2 — Compute what is missing, then ask once
+Before asking, look at the MCP servers already connected in this session.
 
-Group the gaps and ask them in **one message**, numbered, each with the consequence of
-skipping it. A drip of single questions across a session is the failure mode this skill
-exists to remove.
+- **Splunk Observability Cloud and Splunk Enterprise are mandatory.** If either is absent, the gap report says so and points at copying that entry from `plugins/obengineer/.mcp.optional.json` with the organisation's own command. Do not invent a command. Tenant facts gathered without them are `stated`, not `measured`.
+- **Jira, if present.** When a Jira server is already connected, read issue keys that match `outcomes.known_pain` and record the keys. When it is not connected, do not add one.
+- **Recommend, do not require,** the other servers in [`mcp-servers.md`](../references/mcp-servers.md): local OpenTelemetry tools, ThousandEyes when an off-box hop is in scope, and a cloud inventory MCP for whatever cloud this site runs on so analyze can generate diagrams.
+
+### Step 2 — Tell them what to bring, then ask once for the gaps
+
+The first message has two parts. The guidance comes first, then the numbered gaps.
+
+**Guidance, in substance:**
+
+The design runs against whatever site this engagement names. Bring as much as you have. A live **site scan is required**: every production, pre-production, and QA URL you can open. Diagrams you already have are welcome. If you can grant read-only access to a QA, pre-production, or production cloud environment, the run can generate the architecture diagram from that inventory — any cloud, no credential stored in the file. The only way to skip the scan is to write `no browser` and the reason.
+
+Then the optional numbers, with this notice: **the more accurate the data, the tighter the consumption expectation.** Every one of them may be `unknown`. Unknown widens the range. It does not block the design, and it does not cap it.
+
+- Daily average and peak sessions (RUM).
+- Requests per minute, average and peak, and a typical spans-per-trace if they know it (APM).
+- Hourly log volume, average and peak.
+- Infrastructure metrics already coming from integrations: which integration, how many entities, roughly how many metrics each. Name the integration this site runs. Do not invent a vendor.
+
+**Then the gaps**, in one message, numbered, each with the consequence of skipping it. A drip of single questions across a session is the failure mode this skill exists to remove.
 
 Ask in this order, because early answers make later questions unnecessary:
 
 1. **Application, customer, scope, date.** Without these there is no filename.
 2. **Artifacts.** Diagrams, prior contract, prior schema, house-style `.docx`. Say explicitly that a prior schema will be *extended* and its key names reused, never renamed for taste.
-3. **Surfaces.** Production and non-production URLs; whether a test account exists and who holds it. Ask for the holder, never the credential.
-4. **Backends.** Languages, deploy targets, buses, account boundaries, what terminates TLS.
+3. **Surfaces.** The site scan. Production, pre-production, and QA URLs; whether a test account exists and who holds it. Ask for the holder, never the credential. Empty URL lists are a gap, not a default.
+4. **Backends and cloud diagrams.** Languages, deploy targets, buses, account boundaries, what terminates TLS, and which of QA, pre-production, or production can be inventoried for a generated diagram.
 5. **Tenancy.** Realm, org, environments. Identifiers only.
-6. **Entitlement.** The numbers in the table below.
+6. **Entitlement, then the optional traffic baseline.** The entitlement numbers in the table below, then daily sessions, hourly log volume, request rate, and infrastructure integrations. Say the accuracy notice once, not once per field.
 7. **Constraints.** Privacy regime, residency, consent platform, change windows, who deploys.
 8. **Outcomes.** Known pain, and whether they want to nominate the first journey.
 9. **Business context.** The commentary and the numbers in Step 4.
@@ -104,7 +131,7 @@ plan does not.
 |---|---|
 | Custom MTS included, and current consumption | Every proposed dimension, charged against real headroom rather than against a guess. |
 | MMS slots remaining | Monitoring MetricSets are bounded, and a slot shortage is a feature that cannot be created rather than a bill. |
-| Agreed per-tag TMS cardinality ceiling | Whether an identity key can be a Troubleshooting MetricSet tag or stays attribute-only. |
+| Observed Troubleshooting MetricSet distinct-value peak, if they have one | A baseline the prediction compares against. Not a cap. Identity keys stay attribute-only either way. |
 | RUM sessions per month; replay entitled | Sampling, and whether replay may be discussed at all. |
 | Synthetics run quota and private locations | Test frequency and which locations the plan may assume. |
 | Platform GB/day and retention | What goes to Splunk platform versus what stays in Observability Cloud. |
@@ -163,6 +190,7 @@ Refuse to proceed, and say which check failed, when:
 - **A referenced path does not exist.** A diagram in the file but not on disk becomes a phantom citation in the deliverable.
 - **`standards.percentile` is not a single value.** One percentile, everywhere. Two percentiles in one contract means two definitions of "slow".
 - **A URL is in `surfaces` but the human said there is no browser.** One of the two is wrong; ask which.
+- **Both URL lists are empty and `front_end_scan_notes` is not `no browser` with a reason.** The site scan is required. Ask for the URLs. Do not proceed by reusing another site.
 - **`session_replay_entitled` is true but `session_replay_accepted_in_writing` is false.** Replay stays out of the recommendation until the cost and Core Web Vitals risk are accepted in writing.
 - **A business figure arrived as a benchmark.** "Retail typically loses $X a minute" is not this customer's number. Record `unknown` and name the ask.
 - **`fit_to_entitlement: true` with no entitlement numbers.** Nothing to fit to; either get the numbers or set it back to false.
@@ -187,5 +215,5 @@ should not be written twice.
 ## Non-goals
 
 - Does not scan, measure, or infer anything about the application. That is `instrumentation-analyze`.
-- Does not decide dimensions or budgets, only records the limits they are charged against. That is `cardinality-budget`.
+- Does not decide dimensions or compute the prediction, only records the optional baselines and the entitlement they are compared with. The formulas live in `cardinality-budget`.
 - Does not hold credentials. It records who holds them.
