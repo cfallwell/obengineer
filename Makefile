@@ -71,6 +71,25 @@ verify: ## Verify an existing .docx against its Markdown source
 	@test -n "$(FILE)" -a -n "$(DOCX)" || { echo "usage: make verify FILE=<path.md> DOCX=<path.docx>"; exit 2; }
 	$(PY) skills/customer-doc-render/scripts/verify_render.py "$(call at,$(FILE))" "$(call at,$(DOCX))"
 
+.PHONY: verify-ledger
+verify-ledger: ## Validate an engagement provenance ledger
+	@file="$(call at,$(or $(FILE),docs/observability/provenance-ledger.json))"; \
+	  $(PY) skills/instrumentation-wiki/scripts/verify_provenance_ledger.py "$$file"
+
+.PHONY: verify-results
+verify-results: ## Validate read-only verification results against the accepted plan
+	@test -n "$(RESULTS)" || { echo "usage: make verify-results RESULTS=<results.json> [PLAN=<verification-plan.json>] [LEDGER=<provenance-ledger.json>] [EXCLUSIONS=<exclusions.json>] [OB_PROJECT=<repo>]"; exit 2; }
+	@plan="$(call at,$(or $(PLAN),docs/observability/verification-plan.json))"; \
+	  results="$(call at,$(RESULTS))"; \
+	  ledger="$(call at,$(or $(LEDGER),docs/observability/provenance-ledger.json))"; \
+	  acceptance="$(call at,$(ACCEPTANCE))"; base="$(OB_PROJECT)"; \
+	  [[ -n "$$base" ]] || base="."; \
+	  [[ -n "$(ACCEPTANCE)" ]] || acceptance=$$(ls "$$base"/docs/observability/analysis-*.acceptance.yaml 2>/dev/null | sort | tail -1); \
+	  exclusions=""; [[ -z "$(EXCLUSIONS)" ]] || exclusions="$(call at,$(EXCLUSIONS))"; \
+	  $(PY) skills/instrumentation-verify/scripts/verify_results.py "$$plan" "$$results" \
+	    --ledger "$$ledger" --acceptance "$$acceptance" \
+	    $${exclusions:+--exclusions "$$exclusions"}
+
 # make preview DOCX=docs/observability/Guide.docx [PAGES=4] [START=92]
 .PHONY: preview
 preview: ## Rasterise pages of a .docx to check the layout by eye
@@ -83,5 +102,5 @@ preview: ## Rasterise pages of a .docx to check the layout by eye
 	    -o "$$out/contact-sheet.png"
 
 .PHONY: deps
-deps: ## Install the one runtime dependency
-	$(PY) -m pip install python-docx pytest
+deps: ## Install renderer and test dependencies
+	$(PY) -m pip install python-docx markdown-it-py==4.2.0 PyYAML==6.0.3 pytest

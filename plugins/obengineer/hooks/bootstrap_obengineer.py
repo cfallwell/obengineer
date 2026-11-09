@@ -5,7 +5,7 @@ Read-only and non-fatal by design. It installs nothing, contacts nothing outside
 localhost, and always exits 0 — a session must never fail to start because a
 document renderer is missing. It prints one short status block so the agent knows
 up front whether it can render a customer .docx or must ask the user to install
-python-docx.
+the renderer dependencies.
 """
 
 from __future__ import annotations
@@ -26,9 +26,23 @@ PLUGIN_ROOT = Path(
 def check_renderer() -> tuple[bool, str]:
     try:
         import docx  # noqa: F401
+        import markdown_it
+        import yaml
     except ImportError:
-        return False, "python-docx missing — run: pip install python-docx"
-    return True, "python-docx available"
+        return False, (
+            "renderer dependency missing — run: "
+            "pip install python-docx markdown-it-py==4.2.0 PyYAML==6.0.3"
+        )
+    if markdown_it.__version__ != "4.2.0":
+        return False, (
+            f"markdown-it-py {markdown_it.__version__} found; "
+            "run: pip install markdown-it-py==4.2.0"
+        )
+    if yaml.__version__ != "6.0.3":
+        return False, (
+            f"PyYAML {yaml.__version__} found; run: pip install PyYAML==6.0.3"
+        )
+    return True, "python-docx, markdown-it-py 4.2.0, and PyYAML 6.0.3 available"
 
 
 def check_skills() -> tuple[bool, str]:

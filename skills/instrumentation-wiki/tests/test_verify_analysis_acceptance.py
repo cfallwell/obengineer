@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import importlib.util
+import hashlib
 import json
 import subprocess
 import sys
@@ -53,7 +54,35 @@ def accepted_repo(tmp_path: Path) -> tuple[Path, Path, str]:
             "work_order": "WO-001",
             "repositories": ["app"],
             "mapping_status": "complete",
-            "evidence": ["source:src/account.ts"],
+            "evidence": ["SRC-account-route"],
+        }],
+    }))
+    empty_digest = hashlib.sha256(b"[]").hexdigest()
+    (docs / "provenance-ledger.json").write_text(json.dumps({
+        "schema_version": 1,
+        "engagement": {"application": "app"},
+        "contract": {"sealed_ids": []},
+        "context_profile": {"predicates": {}, "loaded_references": []},
+        "sources": [{"id": "SRC-account-route"}],
+        "facts": [], "runs": [], "checks": [], "artifacts": [],
+        "decisions": [], "unresolved": [],
+        "seals": {"analysis": {"ids": [], "digest": empty_digest}},
+    }))
+    (docs / "verification-plan.json").write_text(json.dumps({
+        "schema_version": 1,
+        "criteria": [{
+            "id": "VC-001",
+            "source_section": 17,
+            "system": "repository",
+            "query": {"kind": "contract-check", "reference": "SRC-account-route"},
+            "expected": {"operator": "equals", "value": True},
+            "observation_window": "PT1M",
+            "owner": "engineering",
+            "remediation": {
+                "route": "implementation",
+                "selector": "work-order:WO-001",
+                "instructions": "Run WO-001 and recheck.",
+            },
         }],
     }))
     run(tmp_path, "add", "docs")
@@ -97,6 +126,7 @@ def test_acceptance_record_cli_is_supported(tmp_path):
         "accepted_at: 2026-01-01T00:00:00Z\n"
         "qualifications: []\n"
         "rejected_decisions: []\n"
+        f"provenance_seal_digest: {json.loads((repo / 'docs/observability/provenance-ledger.json').read_text())['seals']['analysis']['digest']}\n"
     )
     assert verify_acceptance.main([
         "--record", str(record), "--repo", str(repo)
@@ -113,7 +143,7 @@ def test_incomplete_acceptance_record_is_rejected(tmp_path):
     _, _, failures = verify_acceptance.read_record(record)
     for field in (
         "analysis_pr", "accepted_by", "accepted_at", "qualifications",
-        "rejected_decisions",
+        "rejected_decisions", "provenance_seal_digest",
     ):
         assert f"acceptance record has no {field}" in failures
 
@@ -129,6 +159,7 @@ def test_acceptance_timestamp_must_be_rfc3339(tmp_path):
         "accepted_at: yesterday\n"
         "qualifications: []\n"
         "rejected_decisions: []\n"
+        f"provenance_seal_digest: {'b' * 64}\n"
     )
     _, _, failures = verify_acceptance.read_record(record)
     assert "acceptance record accepted_at must be RFC3339" in failures

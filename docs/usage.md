@@ -109,6 +109,8 @@ docs/observability/analysis-<app>-<date>.md
 docs/observability/<Customer>-<App>-Analysis-<date>.docx
 docs/observability/attribute-schema.json
 docs/observability/implementation-map.json
+docs/observability/provenance-ledger.json
+docs/observability/verification-plan.json
 ```
 
 Conditional:
@@ -372,6 +374,32 @@ than planned.
 The handoff lists planned resource counts, imports, unresolved IDs, refused items,
 unsupported items, placeholder thresholds, and run-cost implications.
 
+## Run 5: verify outcomes read-only
+
+Run after instrumentation deployment and the human-reviewed Terraform apply:
+
+```text
+/ob-verify
+```
+
+The run verifies the exact accepted commit, provenance ledger, actionable verification
+plan, and optional human-approved exclusions. It performs read-only tenant queries and
+writes JSON plus a Markdown human report under `docs/observability/verification/`.
+
+- `met`, `unmet`, and `unmeasurable` remain machine-visible.
+- Every unmet criterion notifies the human with owner, exact remediation, next command,
+  and recheck instructions.
+- The verifier never declares a criterion unremediable. A human-approved exclusion is
+  recorded separately and omitted from machine result rows and metric denominators.
+- Verification never applies, deploys, merges, arms/disarms, rotates, or changes tenant
+  state.
+- Reusable anonymized outcomes are previewed for `cfallwell/obengineer`. Existing `gh`
+  authentication is reused; otherwise the run provides `gh auth login --web` and the
+  GitHub device-login URL.
+
+Outcome rates always include numerator, denominator, and measurement coverage. Detailed
+evidence and run state live only in `provenance-ledger.json`.
+
 ## Independent review
 
 ```text
@@ -437,8 +465,11 @@ and archive the prior wiki. Do not silently convert a delta into a new first run
 │   ├── <Customer>-<App>-Analysis-<date>.docx
 │   ├── attribute-schema.json
 │   ├── implementation-map.json
+│   ├── provenance-ledger.json
+│   ├── verification-plan.json
 │   ├── analysis-<app>-<date>.acceptance.yaml
-│   └── entitlement-exposure-<app>-<date>.md   conditional
+│   ├── entitlement-exposure-<app>-<date>.md   conditional
+│   └── verification/                          # read-only outcome results
 ├── wiki/apps/<app>/
 │   ├── implementation/work-orders/
 │   └── services/<service>/

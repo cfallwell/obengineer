@@ -34,6 +34,15 @@ over explanatory documentation if behavior changes:
   defines analysis branches, commits, PRs, and exact-commit acceptance.
 - [`skills/references/implementation-work-orders.md`](../skills/references/implementation-work-orders.md)
   defines bounded targets, repository mapping, linked PRs, and Jira fallback.
+- [`skills/references/provenance-ledger.md`](../skills/references/provenance-ledger.md)
+  defines the single evidence and run-state authority.
+- [`skills/references/context-loading.md`](../skills/references/context-loading.md)
+  defines evidence-gated reference loading.
+- [`skills/references/verification-run.md`](../skills/references/verification-run.md)
+  defines read-only outcome verification and remediation routing.
+- [`skills/references/outcome-metrics.md`](../skills/references/outcome-metrics.md) and
+  [`outcome-issues.md`](../skills/references/outcome-issues.md) define measured outcomes
+  and anonymized project issues.
 - [`skills/observability-as-code/SKILL.md`](../skills/observability-as-code/SKILL.md)
   defines Terraform generation.
 - [`commands/`](../commands/) contains the installed command entry points.

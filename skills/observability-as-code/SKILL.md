@@ -54,6 +54,10 @@ full commit SHA. A merged file or generic approval is not acceptance. Then load 
 guide, `attribute-schema.json`, `implementation-map.json`, and `engagement-inputs.yaml`, and build
 one table before writing any HCL, because it is also the handover document:
 
+Validate `provenance-ledger.json`; use its tenant/source IDs and append inventory,
+imports, plan/schema-check results, refusals, and artifact digests. Never alter sealed
+analysis entries.
+
 `Contract section | Artifact | Persona | Provider resource | Dimensions needed | Exists in schema? | Ship armed?`
 
 Anything failing the dimension check does **not** get generated with a hopeful `group by`.

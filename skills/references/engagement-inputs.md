@@ -33,7 +33,7 @@ gives the engagement an artifact that outlives the chat.
 | `traffic_baseline` | The optional averages and peaks the consumption prediction multiplies: daily sessions, hourly log volume, request rate, infrastructure integrations | The expectation is a wide range that names the missing factor. The design is not capped |
 | `backends` | Which SDK sections and which bus inject/extract subsections the guide must contain | The messaging boundary section is written as `Not in evidence` for a bus that exists |
 | `tenancy` | Whether exit criteria can be phrased as queries a TAM can run | Exit criteria become assertions instead of checks |
-| `entitlement` | What the recommendation will **cost** in MTS, MMS slots, and runs — priced in a separate document for the account team | No entitlement exposure document; the recommendation stands and says the budget was not supplied |
+| `entitlement` | What the recommendation will **cost** in MTS, MMS cardinality, and runs — priced in a separate document for the account team | No entitlement exposure document; the recommendation stands and says the budget was not supplied |
 | `constraints` | What is vetoed regardless of technical merit | The guide recommends something legal or platform ownership will reject |
 | `outcomes` | Journey ranking when several candidates are equally instrumentable | The run picks a defensible journey that nobody asked for |
 | `developer_tools` | Which tools the human says they use, and which of those already have an MCP server or an environment variable name in this environment | The run does not guess a server and does not ask for a token. Credentials stay in the user environment or the MCP server |
@@ -73,11 +73,12 @@ A cut nobody can see is worse than an overage somebody has to approve.
 
 | Field | Where it comes from |
 |---|---|
-| `custom_mts_included` | The order form or subscription terms |
+| `custom_mts_entitled` | The order form, Billing, or Subscription Usage |
 | `custom_mts_in_use` | Observability Cloud → Settings → **Subscription Usage** / Org Metrics |
+| `custom_mts_system_limit` | Enforced `sf.org.limit.*` value; never substitute it for contractual entitlement |
 | `hosts_licensed`, `containers_licensed` | Order form; usage on the same page |
 | `traces_per_minute` | APM entitlement on the order form |
-| `mms_slots_remaining` | Settings → **APM MetricSets**: count the Monitoring MetricSets already defined |
+| `mms_cardinality_entitled`, `mms_cardinality_in_use` | Subscription Usage and APM MetricSets; MMS entitlement is cardinality, not object slots |
 | `tms_cardinality_ceiling` | Optional. An observed peak of distinct values on an existing Troubleshooting MetricSet. A baseline the prediction can compare with, not a cap the design must fit under. |
 | `sessions_per_month` (RUM) | Order form; usage in Subscription Usage |
 | Synthetics run quota | Order form; Synthetics usage page |
@@ -94,7 +95,7 @@ proposed MTS for one promotion
 ```
 
 Compare the sum of proposed promotions against
-`custom_mts_included - custom_mts_in_use` and keep headroom for growth. The full
+`custom_mts_entitled - custom_mts_in_use` and keep headroom for growth. The full
 method is a **prediction**, not a license ceiling: RUM sessions, APM trace rate,
 hourly log volume, and infrastructure-integration metrics come from
 `traffic_baseline` when the human supplied them. Unknown factors widen the range.

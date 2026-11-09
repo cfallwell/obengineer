@@ -12,7 +12,8 @@ a production URL with a session in it.
   (`window.__<ORG>_RUM_TOKEN__`, `${SPLUNK_ACCESS_TOKEN}`). MCP configuration uses
   `${VAR}` references. `verify_render.py` fails a document that contains a
   credential-shaped value, and a repository test fails a commit that does.
-- **The SessionStart hook is read-only.** It checks for `python-docx` and probes
+- **The SessionStart hook is read-only.** It checks for `python-docx` and
+  `markdown-it-py` and probes
   `127.0.0.1` for the optional local MCP server. It installs nothing, contacts no
   external host, and always exits 0.
 - **MCP servers ship with no command in `.mcp.json`.** Splunk Observability Cloud and Splunk Enterprise are mandatory for the operator to enable by copying the entry and supplying their own command. No command is guessed. Other servers are recommended or used only when already present.

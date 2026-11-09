@@ -89,34 +89,62 @@ def count_xrefs(prose: str, render) -> int:
     return total
 
 
-def parse_markdown(path: Path, section_level: int, render=None) -> dict:
-    """Fence-aware structural census of the Markdown source."""
-    headings: list[tuple[int, str]] = []
-    tables = code_blocks = 0
-    in_fence = in_table = False
-    prose: list[str] = []
+def count_ast_xrefs(children, render) -> int:
+    total, buffer, i = 0, [], 0
 
-    for line in path.read_text().split("\n"):
-        if line.startswith("```"):
-            in_fence = not in_fence
-            if in_fence:
-                code_blocks += 1
+    def flush() -> None:
+        nonlocal total
+        text = "".join(buffer)
+        for match in render.XREF.finditer(text):
+            total += max(1, len(render.NUMBER.findall(match.group())))
+        buffer.clear()
+
+    children = children or []
+    while i < len(children):
+        token = children[i]
+        if token.type == "link_open":
+            flush()
+            if (token.attrGet("href") or "").startswith("#"):
+                total += 1
+            depth, i = 1, i + 1
+            while i < len(children) and depth:
+                depth += children[i].type == "link_open"
+                depth -= children[i].type == "link_close"
+                i += 1
             continue
-        if in_fence:
-            continue
-        if line.startswith("|"):
-            if not in_table:
-                tables += 1
-                in_table = True
-            prose.append(line)
-            continue
-        in_table = False
-        m = re.match(r"^(#{1,6}) +(.*)$", line)
-        if m:
-            headings.append((len(m.group(1)), m.group(2)))
-            continue
-        if not line.startswith("<!--"):
-            prose.append(line)
+        if token.type == "code_inline":
+            flush()
+        elif token.type in ("text", "html_inline"):
+            buffer.append(token.content)
+        elif token.type in ("softbreak", "hardbreak"):
+            buffer.append(" ")
+        i += 1
+    flush()
+    return total
+
+
+def parse_markdown(path: Path, section_level: int, render=None) -> dict:
+    """CommonMark AST structural census of the Markdown source."""
+    if render is None:
+        render = _renderer()
+    tokens = render.MARKDOWN.parse(path.read_text())
+    headings: list[tuple[int, str]] = []
+    tables = sum(token.type == "table_open" for token in tokens)
+    code_blocks = sum(
+        token.type in ("fence", "code_block") for token in tokens
+    )
+    xrefs = 0
+    for index, token in enumerate(tokens):
+        if token.type == "heading_open":
+            inline = tokens[index + 1]
+            headings.append((
+                int(token.tag[1:]),
+                render.inline_text(inline.children),
+            ))
+        elif token.type == "inline" and not (
+            index > 0 and tokens[index - 1].type == "heading_open"
+        ):
+            xrefs += count_ast_xrefs(token.children, render)
 
     # The leading H1 becomes the title page, so it is not a body heading and
     # does not get a page break of its own.
@@ -129,7 +157,7 @@ def parse_markdown(path: Path, section_level: int, render=None) -> dict:
         "code_blocks": code_blocks,
         # The renderer joins wrapped prose before parsing, so a reference split
         # across two source lines is one reference here as well.
-        "xrefs": count_xrefs(" ".join(prose), render) if render else 0,
+        "xrefs": xrefs,
     }
 
 

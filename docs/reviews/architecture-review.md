@@ -14,6 +14,30 @@ Companion reading:
 
 ---
 
+## Closure update — 9 Nov 2026
+
+All seven assessment items from this review are now closed:
+
+1. **Verification run:** `/ob-verify` performs read-only accepted exit-criterion checks,
+   notifies humans of unmet criteria with remediation/recheck instructions, and keeps
+   human-approved unremediable exclusions out of machine result rows.
+2. **Outcome issues:** sanitized previews reuse authenticated `gh`; when authentication is
+   absent, the human receives `gh auth login --web` and the GitHub device-login URL.
+3. **Read-first entitlement:** endpoint, minimum-scope, contractual-vs-system-limit, and
+   fallback behavior are canonical in `existing-telemetry.md`; the input schema is v3.
+4. **Provenance ledger:** one sealed `provenance-ledger.json` replaces proposed evidence
+   and run-state files across every stage.
+5. **Parser migration:** the renderer and verifier now consume
+   `markdown-it-py==4.2.0` CommonMark syntax trees.
+6. **Outcome metrics:** exact numerators, denominators, coverage, and collection points are
+   canonical and tested.
+7. **Conditional context:** browser, router, language, bus, cloud, and optional portfolio
+   references load only when evidence predicates are true.
+
+No new architecture issue requiring a human choice was opened during closure. Operational
+failures discovered by future verification become anonymized outcome issues under the policy
+below.
+
 ## Executive assessment
 
 The architecture is materially more complete than it was on 18 September. The project has
@@ -32,9 +56,8 @@ contract system with:
 - generated plugin mirrors checked against canonical sources.
 
 The strongest September finding—two competing authorities for the document section
-list—is resolved structurally. The most important remaining gap is also the same one
-September identified: the pipeline still lacks a first-class verification run that checks
-the accepted contract against telemetry after implementation and configuration.
+list—is resolved structurally. The closing-loop gap identified in September is now also
+closed by a first-class read-only verification run.
 
 ## Section-count decision
 
@@ -60,7 +83,7 @@ the canonical template, with render/review tests and an explicit architecture re
 | Change | Status now | Evidence |
 |---|---|---|
 | Repository hygiene and public portability | Resolved | [PR #1](https://github.com/cfallwell/obengineer/pull/1) removed customer/machine paths; source and generated-artifact credential scans are tested |
-| Install and host command discovery | Resolved | Seven commands are installed for Cursor, Claude Code, and Codex; retired command names migrate safely |
+| Install and host command discovery | Resolved | Eight commands, including `/ob-verify`, are installed for Cursor, Claude Code, and Codex; retired command names migrate safely |
 | Project and memory-repository setup | Resolved | [PR #10](https://github.com/cfallwell/obengineer/pull/10), [PR #11](https://github.com/cfallwell/obengineer/pull/11), and [PR #12](https://github.com/cfallwell/obengineer/pull/12) established the memory repository, app/service wiki, environment template, and existing-telemetry pass |
 | Entitlement and consumption arithmetic | Substantially resolved | [PR #8](https://github.com/cfallwell/obengineer/pull/8) added license prediction and pre-merge contracts; entitlement exposure is separate from the customer document |
 | Exact contract acceptance | Resolved | Analysis artifacts are bound to a full commit SHA and verified before generation, implementation, or Terraform |
@@ -122,22 +145,17 @@ Revises [Context engineering](2026-09-18-architecture-review.md#context-engineer
   inventing ownership from a monolithic document.
 - Inputs, acceptance, and repository mapping are structured artifacts.
 
-Still open:
-
-- a first-class `evidence.json` ledger;
-- a single machine-readable run-state artifact joining evidence, checklist, outputs, and
-  unresolved decisions;
-- explicit conditional-reference loading for targets with no browser or bus; and
-- the CommonMark parser migration described in [Resolved design decisions](../design.md#resolved-design-decisions).
+**Closed.** `provenance-ledger.json` is the single evidence/run-state authority, context
+loads are predicate-gated and ledger-recorded, and CommonMark parsing is implemented. The
+proposed `evidence.json` and `run-state.json` names are retired.
 
 ### Outcome learning
 
 Revises [Reinforcement learning: build the grader first](2026-09-18-architecture-review.md#reinforcement-learning-build-the-grader-first).
 
-**The grader and deterministic inputs exist; the outcome system does not.** Reviews report
-defects by rubric row, implementation maps bind targets to code, and verification scripts
-can reject drift. There is still no repository-level outcome record that aggregates schema
-misses, empty dimensions, detector disarms, or reversed “Not in evidence” findings.
+**Closed.** Reviews report defects by rubric row; verification appends deduplicated
+opportunities and calculates schema miss, dimension miss, detector disarm, and
+not-in-evidence reversal rates with explicit denominators and coverage.
 
 Decision: each anonymized outcome record is opened or updated as a GitHub issue in
 [`cfallwell/obengineer`](https://github.com/cfallwell/obengineer/issues). Issues must contain
@@ -146,22 +164,16 @@ taxonomy. The issue should identify the rubric row or reference, source commit, 
 class, measured result, and proposed specification change. Repeated instances update one
 defect-class issue rather than creating customer-per-issue leakage.
 
-This policy is now part of the deliverable-review contract, including anonymization,
-deduplication, and an issue-ready fallback when GitHub write access is unavailable. A
-deterministic issue helper, authentication profile, and the point in the future verification
-run that invokes it still need implementation.
+This policy is implemented by a deterministic preview/publish helper with stable
+deduplication markers, existing-`gh` authentication reuse, and a web-login handoff.
 
 ### Closing the loop
 
 Revises [Closing the loop: analysis → recommendation → implementation → verification](2026-09-18-architecture-review.md#closing-the-loop-analysis--recommendation--implementation--verification).
 
-**Still open.** There are deterministic artifact verifiers, contract checks, Terraform
-plans, and manual proof requirements, but there is no `/ob-verify` run that executes the
-accepted exit criteria against the tenant and records met, unmet, or unmeasurable.
-
-This is now the highest-value architectural addition. It is the only way to distinguish a
-complete-looking contract from one that actually improved the tenant's ability to answer
-incident questions.
+**Closed.** `/ob-verify` executes accepted actionable criteria read-only and records met,
+unmet, or unmeasurable. It notifies humans with remediation/recheck instructions and honors
+only human-approved unremediable exclusions.
 
 ## Resolutions to the September open questions
 
@@ -176,8 +188,8 @@ measurable tenant facts before asking a human. Measured values outrank stated va
 Not every commercial term is exposed by an API. Intake may still ask for order-form limits,
 contractual entitlements, or values whose endpoint is unavailable, but it asks only for the
 remaining gaps and labels them `stated`. The intake contract is now explicitly read-first;
-the remaining assessment is endpoint coverage, minimum scopes, and reconciliation with
-order-form values.
+the endpoint, minimum-scope, system-limit-versus-contract, and fallback matrix is now
+canonical in `existing-telemetry.md`.
 
 ### 2. Outcome records: GitHub issues
 
@@ -206,8 +218,8 @@ tests, and handover together. This protocol is now canonical in
 
 ### 4. Run 5 tenant access: still relevant, and read-only
 
-**Yes, it remains relevant.** Run 5 does not exist yet, but its access boundary must be
-settled before implementation because credential scope shapes the design.
+**Resolved.** Run 5 now exists and retains the read-only boundary because credential scope
+shapes the design.
 
 The verification run needs read access to:
 
@@ -232,36 +244,28 @@ therefore have read-only product scopes and no apply, deploy, or detector-arm pe
 
 ## What now needs assessment
 
-Ordered by architectural leverage:
+No recommendation from this assessment remains architecturally undecided. Operational
+validation now measures:
 
-1. **Verification run contract.** Define `/ob-verify`, its read-only credentials, accepted
-   inputs, queries, result schema, and how unmet criteria dispatch work without remediating.
-2. **Outcome issue workflow.** Define authentication, anonymization, deduplication, issue
-   fields, failure behavior, and whether issue creation requires a final human preview.
-3. **Read-first entitlement flow.** Identify which facts are available from each Splunk API,
-   the minimum read scopes, the fallback questions, and how measured values reconcile with
-   order-form values.
-4. **Evidence and run-state schema.** Decide whether `evidence.json` and `run-state.json`
-   remain separate or become one provenance ledger consumed by analysis, generation, and
-   verification.
-5. **Parser migration.** Replace line parsing with a maintained CommonMark AST while proving
-   Word output parity and updating the dependency contract atomically.
-6. **Outcome metrics.** Define exact denominators and collection points for schema miss,
-   dimension miss, detector disarm, and “Not in evidence” reversal rates.
-7. **Conditional context loading.** Measure whether explicit browser/bus/language gates
-   reduce context without hiding cross-cutting requirements.
+- whether each tenant exposes the documented least-privilege entitlement endpoints;
+- whether CommonMark render output remains visually compatible on customer documents;
+- whether context predicates reduce loaded material without hiding mandatory headings;
+- whether verification criteria are actionable enough to avoid exclusion;
+- whether outcome issue sanitization and deduplication hold on the first real cohorts; and
+- whether metric coverage is high enough for rates to be decision-worthy.
 
-The section-count question is not on this list. The current canonical structure is accepted,
-and one tested authority owns it.
+Failures follow the contracts now implemented: notify the human, route remediation, amend
+the contract, or create/update an anonymized outcome issue. The current canonical section
+structure remains accepted and one tested authority owns it.
 
 ## Conclusion
 
 The September architecture review succeeded at its most important job: it found that
 duplication concealed a real contract defect. The repository now enforces the remedy.
-Since then, the project has added durable memory, exact acceptance, security assessment,
-multi-repository implementation mapping, plan-only Terraform, and much stronger verification
-of its own artifacts.
+Since then, the project has added a sealed provenance ledger, exact acceptance, security
+assessment, conditional context, multi-repository implementation mapping, plan-only
+Terraform, CommonMark rendering, and read-only outcome verification.
 
-The next architecture milestone is not another authoring feature. It is closing the loop:
-read the tenant after implementation, prove or disprove the accepted exit criteria, and turn
-reusable failures into anonymized issues that improve the specification.
+The loop is now explicit: read the tenant after implementation, prove or disprove accepted
+exit criteria, notify humans with remediation, and turn reusable failures into anonymized
+issues that improve the specification.

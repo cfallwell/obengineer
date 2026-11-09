@@ -35,6 +35,7 @@ discipline, and each fact has exactly one home.
 | Security screening: exposed credentials/APIs, OWASP coverage, confidence, and P0 | [`../skills/references/security-assessment.md`](../skills/references/security-assessment.md) |
 | Analysis branch, phase commits, PR, and explicit acceptance | [`../skills/references/analysis-run-lifecycle.md`](../skills/references/analysis-run-lifecycle.md) |
 | Implementation mapping, bounded targets, linked repository PRs, and Jira fallback | [`../skills/references/implementation-work-orders.md`](../skills/references/implementation-work-orders.md) |
+| Evidence/run state, context gates, and verification | [`provenance-ledger.md`](../skills/references/provenance-ledger.md), [`context-loading.md`](../skills/references/context-loading.md), [`verification-run.md`](../skills/references/verification-run.md) |
 | Section 24 — indicators and objectives in the customer's voice | [`../skills/references/service-levels.md`](../skills/references/service-levels.md) |
 | The agent layer: wiki tree, note frontmatter, host memory pointers | [`../skills/references/agent-wiki.md`](../skills/references/agent-wiki.md) |
 | Whether this is a first run, a delta, or a re-baseline | [`../skills/references/incremental-runs.md`](../skills/references/incremental-runs.md) |
@@ -118,8 +119,8 @@ contract. Assign each question to exactly one platform. Call Phase 0 blockers on
 the scan shows them, and still write the dashboards and detectors as drafts to arm after
 trust.
 
-**Produce.** The analysis document, the `.docx`, the schema, and
-`implementation-map.json`, in template order — plus,
+**Produce.** The analysis document, `.docx`, schema, implementation map,
+provenance ledger, and verification plan, in template order — plus,
 only where entitlement numbers were supplied, the account team's entitlement exposure
 document, which is the one place licensed totals, consumption, and overage appear — then,
 on the following run, the wiki that carries the per-subject detail the coding agents read. If

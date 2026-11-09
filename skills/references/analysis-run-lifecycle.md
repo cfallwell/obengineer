@@ -45,6 +45,8 @@ Commit each completed analysis phase on the same new branch:
    - analysis Markdown;
    - `attribute-schema.json`;
    - `implementation-map.json`;
+   - `provenance-ledger.json`, with analysis-owned entries sealed;
+   - `verification-plan.json`;
    - conditional entitlement exposure.
 3. `analysis(<app>): render and verify deliverables`
    - rendered `.docx`;
@@ -93,6 +95,7 @@ accepted_by: <reviewer identity>
 accepted_at: <RFC3339 timestamp>
 qualifications: []
 rejected_decisions: []
+provenance_seal_digest: <sha256-of-sealed-ledger-projection>
 ```
 
 If the invocation omits the path or exact SHA, `/ob-generate` stops and prints the exact

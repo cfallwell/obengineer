@@ -50,6 +50,9 @@ Prompt: [`../../prompts/01-analyze-application.md`](../../prompts/01-analyze-app
 | [`../references/security-assessment.md`](../references/security-assessment.md) | Exposed credentials/APIs, OWASP coverage, confidence, and P0 routing. |
 | [`../references/analysis-run-lifecycle.md`](../references/analysis-run-lifecycle.md) | Analysis branch names, phase commits, docs-only PR, and acceptance. |
 | [`../references/implementation-work-orders.md`](../references/implementation-work-orders.md) | Target-to-repository/Jira mapping and the `<org>.bt` global-tag contract. |
+| [`../references/provenance-ledger.md`](../references/provenance-ledger.md) | Evidence, run state, context decisions, artifacts, and the analysis seal. |
+| [`../references/context-loading.md`](../references/context-loading.md) | Evidence predicates controlling which technology references load. |
+| [`../references/verification-run.md`](../references/verification-run.md) | Stable exit criteria and remediation schema. |
 | [`../references/service-levels.md`](../references/service-levels.md) | Section 24 — indicators in the customer's voice. |
 | [`../references/cross-cutting-attributes.md`](../references/cross-cutting-attributes.md) | Section 7 and its five mandatory code subsections. |
 | [`../references/portfolio-decision-engine.md`](../references/portfolio-decision-engine.md) | Which question goes to Observability Cloud, Splunk Enterprise, or ThousandEyes. |
@@ -66,6 +69,8 @@ Prompt: [`../../prompts/01-analyze-application.md`](../../prompts/01-analyze-app
 | Word | `docs/observability/<Customer>-<App>-Analysis-<date>.docx` | always |
 | Schema | `docs/observability/attribute-schema.json` | always |
 | Implementation map | `docs/observability/implementation-map.json` | always |
+| Provenance ledger | `docs/observability/provenance-ledger.json` | always |
+| Verification plan | `docs/observability/verification-plan.json` | always |
 | Entitlement exposure | `docs/observability/entitlement-exposure-<app>-<date>.md` | when `entitlement` was supplied, or a `traffic_baseline` factor was supplied. A factor is supplied only when it is neither `unknown` nor an empty collection (`[]` or `{}`). `infra_integrations: []` is unsupplied |
 
 One customer document. If a run is about to produce a second one, it has recreated the
@@ -304,6 +309,11 @@ Map every BT, workflow, use case, detector, objective, and configuration target 
 repository ids and optional Jira projects. Ask engineering once for unresolved repository
 ownership after analysis. Missing Jira uses the manual work-order path; it does not block
 the contract.
+
+Emit and validate `provenance-ledger.json`; implementation-map evidence values are ledger
+IDs. Record the context predicates and exactly which references were loaded. Emit and
+validate `verification-plan.json` with actionable `VC-*` criteria. Seal analysis-owned
+ledger IDs before exact-commit acceptance.
 
 ```bash
 python3 ../customer-doc-render/scripts/render_customer_doc.py \

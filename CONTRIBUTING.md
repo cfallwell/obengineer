@@ -9,7 +9,7 @@ customer deliverables live in the engagement's own repository, under
 ## Setup
 
 ```bash
-make deps          # python-docx and pytest — the only dependencies
+make deps          # python-docx, markdown-it-py 4.2.0, PyYAML 6.0.3, and pytest
 make test          # contract tests + renderer round-trip
 make check         # plugin sync and manifest agreement
 ```

@@ -32,7 +32,8 @@ there. Paths in the skills are relative to that repository, not to this one.
   `plugins/*/skills/`** — change the canonical file, then run
   `make sync-plugin-skills`.
 - Use `rg` for search.
-- Use `python3` and `pytest`; the only runtime dependency is `python-docx`.
+- Use `python3` and `pytest`; renderer dependencies are `python-docx` and pinned
+  `markdown-it-py==4.2.0`; input validation uses `PyYAML==6.0.3`.
 - Avoid drive-by refactors and narration comments.
 
 ## One authority per fact
@@ -50,6 +51,11 @@ it is the only way a disagreement becomes visible.
 | Security assessment scope, OWASP coverage, confidence, and P0 routing | `skills/references/security-assessment.md` |
 | Analysis branches, phase commits, PRs, and explicit acceptance | `skills/references/analysis-run-lifecycle.md` |
 | Target selectors, implementation mapping, multi-repository work orders, and Jira fallback | `skills/references/implementation-work-orders.md` |
+| Evidence, run state, context loads, artifacts, and acceptance seal | `skills/references/provenance-ledger.md` |
+| Conditional reference loading predicates | `skills/references/context-loading.md` |
+| Read-only exit-criterion verification and exclusions | `skills/references/verification-run.md` |
+| Outcome metric denominators and collection points | `skills/references/outcome-metrics.md` |
+| Public outcome issue privacy/auth/deduplication | `skills/references/outcome-issues.md` |
 | Terraform resource names across the three Splunk providers | `skills/references/splunk-terraform-providers.md` |
 | The `.docx` layout | `skills/customer-doc-render/references/document-format.json` |
 | What the human must supply | `inputs/engagement-inputs.template.yaml` |
@@ -167,8 +173,8 @@ make check                   # plugin sync + manifest agreement
 make render FILE=<path.md>   # render one Markdown deliverable
 ```
 
-`python-docx` is required for the renderer tests; they skip cleanly without it, so
-run `pip install python-docx` before trusting a green run.
+`python-docx`, `markdown-it-py==4.2.0`, and `PyYAML==6.0.3` are required; run
+`make deps` before trusting a green run.
 
 ## Available Skills
 
@@ -183,3 +189,4 @@ run `pip install python-docx` before trusting a green run.
 | `$cardinality-budget` | Decide dimension versus attribute-only as arithmetic against the customer's entitlement |
 | `$observability-as-code` | Emit the accepted contract as Terraform across the three Splunk providers, at three persona levels |
 | `$deliverable-review` | Grade a finished deliverable against the completeness bar, separately from whoever wrote it |
+| `$instrumentation-verify` | Verify accepted exit criteria read-only, notify humans, append outcomes, and route remediation |

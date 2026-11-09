@@ -14,6 +14,8 @@ Run obengineer run 2 — accept the analysis and generate the instrumentation wi
    `python3 "${CLAUDE_PLUGIN_ROOT}/skills/instrumentation-wiki/scripts/verify_analysis_acceptance.py" <analysis-path> <full-sha> --repo .`,
    then write the acceptance record. If either argument is missing, print the exact
    command and stop.
+   The accepted artifact set includes `provenance-ledger.json` and
+   `verification-plan.json`; verify the ledger seal before generating.
 4. Follow `${CLAUDE_PLUGIN_ROOT}/prompts/02-build-instrumentation-wiki.md`.
 5. Skills: `$instrumentation-wiki`, `$baggage-propagation`, `$cardinality-budget`.
 

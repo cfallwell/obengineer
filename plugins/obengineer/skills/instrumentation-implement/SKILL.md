@@ -50,6 +50,10 @@ repository leg against `implementation-map.json` and repository-qualified `initi
 One invocation may produce one linked PR per repository plus a coordination PR. This is
 still one concern: the unified accepted work order.
 
+Validate [`../references/provenance-ledger.md`](../references/provenance-ledger.md), load
+only ledger IDs cited by the work order, and append repository-leg proof without mutating
+sealed analysis entries.
+
 ## Default dependency order
 
 Use this order when the selected work order contains these runtime slices. It is a default

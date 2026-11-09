@@ -221,7 +221,7 @@ def test_budgets_are_numbers_not_adjectives():
     )
 
     cardinality = (SKILLS / "cardinality-budget" / "SKILL.md").read_text()
-    for term in ("distinct values", "custom_mts_included", "custom_mts_in_use"):
+    for term in ("distinct values", "custom_mts_entitled", "custom_mts_in_use"):
         assert term in cardinality, (
             f"the cardinality budget must compute against entitlement; missing {term}"
         )
@@ -450,7 +450,9 @@ def test_dora_and_mttx_measurement_is_an_m5_objective():
 
 def test_inputs_template_captures_what_no_scan_can_measure():
     template = (ROOT / "inputs" / "engagement-inputs.template.yaml").read_text()
-    for field in ("custom_mts_included", "custom_mts_in_use", "mms_slots_remaining",
+    for field in ("custom_mts_entitled", "custom_mts_in_use",
+                  "custom_mts_system_limit", "mms_cardinality_entitled",
+                  "mms_cardinality_in_use",
                   "tms_cardinality_ceiling", "session_replay_accepted_in_writing",
                   "baggage_header_budget_bytes", "percentile"):
         assert field in template, f"engagement inputs must capture {field}"
@@ -647,13 +649,108 @@ def test_entitlement_is_read_before_human_gap_questions():
 
 def test_outcome_records_are_anonymized_project_issues():
     review = (SKILLS / "deliverable-review" / "SKILL.md").read_text()
-    assert "cfallwell/obengineer" in review
-    assert "Deduplicate by" in review
+    issues = (SKILLS / "references" / "outcome-issues.md").read_text()
+    assert "outcome-issues.md" in review
+    assert "cfallwell/obengineer" in issues
+    assert "stable marker" in issues
     for forbidden in (
         "customer name", "production URL", "tenant or account id", "credential",
     ):
-        assert forbidden in review
-    assert "issue-ready title and body" in review
+        assert forbidden in issues
+    assert "gh auth login --web" in issues
+
+
+def test_run_five_is_read_only_and_routes_unmet_criteria():
+    command = (ROOT / "commands" / "ob-verify.md").read_text()
+    prompt = (PROMPTS / "05-verify-accepted-contract.md").read_text()
+    skill = (SKILLS / "instrumentation-verify" / "SKILL.md").read_text()
+    authority = (SKILLS / "references" / "verification-run.md").read_text()
+    for text in (command, prompt, skill, authority):
+        assert "read-only" in text.lower()
+        assert "unmet" in text.lower()
+    assert "not machine result rows" in command
+    assert "human-approved" in authority.lower()
+    assert "terraform apply" in authority.lower()
+
+
+def test_provenance_ledger_is_the_only_machine_evidence_state():
+    authority = (SKILLS / "references" / "provenance-ledger.md").read_text()
+    analyze = (SKILLS / "instrumentation-analyze" / "SKILL.md").read_text()
+    acceptance = (SKILLS / "instrumentation-wiki" / "scripts" /
+                  "verify_analysis_acceptance.py").read_text()
+    assert "provenance-ledger.json" in authority
+    assert "Do not create parallel `evidence.json` or `run-state.json`" in authority
+    assert "provenance-ledger.json" in analyze
+    assert '"provenance-ledger.json"' in acceptance
+
+
+def test_outcome_metrics_have_exact_denominators_and_collection_points():
+    metrics = (SKILLS / "references" / "outcome-metrics.md").read_text()
+    for name in (
+        "Schema miss rate", "Dimension miss rate", "Detector disarm rate",
+        "Not-in-evidence reversal rate",
+    ):
+        assert name in metrics
+    for required in (
+        "Miss numerator", "Eligible denominator", "Collection point",
+        "measurement_coverage", "unmeasurable",
+    ):
+        assert required in metrics
+
+
+def test_context_loading_is_evidence_gated():
+    context = (SKILLS / "references" / "context-loading.md").read_text()
+    router = (SKILLS / "references" / "platform-expertise.md").read_text()
+    for predicate in (
+        "browser", "Router", "backends.languages", "backends.buses",
+        "cloud", "ThousandEyes", "ITSI", "Log Observer Connect",
+        "Session replay", "Synthetics",
+    ):
+        assert predicate.lower() in context.lower()
+    assert "platform/browser.md" in router
+    assert "platform/languages/python.md" in router
+    assert "platform/buses/kafka.md" in router
+    browser = (SKILLS / "references" / "platform" / "browser.md").read_text()
+    for router_name in ("react-router", "nextjs", "vue", "angular", "history-api"):
+        assert f"routers/{router_name}.md" in browser
+
+
+def test_commonmark_dependency_contract_is_consistent():
+    files = (
+        ROOT / "README.md",
+        ROOT / "Makefile",
+        ROOT / ".github" / "workflows" / "ci.yml",
+        ROOT / "docs" / "installation.md",
+        ROOT / "CONTRIBUTING.md",
+        ROOT / "AGENTS.md",
+        ROOT / "plugins" / "obengineer" / "README.md",
+        ROOT / "plugins" / "obengineer" / "hooks" / "bootstrap_obengineer.py",
+    )
+    for path in files:
+        assert "markdown-it-py" in path.read_text(), f"{path} omits parser dependency"
+        assert "PyYAML" in path.read_text(), f"{path} omits input YAML dependency"
+    renderer = (SKILLS / "customer-doc-render" / "scripts" /
+                "render_customer_doc.py").read_text()
+    verifier = (SKILLS / "customer-doc-render" / "scripts" /
+                "verify_render.py").read_text()
+    assert "MarkdownIt" in renderer
+    assert "MARKDOWN.parse" in renderer
+    assert "MARKDOWN.parse" in verifier
+
+
+def test_entitlement_schema_separates_contract_and_system_limits():
+    template = (ROOT / "inputs" / "engagement-inputs.template.yaml").read_text()
+    telemetry = (SKILLS / "references" / "existing-telemetry.md").read_text()
+    assert "schema_version: 3" in template
+    for field in (
+        "custom_mts_entitled", "custom_mts_system_limit",
+        "mms_cardinality_entitled", "mms_cardinality_in_use",
+    ):
+        assert field in template
+    assert "custom_mts_included" not in template
+    assert "mms_slots_remaining" not in template
+    assert "stream.<realm>.observability.splunkcloud.com" in telemetry
+    assert "Enforced system limits are not contractual entitlement" in telemetry
 
 
 def test_project_path_and_retired_command_migration_are_documented():

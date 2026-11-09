@@ -36,11 +36,11 @@ git -C /path/to/memory-repo commit --allow-empty -m "Initial commit"
 ```bash
 git clone https://github.com/cfallwell/obengineer.git
 cd obengineer
-python3 -m pip install python-docx
+python3 -m pip install python-docx markdown-it-py==4.2.0 PyYAML==6.0.3
 ```
 
-`python-docx` is required only for rendering and verifying `.docx` files. Maintainers
-can run `make deps` to install both `python-docx` and `pytest`.
+`python-docx` writes/verifies `.docx`, `markdown-it-py==4.2.0` parses CommonMark, and
+`PyYAML==6.0.3` validates/migrates engagement inputs. `make deps` adds `pytest`.
 
 Install the Terraform CLI when using `/ob-terraform`; analysis, generation, review,
 rendering, and application implementation do not require it.
@@ -191,8 +191,8 @@ running from the original checkout makes the intended source and scope clear.
 Install into the same Python interpreter used by the command:
 
 ```bash
-python3 -m pip install python-docx
-python3 -c "import docx; print(docx.__version__)"
+python3 -m pip install python-docx markdown-it-py==4.2.0 PyYAML==6.0.3
+python3 -c "import docx, markdown_it, yaml; print(docx.__version__, markdown_it.__version__, yaml.__version__)"
 ```
 
 ### A copied skill did not update

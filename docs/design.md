@@ -71,17 +71,11 @@ them.
 
 ## Resolved design decisions
 
-**Renderer migration uses a real Markdown parser.** The current line-based renderer is
-the compatibility baseline, not the long-term parsing architecture. New parser work must
-use a CommonMark syntax tree (`markdown-it-py` or an equivalent maintained parser) feeding
-the existing `.docx` writer. The migration is complete only when the current structural,
-cross-reference, credential, and round-trip verification suite passes and visual output
-matches the approved format. Until then, the line-based implementation receives defect
-fixes but no new Markdown syntax. Today, `python-docx` remains the only renderer runtime
-dependency. The parser migration explicitly includes adding and pinning the maintained
-parser dependency and updating the README, `make deps`, plugin bootstrap check, and
-dependency documentation in the same change. The parser direction is settled; output
-compatibility and an atomic dependency-contract update are the migration gates.
+**The renderer uses a real Markdown parser.** `markdown-it-py==4.2.0` produces the
+CommonMark block and inline syntax tree consumed by the existing `python-docx` writer.
+Renderer and verifier independently census that tree, while the established structural,
+cross-reference, credential, round-trip, and visual-format checks remain the compatibility
+gate. The former line scanner is no longer the parsing architecture.
 
 **MCP commands remain operator-supplied rather than hardcoded.** A server command or URL
 cannot be verified by the repository because it is organisation-specific. Hardcoding a

@@ -39,7 +39,7 @@ def valid_map() -> dict:
                 "work_order": "WO-001",
                 "repositories": ["web"],
                 "mapping_status": "complete",
-                "evidence": ["source:src/account.ts"],
+                "evidence": ["SRC-account-route"],
             }
         ],
     }

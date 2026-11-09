@@ -12,6 +12,8 @@ Run obengineer run 3 — implement one bounded target.
    guide.** This run implements a contract; it does not invent one.
    Before editing, run:
    `python3 "{{OBENGINEER_ROOT}}/skills/instrumentation-wiki/scripts/verify_analysis_acceptance.py" --record docs/observability/analysis-<app>-<date>.acceptance.yaml --repo .`.
+   Load only provenance-ledger IDs cited by the selected work order, append proof
+   records, and never alter sealed analysis entries.
 3. Follow `{{OBENGINEER_ROOT}}/prompts/03-implement-instrumentation.md`.
 4. Use the `$instrumentation-implement` skill.
 

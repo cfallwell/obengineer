@@ -24,18 +24,22 @@ Run obengineer run 1 — analyze.
 7. Follow `{{OBENGINEER_ROOT}}/skills/references/analysis-run-lifecycle.md`: include the
    intake artifact, create the analysis branch, commit each phase, push, and open one
    docs-only PR.
+8. Follow `provenance-ledger.md`, `context-loading.md`, and `verification-run.md`;
+   validate the ledger and read-only verification plan before review.
 
 This is the **only customer-facing document**. Section order is owned by
 `{{OBENGINEER_ROOT}}/skills/references/document-template.md`; read it first.
 
-Not complete until all four artifacts exist and the render verifier exits 0:
+Not complete until all six artifacts exist and the render verifier exits 0:
 
 - `docs/observability/analysis-<app>-<date>.md`
 - `docs/observability/<Customer>-<App>-Analysis-<date>.docx`, rendered from that Markdown
 - `docs/observability/attribute-schema.json`
 - `docs/observability/implementation-map.json`
+- `docs/observability/provenance-ledger.json`
+- `docs/observability/verification-plan.json`
 
-Plus a fifth, when entitlement or a supplied traffic baseline exists:
+Plus a seventh, when entitlement or a supplied traffic baseline exists:
 `docs/observability/entitlement-exposure-<app>-<date>.md` for the account team,
 markdown only, never rendered. Spec:
 `{{OBENGINEER_ROOT}}/skills/references/entitlement-exposure.md`.
