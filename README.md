@@ -3,9 +3,12 @@
 obengineer is a multi-host agent toolkit for designing and implementing a Splunk
 OpenTelemetry instrumentation contract. It inspects an application and its existing
 telemetry, produces a reviewable analysis and attribute schema, turns the accepted
-contract into an agent-readable wiki, and can then implement bounded unified work orders
-or generate Terraform. Analysis includes exposed-credential/API checks and versioned
-OWASP Web/API coverage within the authorized boundary.
+contract into an agent-readable wiki, and can then implement bounded unified work-
+orders to make code observable. obengineer will also generate Splunk Terraform
+artifacts to build the use cases into Splunk Observability Cloud in the form of
+Dashboards, Custom Monitoring Metric Sets, Custom Workflows, Business Transactions
+and Detectors and other artifacts. Analysis includes exposed-credential/API checks
+and versioned OWASP Web/API coverage within the authorized boundary.
 
 It supports Cursor, Claude Code, and Codex. Generated artifacts belong in a separate
 memory or application repository; this repository remains the toolkit.
