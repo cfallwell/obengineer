@@ -1,130 +1,68 @@
 # obengineer
 
-A Splunk OpenTelemetry agentic plugin. Give it as much as you have about an
-application — source, diagrams, a live URL, existing telemetry, the inputs no
-scan can measure — and it writes a **development contract** a coding agent can
-implement: curated, high-fidelity instrumentation around custom code. Landed and
-enforced, that contract produces a measurable, verifiable improvement in MTTx
-(mean time to detect, acknowledge, and resolve), because every dashboard
-variable, detector grouping, and Related-Content link is a key the application
-actually emits.
+obengineer is the toolkit for a Splunk OpenTelemetry instrumentation contract. It installs as skills and commands for Cursor, Claude Code, and Codex. Give it source, diagrams, a live URL, existing telemetry, and the inputs a scan cannot measure. It writes one customer document a coding agent can implement. Landed and enforced, that contract puts the same keys on the spans a dashboard variable, a detector grouping, and a Related Content link need, and it shortens MTTx (mean time to detect, acknowledge, and resolve).
 
-Zero-code agents tell you a service is slow. They do not tell you which
-checkout, which tenant, which workflow, or which custom path failed, and they
-do not put those keys on every span a later hop will need. That is why
-incidents stay long: the telemetry is present and the question is still
-unanswerable. This repository exists so the missing contract is written once,
-from evidence, in a form a reviewer can accept and a coding agent can land
-without inventing a taxonomy.
+Canonical skills live under `skills/`. `plugins/obengineer/` is the self-contained bundle a marketplace install gets. This repository stays the toolkit. The wiki and the deliverables are written in a separate memory repository.
 
-It installs as skills and commands for Cursor, Claude Code, and Codex.
-Canonical skills live under `skills/`; `plugins/obengineer/` is the
-self-contained bundle a marketplace install gets. The plugin belongs to no
-engagement. The document, the wiki, and the pull requests land in the
-engagement's own repository.
+## Pull the toolkit, then create the memory repository
 
-## How to use it
+Do these two steps in this order.
 
-Work from the **engagement** repository (or the application you are
-instrumenting), not from this one. Paths in the skills are relative to that
-workspace.
+1. Pull the obengineer repository so this checkout matches the current toolkit.
 
-1. **Install** the plugin into your agent host — see [Install](#install).
-   Restart the host so it picks up the commands.
-2. **Collect what a scan cannot measure** with `/obengineer-intake`. Realm,
-   percentile standard, diagram paths, entitlement, current MTTx, who deploys
-   what. One file, `engagement-inputs.yaml`. `unknown` is a valid answer.
-3. **Analyze** with `/obengineer-analyze`. Point it at the application: front
-   end, backends, diagrams, the existing Splunk and ThousandEyes footprint. It
-   writes one customer document, a `.docx` rendered from that Markdown, and
-   `attribute-schema.json`.
-4. **Accept the contract**, then `/obengineer-wiki`. That breaks the document
-   into one note per business transaction, workflow, finding, detector, and
-   objective, plus work orders a coding agent can pick up.
-5. **Implement** with `/obengineer-implement` against a single work order. The
-   coding agent opens a small pull request and the CI check that keeps that
-   slice enforced. Repeat. `/obengineer-as-code` can run in parallel once the
-   analysis is accepted — it configures the tenant, not the application.
-6. **Grade before a human sees it** with `/obengineer-review`. Re-render any
-   document with `/obengineer-render`.
+   ```bash
+   cd /path/to/obengineer
+   git pull
+   ```
 
-The first five commands are a sequence. Nothing is pasted into a chat: each
-command reads its prompt file in place, so the run contract under review is the
-one that ran.
+2. Create a separate repository for obengineer to use for memory. From this toolkit checkout, run the install command with `--project` pointing at that memory repository. The flag installs skills and commands into the memory repository. Cursor and Claude Code use `.cursor/` and `.claude/` inside it. Codex uses `.agents/` for skills and `prompts/` for commands.
 
-Give it as much as you have. Source and a live URL beat a narrative. A diagram
-beats a recollection. Existing dashboards and detectors are inventory, not a
-ceiling. What you do not give, the run records as an open item rather than
-inventing.
+   ```bash
+   ./install.sh --cursor --project /path/to/memory-repo
+   ```
 
-## Where this lives, and where the work lands
-
-This is `obengineer`, its own repository, and it belongs to no engagement. A
-customer engagement is a separate repository, and the deliverables land there:
-
-```
-obengineer/                         # this project — clone it anywhere
-<engagement-repo>/                  # one repository per engagement, anywhere
-    ├── docs/observability/         # the customer document and its .docx
-    ├── wiki/<Customer>/<app>/      # the agent wiki: working memory for later runs
-    ├── AGENTS.md · CLAUDE.md       # host pointers into that wiki
-    └── terraform/                  # what observability-as-code emits
-```
-
-The split is the point. A toolkit that lives inside one customer's repository gets
-customer-specific edits, and the next engagement either forks it or inherits them.
-Paths in the skills — `docs/observability/…`, `wiki/<Customer>/<app>/…` — are always
-relative to the **engagement** repository, never to this one.
+   Pass `--claude`, `--codex`, or `--all` in place of `--cursor` when those hosts should receive the same install. Restart the host so it loads the new skills and commands. Open the memory repository in the host and run the commands there. They write `docs/observability/`, the wiki, and `terraform/` into that repository.
 
 ## Install
 
+`install.sh` is a thin wrapper around `scripts/install.py`.
+
 ```bash
-git clone <this-repository> && cd obengineer
-
-./install.sh --cursor            # this user, Cursor
-./install.sh --claude --codex    # this user, two hosts
-./install.sh --all               # every supported host
+./install.sh --cursor --project /path/to/memory-repo
+./install.sh --claude --codex --project /path/to/memory-repo
+./install.sh --all --project /path/to/memory-repo
 ```
-
-Then restart your agent host so it picks up the new skills and commands.
 
 | Flag | Effect |
 |---|---|
 | `--cursor`, `--claude`, `--codex`, `--all` | Which hosts to install for |
-| `--project PATH` | Scope to one repository (`.cursor/`, `.claude/`, `.agents/` inside it) instead of this user |
-| `--copy` | Copy skills instead of symlinking, for a host that cannot follow links |
+| `--project PATH` | Install into one repository. Point this at the memory repository. |
+| `--copy` | Copy skills. The default is a symlink, so an edit to a canonical skill takes effect on the next run. |
 | `--list` | Show what is installed and the exact paths, then exit |
-| `--dry-run` | Print every action without taking it |
+| `--dry-run` | Print every action and take none |
 | `--uninstall` | Remove exactly what a previous install created, tracked by a manifest |
 
-Skills are symlinked by default, so editing a canonical skill takes effect without
-reinstalling. Commands are written as files because each one carries this bundle's
-resolved path.
-
-Host skill and command directories are conventions rather than standards and they move
-between versions. `--list` prints the resolved paths so a wrong guess is a visible
-inconvenience rather than a silent no-op:
+Commands are written as files. Each file carries this bundle's resolved path, so `/obengineer-analyze` reads the prompt in this checkout. Host skill and command directories move between versions. `--list` prints the resolved paths:
 
 ```
-$ ./install.sh --list
+$ ./install.sh --list --project /path/to/memory-repo
 obengineer at /Users/you/src/obengineer
-scope: user /Users/you
+scope: project /path/to/memory-repo
 
   Cursor       installed
-    skills   /Users/you/.cursor/skills
-    commands /Users/you/.cursor/commands
+    skills   /path/to/memory-repo/.cursor/skills
+    commands /path/to/memory-repo/.cursor/commands
   Claude Code  host present, not installed
     ...
 ```
 
-The only runtime dependency is the document renderer's:
+The document renderer needs `python-docx`:
 
 ```bash
 pip install python-docx      # or: make deps
 ```
 
-Claude Code can also take the whole bundle as a plugin, which brings the hooks and the
-MCP declarations along with the skills:
+Claude Code can take the whole bundle as a plugin. That install brings the hooks and the MCP declarations with the skills:
 
 ```bash
 claude plugin marketplace add /path/to/obengineer
@@ -133,19 +71,17 @@ claude plugin marketplace add /path/to/obengineer
 
 ## Commands
 
-The sequence in [How to use it](#how-to-use-it), in full. Seven commands; the
-first five run in order. They read the prompt files in place, so the run
-contract has exactly one copy and it is the copy under review.
+Seven commands. Each one reads its prompt file in place under `prompts/`, so the run contract under review is the one that ran. Intake, analyze, and wiki run in that order. After you accept the analysis, implement and as-code can run in parallel: implement changes application repositories, and as-code configures the tenant. Review grades a deliverable. Render rebuilds the Word file.
 
 | Command | Does | Produces |
 |---|---|---|
-| `/obengineer-intake` | Asks for the inputs no scan can measure, in one round | `engagement-inputs.yaml` |
+| `/obengineer-intake` | Asks for the inputs a scan cannot measure, in one round | `docs/observability/engagement-inputs.yaml` |
 | `/obengineer-analyze` | Deep-scans the front end, maps the backends from diagrams, raises the findings, and writes the full recommendation set | `analysis-<app>-<date>.md`, a customer `.docx`, `attribute-schema.json` |
 | `/obengineer-wiki` | Turns the accepted analysis into the notes the agents retrieve by subject | `wiki/<Customer>/<app>/`, work orders, tracked versions |
-| `/obengineer-implement` | Lands one contract slice with the CI check that keeps it enforced | A single-concern PR |
+| `/obengineer-implement` | Lands one contract slice with the CI check that keeps it enforced | A single-concern pull request |
 | `/obengineer-as-code` | Generates Terraform for the contract at three persona levels | A `terraform/` tree and a plan |
 | `/obengineer-review` | Grades a deliverable against the completeness bar before a human sees it | A pass, or numbered defects with lines |
-| `/obengineer-render` | Re-renders any deliverable and proves the render matches its source | A verified `.docx` |
+| `/obengineer-render` | Re-renders a deliverable and proves the render matches its source | A verified `.docx` |
 
 ```
 /obengineer-intake
@@ -155,80 +91,54 @@ contract has exactly one copy and it is the copy under review.
 /obengineer-as-code
 ```
 
-`/obengineer-implement` and `/obengineer-as-code` are independent — instrumentation lands in
-application repos, configuration lands in a tenant — so they can run in parallel once the
-analysis is accepted.
+Name a skill directly when you want one piece of a run: `$baggage-propagation`, `$cardinality-budget`, `$customer-doc-render`.
 
-Or name a skill directly when you want one piece rather than a whole run:
-`$baggage-propagation`, `$cardinality-budget`, `$customer-doc-render`.
+Source and a live URL carry more weight than a narrative. A diagram carries more weight than a recollection. Existing dashboards and detectors are inventory. What you omit, the run records as an open item.
 
-Nothing needs to be attached twice. The intake writes `engagement-inputs.yaml`, and
-every later run reads it — so the realm, the percentile standard, the diagram paths, and
-the entitlement numbers are given once and cannot drift between runs.
+Intake writes `engagement-inputs.yaml` once. Later runs read that file, so the realm, the percentile standard, the diagram paths, and the entitlement numbers stay in one place.
+
+## Where the files go
+
+```
+obengineer/                         # toolkit repository
+<memory-repo>/                      # memory repository
+    ├── docs/observability/         # the customer document and its .docx
+    ├── wiki/<Customer>/<app>/      # the agent wiki
+    ├── AGENTS.md · CLAUDE.md       # host pointers into that wiki
+    └── terraform/                  # what observability-as-code emits
+```
+
+Paths in the skills — `docs/observability/…`, `wiki/<Customer>/<app>/…` — are relative to the memory repository.
 
 ## Inputs
 
 One file, `engagement-inputs.yaml`, from
 [`inputs/engagement-inputs.template.yaml`](inputs/engagement-inputs.template.yaml).
-Filled once, visible, diffable, and reviewable. What each field decides:
+The intake writes it under `docs/observability/` in the memory repository. What each field decides:
 [`skills/references/engagement-inputs.md`](skills/references/engagement-inputs.md).
 
-Two sections are worth filling carefully, and neither constrains the design.
+**Entitlement prices the recommendation.** Given licensed and consumed custom metric time series (MTS), remaining Monitoring MetricSet slots, and the agreed per-tag ceiling, every proposed dimension has a computable cost. That cost, any overage, and the options go to the account team in `entitlement-exposure-<app>-<date>.md`. The recommendation stays what the application needs. A team that learns full checkout observability needs 40,000 more MTS can buy them, phase them, or promote fewer dimensions. Trimming to fit happens when `fit_to_entitlement` is set because they asked. When entitlement and a supplied traffic baseline are both absent, there is no exposure document and the run recommends as though licensing is sufficient. A supplied baseline is a list with values. An empty list leaves the range wide. A baseline with no entitlement is an expectation range.
 
-**Entitlement prices the recommendation.** Given licensed and consumed custom MTS, remaining
-Monitoring MetricSet slots, and the agreed per-tag ceiling, every proposed dimension has a
-computable cost — and that cost, with any overage and the options, goes to the **account team**
-in a separate `entitlement-exposure-<app>-<date>.md`. The recommendation itself stays what the
-application needs: a customer who learns that full checkout observability needs 40,000 more MTS
-may buy them, phase them, or promote fewer dimensions, and all three beat a dimension being
-dropped silently. Trimming to fit happens only when `fit_to_entitlement` is set because they
-asked. Given neither entitlement nor a supplied traffic baseline, there is no exposure
-document and the run recommends as though there is enough licensing. An empty list is
-not a supplied baseline. A baseline with no entitlement is an expectation range.
-
-**Business context is what makes the value section real.** Current MTTD/MTTA/MTTR, incidents a
-month, how many people join a bridge, what an engineering hour costs, what fraction of incidents
-customers report first, tooling spend, revenue per hour online — plus a paragraph of commentary
-in the customer's own words, which gets quoted rather than paraphrased. Every number may be
-`unknown`; none may be an industry benchmark. The analysis then reads the last twelve months of
-the public record — outage coverage, their own status history, complaints, field performance —
-and closes the document with **Business Value Realization**, every figure labelled `stated`,
-`measured`, `public`, or `derived`. See
+**Business context fills the value section.** Current MTTD, MTTA, and MTTR, incidents a month, how many people join a bridge, what an engineering hour costs, what fraction of incidents customers report first, tooling spend, revenue per hour online, and a paragraph in the customer's own words. The paragraph is quoted. Every number may be `unknown`. Fill none of them with an industry benchmark. The analysis then reads the last twelve months of the public record — outage coverage, status history, complaints, field performance — and closes the document with **Business Value Realization**. Every figure is labelled `stated`, `measured`, `public`, or `derived`. See
 [`skills/references/business-value.md`](skills/references/business-value.md) and
 [`skills/references/entitlement-exposure.md`](skills/references/entitlement-exposure.md).
 
-Everything a scan can measure is *not* an input. Composition, router, load order,
-competing agents, CSP, and consent gating are evidence, and asking about them converts
-evidence into opinion.
+Composition, router, load order, competing agents, content security policy, and consent gating are evidence the scan records. Leave them out of the inputs file.
 
-## What this produces
+## What the runs write
 
-Four runs, each with a run contract and an agent definition:
+Four runs, each with a prompt and an agent definition:
 
 | Run | Prompt | Output |
 |---|---|---|
-| Analyze | [`prompts/01-analyze-application.md`](prompts/01-analyze-application.md) | **The customer document** — architecture observed, critical findings, the full recommendation set, and the business value realization it closes on — plus its `.docx`, `attribute-schema.json`, and, when entitlement or a supplied traffic baseline exists, the account team's entitlement exposure document |
-| Wiki | [`prompts/02-build-instrumentation-wiki.md`](prompts/02-build-instrumentation-wiki.md) | `wiki/<Customer>/<app>/` — one note per BT, workflow, use case, finding, detector, and objective, plus work orders, the value workings, and tracked versions |
-| Implement | [`prompts/03-implement-instrumentation.md`](prompts/03-implement-instrumentation.md) | Small reviewable PRs, one contract slice each |
-| Configure | [`prompts/04-generate-observability-as-code.md`](prompts/04-generate-observability-as-code.md) | A `terraform/` tree and a plan — executive, SRE, and engineer modules |
+| Analyze | [`prompts/01-analyze-application.md`](prompts/01-analyze-application.md) | The customer document — architecture observed, critical findings, the recommendation catalogue, and Business Value Realization — plus its `.docx`, `attribute-schema.json`, and, when entitlement or a supplied traffic baseline exists, the account team's entitlement exposure document |
+| Wiki | [`prompts/02-build-instrumentation-wiki.md`](prompts/02-build-instrumentation-wiki.md) | `wiki/<Customer>/<app>/` in the memory repository: one note per business transaction, workflow, use case, finding, detector, and objective, plus work orders, the value workings, and tracked versions |
+| Implement | [`prompts/03-implement-instrumentation.md`](prompts/03-implement-instrumentation.md) | Small reviewable pull requests, one contract slice each |
+| Configure | [`prompts/04-generate-observability-as-code.md`](prompts/04-generate-observability-as-code.md) | A `terraform/` tree and a plan, in executive, SRE, and engineer modules |
 
-**One customer document, two renderings.** Markdown as the source of record, and a Word
-document for architecture review rendered from that same Markdown so the two cannot disagree.
-There is no separate "instrumentation recommendations" deliverable: it duplicated the
-analysis, no customer read it, and no agent could load it without spending its whole context
-on material irrelevant to the task in hand.
+The customer document has two renderings of one source. Markdown is the source of record. The Word file for architecture review is rendered from that Markdown. Critical findings are section 4, ordered by severity, with the files involved, the exposure, the remediation, and the verification. The body then carries business transactions, workflows, custom metrics, the business-transaction-to-workflow join, detectors with thresholds, indicators and objectives, and the composite use cases. It closes on Business Value Realization.
 
-The document leads with what a reader needs in the first six pages — the observed
-architecture, then **critical findings** ordered by severity with remediation, files, and
-exposure — carries the catalogue the build works from: business transactions, workflows, custom
-metrics, the BT-to-workflow join, detectors with thresholds, indicators and objectives in the
-customer's voice, then the composite use cases — and closes on **Business Value Realization**,
-built from the customer's own numbers, the cited public record, and measured performance.
-
-The lower layer is a **wiki**, one note per subject under `wiki/<Customer>/<app>/`, with
-frontmatter and wikilinks that Obsidian and the Cursor, Claude, and Codex memory features can
-read. It is what makes a periodic run a delta rather than a rewrite, and what makes a CI
-pipeline possible at all. See
+The wiki sits under that document: one note per subject at `wiki/<Customer>/<app>/`, with frontmatter and wikilinks that Obsidian and the Cursor, Claude, and Codex memory features can read. A later run reads those notes and reports the delta. See
 [`skills/references/agent-wiki.md`](skills/references/agent-wiki.md),
 [`skills/references/incremental-runs.md`](skills/references/incremental-runs.md), and
 [`skills/references/ci-integration.md`](skills/references/ci-integration.md).
@@ -237,101 +147,57 @@ pipeline possible at all. See
 
 | Skill | Purpose |
 |---|---|
-| `$engagement-intake` | Collect and validate the inputs no scan can reach — artifacts, tenancy, entitlement, privacy regime, who deploys what, and the business context behind the engagement — into one file, asking only for what is missing |
-| `$instrumentation-analyze` | Deep-scan the front end (script order, competing agents, where the agent initialises, router, CSP, consent, status-versus-content), map backends and buses, inventory the existing portfolio footprint, enumerate business transactions from evidence — then write the customer document in canonical template order, findings at section 4 and the catalogue closing the body, emit all three artifacts, read the last twelve months of the public record for the value section, and price the recommendation for the account team when entitlement or a supplied traffic baseline exists |
+| `$engagement-intake` | Collect the inputs a scan cannot reach — artifacts, tenancy, entitlement, privacy regime, who deploys what, and the business context — into one file, asking only for what is missing |
+| `$instrumentation-analyze` | Deep-scan the front end (script order, competing agents, where the agent initialises, router, content security policy, consent, status versus content), map backends and buses, inventory the existing Splunk and ThousandEyes footprint, enumerate business transactions from evidence, write the customer document in template order with findings at section 4, emit the three artifacts, read the last twelve months of the public record, and price the recommendation for the account team when entitlement or a supplied traffic baseline exists |
 | `$instrumentation-wiki` | Turn the accepted analysis into one note per subject, with work orders, the value workings and their cited sources, tracked versions, and the host memory pointers |
-| `$baggage-propagation` | The cross-cutting attribute set and W3C Baggage contract: set once, propagate, stamp on every span via `SpanProcessor.onStart` — and the byte budget that decides which keys earn a place in the header |
-| `$cardinality-budget` | Dimension versus attribute-only as arithmetic: MTS cost per promotion, MMS and TMS sizing, the classifiers that replace raw URLs and topic names, and the priced overage the account team gets when the total exceeds what the customer owns |
-| `$customer-doc-render` | Render Markdown to a customer-review `.docx` — simple title page, Table of Contents, one section per page, clickable section and appendix references, `Confidential` footer — then prove the render matches its source |
-| `$instrumentation-implement` | Land the contract as ordered PRs, with the CI checks that keep it enforced |
-| `$observability-as-code` | Emit the contract as Terraform across the three Splunk providers — executive, SRE, and engineer modules — importing what the tenant already has and refusing any grouping the schema cannot support |
+| `$baggage-propagation` | The cross-cutting attribute set and the W3C Baggage contract: set once, propagate, stamp on every span with `SpanProcessor.onStart`, inside a byte and key-count budget |
+| `$cardinality-budget` | Dimension versus attribute-only as arithmetic: MTS cost per promotion, Monitoring and Troubleshooting MetricSet sizing, the classifiers that replace raw URLs and topic names, and the priced overage the account team gets when the total exceeds the entitlement |
+| `$customer-doc-render` | Render Markdown to a customer-review `.docx` — title page, table of contents, one section per page, clickable section and appendix references, `Confidential` footer — then prove the render matches its source |
+| `$instrumentation-implement` | Land the contract as ordered pull requests, with the CI checks that keep it enforced |
+| `$observability-as-code` | Emit the contract as Terraform across the three Splunk providers — executive, SRE, and engineer modules — importing what the tenant already has and refusing a grouping the schema cannot support |
 | `$deliverable-review` | Grade a finished deliverable against the completeness bar, separately from whoever wrote it, and report defects by rubric row with line numbers |
 
-## Working on this repo
+## Working on this repository
 
 ```bash
-make test                # contract tests over the agentry and the renderer round-trip
-make check               # packaging consistency: plugin mirror, manifest versions
+make test                # contract tests over the toolkit and the renderer round-trip
+make check               # plugin copies match canonical skills; manifest versions agree
 make sync-plugin-skills  # refresh plugin copies and host links from canonical skills
 ```
 
-`make test` and `make check` run on every pull request, along with an install and
-uninstall round-trip into a scratch project — see `.github/workflows/ci.yml`. The
-round-trip is there because a fresh clone that cannot install is the failure nobody
-notices locally, where the skills are already installed.
+`make test` and `make check` run on every pull request, with an install and uninstall round-trip into a scratch project. See `.github/workflows/ci.yml`.
 
-`skills/` is the single source. The plugin carries copies so an installed bundle is
-self-contained; refresh them with `make sync-plugin-skills` and never edit them
-directly. See [`AGENTS.md`](AGENTS.md) for the review rules,
-[`CONTRIBUTING.md`](CONTRIBUTING.md) for the workflow,
-[`docs/design.md`](docs/design.md) for why the layout is shaped this way, and
-[`docs/reviews/`](docs/reviews/) for the standing architecture reviews — including what
-is deliberately not built yet and why.
+`skills/` is the single source. The plugin carries copies so an installed bundle is self-contained. Refresh them with `make sync-plugin-skills`. See [`AGENTS.md`](AGENTS.md) for the review rules, [`CONTRIBUTING.md`](CONTRIBUTING.md) for the workflow, [`docs/design.md`](docs/design.md) for why the layout is shaped this way, and [`docs/reviews/`](docs/reviews/) for the standing architecture reviews.
 
-One rule underpins the rest: **one authority per fact.** The section list lives only in
-`skills/references/document-template.md`, the platform decision rules only in
-`portfolio-decision-engine.md`, the layout only in `document-format.json`. Agent files
-route to them and never restate them, capped at 2,500 words and tested. A second copy
-drifts, and then two files both claim to say what a deliverable contains.
+Each fact has one home. The section list lives in `skills/references/document-template.md`. The platform decision rules live in `portfolio-decision-engine.md`. The `.docx` layout lives in `document-format.json`. Agent files route to those files and stay under 2,500 words. The tests fail when an agent file restates a reference.
 
-## Three references do the heavy lifting
+## References
 
-Self-contained, so each is reproducible in a fresh session with no prior customer
-document to copy from:
+Each of these is enough to reproduce its part of a deliverable in a fresh session:
 
-- **[`skills/references/document-template.md`](skills/references/document-template.md)** — the canonical customer document: section order, every table's columns, the title page, and the pre-delivery checklist.
-- **[`skills/references/cross-cutting-attributes.md`](skills/references/cross-cutting-attributes.md)** — the mandatory baggage section, with the attribute-set table and all five code subsections.
-- **[`skills/references/baggage-budget.md`](skills/references/baggage-budget.md)** — which keys are worth carrying, the five tests each must pass, and where the rejected ones go instead.
+- [`skills/references/document-template.md`](skills/references/document-template.md) — the customer document: section order, every table's columns, the title page, and the pre-delivery checklist.
+- [`skills/references/cross-cutting-attributes.md`](skills/references/cross-cutting-attributes.md) — the baggage section, with the attribute-set table and all five code subsections.
+- [`skills/references/baggage-budget.md`](skills/references/baggage-budget.md) — which keys earn a place in the header, the five tests each must pass, and where the others go.
 
-Two more govern what the document says about money, and they are separate on purpose:
-[`business-value.md`](skills/references/business-value.md) for the value the customer reads,
-and [`entitlement-exposure.md`](skills/references/entitlement-exposure.md) for the cost the
-account team reads. Mixing them turns a technical review into a negotiation.
+Two more govern money, and they stay separate. [`business-value.md`](skills/references/business-value.md) is the value the customer reads. [`entitlement-exposure.md`](skills/references/entitlement-exposure.md) is the cost the account team reads.
 
 ## MCP servers
 
-`plugins/obengineer/.mcp.json` ships with an empty `mcpServers` object. A placeholder
-command fails plugin startup, so the operator copies an entry from `.mcp.optional.json`
-and supplies their own command. **Splunk Observability Cloud and Splunk Enterprise are
-mandatory.** ThousandEyes, a local OpenTelemetry tools server, and a cloud inventory
-MCP for whatever cloud the site runs on are recommended. A Jira server is used only
-when the host already has one connected. The classification, and what each server is
-read for, lives in
-[`skills/references/mcp-servers.md`](skills/references/mcp-servers.md).
+`plugins/obengineer/.mcp.json` ships with an empty `mcpServers` object. Copy an entry from `.mcp.optional.json` and supply your own command. Splunk Observability Cloud and Splunk Enterprise are mandatory. ThousandEyes, a local OpenTelemetry tools server, and a cloud inventory server for the cloud the site runs on are recommended. A Jira server is used when the host already has one connected. The classification lives in [`skills/references/mcp-servers.md`](skills/references/mcp-servers.md).
 
-**Never** put a token value in either file. `${VAR}` references only, since both are
-committed. The design runs against any site; do not leave a previous site's endpoint
-in the copied entry.
+Keep token values out of both files. Use `${VAR}` references. Both files are committed. The design runs against any site. Put the current site's endpoint in the copied entry.
 
-## Operating on an engagement from this checkout
+## Rebuild deliverables from the toolkit checkout
 
-Not setup. The `/obengineer-*` commands write the document and the wiki into the
-engagement repository. These `make` targets are for later, when you are standing
-in *this* checkout — where the renderer and the wiki verifier live — and you
-want to rebuild or check those artifacts without starting an agent session.
-
-`ENGAGEMENT` is how a path that lives in the other repository stays short.
-Substitute the real analysis filename and wiki directory; `<app>`, `<date>`,
-and `<Customer>` are placeholders.
+The `/obengineer-*` commands write the document and the wiki into the memory repository. These `make` targets rebuild or check those artifacts from this checkout, where the renderer and the wiki verifier live. `ENGAGEMENT` is the path to the memory repository. Substitute the real analysis filename and wiki directory. `<app>`, `<date>`, and `<Customer>` are placeholders.
 
 ```bash
-export ENGAGEMENT=/path/to/engagement-repo
+export ENGAGEMENT=/path/to/memory-repo
 make render FILE=docs/observability/analysis-<app>-<date>.md
 make verify-wiki WIKI="wiki/<Customer>/<app>"
 ```
 
-- **`make render`** rebuilds the customer `.docx` from the Markdown analysis and
-  proves the Word file matches its source (headings, page breaks, links, no
-  leftover markers). Same job as `/obengineer-render`, without a chat.
-- **`make verify-wiki`** checks the agent wiki: wikilinks resolve, frontmatter
-  is complete, index counts match the tree, host pointers exist, no
-  credential-shaped values. Run it before you trust `/obengineer-implement`
-  to read those notes.
-
-An absolute path always wins. With `ENGAGEMENT` unset, the same relative paths
-are resolved from the current directory, so they only work if the files are
-here — which they are not. The env var is what lets the toolkit and the
-deliverables stay in two repositories.
+`make render` rebuilds the customer `.docx` from the Markdown analysis and proves the Word file matches its source. `make verify-wiki` checks that wikilinks resolve, frontmatter is complete, index counts match the tree, host pointers exist, and no credential-shaped values are present. An absolute path is used as given. With `ENGAGEMENT` unset, a relative path is resolved from the current directory.
 
 ## License
 
