@@ -147,12 +147,16 @@ Inspect project-scoped status:
 ./install.sh --list --project /path/to/memory-repo
 ```
 
-Upgrade a symlink-based installation:
+Upgrade a symlink-based installation by reusing the original host selectors. For
+example, upgrade a Cursor-only installation with:
 
 ```bash
 git pull --ff-only
-./install.sh --all --project /path/to/memory-repo
+./install.sh --cursor --project /path/to/memory-repo
 ```
+
+Use `--all` only when all three hosts were installed originally or should be installed
+now.
 
 Preview and then remove selected hosts:
 

@@ -78,8 +78,9 @@ after reviewing the contract.
 - `docs/observability/engagement-inputs.yaml` exists.
 - A production URL exists unless `artifacts.front_end_scan_notes` explicitly says
   `no browser: <reason>`.
-- Every supplied source, diagram, and artifact path resolves. Unavailable source or
-  diagrams are recorded as evidence gaps rather than blocking the run.
+- Every referenced source, diagram, and artifact path resolves. A referenced but
+  missing file blocks intake so it cannot become a phantom citation. Evidence that was
+  not supplied is recorded as a gap rather than guessed.
 - Tenant integrations are configured when tenant facts must be measured.
 
 If inputs are absent or incomplete, the command invokes intake rather than filling gaps
