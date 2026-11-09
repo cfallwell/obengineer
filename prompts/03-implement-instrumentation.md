@@ -24,7 +24,7 @@ PII deny list is enforced. If you see tokens in the repo, stop and report. Do no
 ## Inputs
 
 - Analysis document: `docs/observability/analysis-<app>-<date>.md`
-- Wiki work orders: `wiki/<Customer>/<app>/implementation/work-orders/`
+- Wiki work orders: `wiki/apps/<app>/services/<service>/implementation/work-orders/`
 - Schema: `docs/observability/attribute-schema.json`
 - Engagement inputs: `docs/observability/engagement-inputs.yaml` — `backends.languages` and
   `.deploy_targets` for which SDK, `constraints.who_deploys_front_end` and

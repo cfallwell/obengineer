@@ -3,7 +3,7 @@ name: instrumentation-wiki
 description: >-
   Turn an accepted analysis into the structured wiki the agents work from: one
   note per business transaction, workflow, use case, finding, detector, and
-  objective under wiki/<Customer>/<app>/, with frontmatter and wikilinks that
+  objective under wiki/apps/<app>/services/<service>/, with frontmatter and wikilinks that
   Obsidian and the Cursor, Claude, and Codex memory features can read. Also
   emits attribute-schema.json, the tracked-versions note, the run log, and the
   work orders the implementer agent executes. Use when the user types
@@ -47,9 +47,18 @@ Prompt: [`../../prompts/02-build-instrumentation-wiki.md`](../../prompts/02-buil
 ## Output
 
 ```
-wiki/<Customer>/<app>/          # notes — see agent-wiki.md for the full tree
+wiki/apps/<app>/index.md                          # the website and its services
+wiki/apps/<app>/services/<service>/               # notes — see agent-wiki.md for the full tree
 docs/observability/attribute-schema.json
 ```
+
+Create `wiki/apps/<app>/` and `wiki/apps/<app>/services/<service>/` for each app and each
+backend service that app uses. Take the names from the accepted analysis. The run creates
+these directories. A human does not create them first.
+
+When two apps use the same service, write a service note under each app and join the notes
+with `[[apps/<other-app>/services/<service>/index]]`. A shared service is recorded under
+each app and linked. It is not moved to a single global folder that neither app owns.
 
 Plus the host memory pointers — `.cursor/rules/obengineer-wiki.mdc`, `CLAUDE.md`,
 `AGENTS.md` — each a pointer to the index note, never a copy of it.
@@ -61,7 +70,7 @@ would read cover to cover, it has recreated the artifact this design removed.
 
 ### Step 1 — Establish the run type before writing anything
 
-Does `wiki/<Customer>/<app>/index.md` exist? No wiki means a first run. A wiki with run-log
+Does `wiki/apps/<app>/services/<service>/index.md` exist? No wiki means a first run. A wiki with run-log
 entries means a **delta**: read `meta/`, the accepted names, and the finding frontmatter
 *before* scanning, or the run will invent names that already exist and rename things that
 have dashboards built on them. Rules: [`../references/incremental-runs.md`](../references/incremental-runs.md).
@@ -175,7 +184,7 @@ one that will be wrong.
 ### Step 10 — Verify the wiki, then close the run
 
 ```bash
-python3 scripts/verify_wiki.py "wiki/<Customer>/<app>"
+python3 scripts/verify_wiki.py "wiki/apps/<app>/services/<service>"
 ```
 
 It checks what a reader will not: the notes every wiki must have, `type` / `status` / `updated`

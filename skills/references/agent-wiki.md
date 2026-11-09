@@ -12,66 +12,77 @@ can read.
 
 ## Where it lives
 
+An app is a website. Backend services live under the app that uses them. The run creates this tree from the apps and services it finds in the analysis. A human does not create the folders first.
+
 ```
 wiki/
-  README.md                       # entry point: customers, conventions, how to read this
-  <Customer>/
-    README.md                     # customer-level: tenancy, entitlement, contacts, applications
+  README.md                       # entry point: apps, conventions, how to read this
+  apps/
     <app>/
-      index.md                    # map of content for this application — the note an agent loads first
-      meta/
-        engagement-inputs.yaml    # the run's inputs, copied here on completion
-        versions.md               # tool, SDK, semconv, and provider versions this app is designed against
-        run-log.md                # one row per architect or implementer run, newest first
-        decisions.md              # accepted decisions with their date and rationale (an ADR log)
-      architecture/
-        observed.md               # the composition, as of the last run
-        surfaces.md               # bundles, routes, chunk map
-        buses.md                  # one section per bus: topics, accounts crossed, inject/extract state
-        third-parties.md          # every third party, its purpose, and its telemetry consequence
-      findings/
-        F-01-<slug>.md            # one note per finding, with status: open | fixed | regressed | accepted
-      contract/
-        cross-cutting.md          # the attribute set and the five code patterns
-        baggage.md               # the budget, the allowlist, and each key's named consumer
-        collector.md              # the config and why each processor is where it is
-        mpm.md                    # dimension-eligible and attribute-only, with the arithmetic
-        attribute-schema.json     # the machine form — the same file the document appendix generates
-      business-transactions/
-        <bt>.md                   # one note per BT: surface, owning artifact, flag, workflows
-      workflows/
-        <workflow>.md             # one note per workflow: intent, spans, attributes, metrics, SLI, detectors
-      use-cases/
-        <flow>.md                 # the composite: narrative, identity, dashboard, joins
-      metrics/
-        custom-meters.md
-      detectors/
-        <detector>.md             # condition, threshold and its provenance, arm state, runbook
-      slos/
-        <sli>.md                  # user-facing statement, queries, objective, budget, burn rate
-      business/
-        value-model.md            # the value arithmetic and its coefficients, each labelled
-        public-evidence.md        # cited public sources with their read dates
-        asks.md                   # the inputs that would make the value case quantitative
-        entitlement-exposure.md   # when entitlement or a supplied baseline exists; absent when neither does
-      implementation/
-        work-orders/<nn>-<slice>.md   # what the implementer agent will do, one note per PR-sized slice
-        enforcement.md            # the CI checks that keep the contract true
-      as-code/
-        inventory.md              # what exists in the tenant, what Terraform owns, what was imported
-        refusals.md               # what could not be generated and the missing key for each
+      index.md                    # this website and the services it uses, as wikilinks
+      services/
+        <service>/
+          index.md                # map of content for this service — the note an agent loads for the service
+          meta/
+            engagement-inputs.yaml    # the run's inputs, copied here on completion
+            versions.md               # tool, SDK, semconv, and provider versions this service is designed against
+            run-log.md                # one row per architect or implementer run, newest first
+            decisions.md              # accepted decisions with their date and rationale (an ADR log)
+          architecture/
+            observed.md               # the composition, as of the last run
+            surfaces.md               # bundles, routes, chunk map
+            buses.md                  # one section per bus: topics, accounts crossed, inject/extract state
+            third-parties.md          # every third party, its purpose, and its telemetry consequence
+          findings/
+            F-01-<slug>.md            # one note per finding, with status: open | fixed | regressed | accepted
+          contract/
+            cross-cutting.md          # the attribute set and the five code patterns
+            baggage.md                # the budget, the allowlist, and each key's named consumer
+            collector.md              # the config and why each processor is where it is
+            mpm.md                    # dimension-eligible and attribute-only, with the arithmetic
+            attribute-schema.json     # the machine form — the same file the document appendix generates
+          business-transactions/
+            <bt>.md                   # one note per BT: surface, owning artifact, flag, workflows
+          workflows/
+            <workflow>.md             # one note per workflow: intent, spans, attributes, metrics, SLI, detectors
+          use-cases/
+            <flow>.md                 # the composite: narrative, identity, dashboard, joins
+          metrics/
+            custom-meters.md
+          detectors/
+            <detector>.md             # condition, threshold and its provenance, arm state, runbook
+          slos/
+            <sli>.md                  # user-facing statement, queries, objective, budget, burn rate
+          business/
+            value-model.md            # the value arithmetic and its coefficients, each labelled
+            public-evidence.md        # cited public sources with their read dates
+            asks.md                   # the inputs that would make the value case quantitative
+            entitlement-exposure.md   # when entitlement or a supplied baseline exists; absent when neither does
+          implementation/
+            work-orders/<nn>-<slice>.md   # what the implementer agent will do, one note per PR-sized slice
+            enforcement.md            # the CI checks that keep the contract true
+          as-code/
+            inventory.md              # what exists in the tenant, what Terraform owns, what was imported
+            refusals.md               # what could not be generated and the missing key for each
 ```
 
-Two rules about the path, and they are the load-bearing ones:
+Three rules about the path, and they are the load-bearing ones:
 
-**Customer first, then application.** A customer has more than one application and the
-things that are true at the customer level — realm, entitlement, privacy regime, who holds a
-credential — are true for all of them and must not be duplicated per application, because
-duplicated facts drift and then two applications disagree about the same MTS budget.
+**Apps, then the services each app uses.** The path is `wiki/apps/<app>/services/<service>/`.
+The run creates `wiki/apps/<app>/` and `wiki/apps/<app>/services/<service>/` for every app
+and every backend service that app uses. A human does not create those folders first.
+Realm, entitlement, and privacy regime stay in `docs/observability/engagement-inputs.yaml`.
+Each app index links that file, so those facts have one home.
+
+**A shared service is recorded under each app and linked.** When two apps use the same
+backend service, each app has its own service note at
+`wiki/apps/<app>/services/<service>/`. Join the two notes with a path wikilink,
+`[[apps/<other-app>/services/<service>/index]]`. The service stays under each app that
+uses it. It is not moved to a single global folder that neither app owns.
 
 **The application directory name is the `<app>` identifier used everywhere else**: in
-`service.name`, in the document filename, in the `<org>.bt` prefix. One string, so a grep
-finds everything.
+the document filename and in the `<org>.bt` prefix. The service directory name is the
+`<service>` identifier used for that backend. One string each, so a grep finds everything.
 
 ## A note earns its file
 
@@ -132,14 +143,14 @@ never a copy, because a copy is a second authority that drifts:
 
 | Host | File | Contents |
 |---|---|---|
-| Cursor | `.cursor/rules/obengineer-wiki.mdc` | `alwaysApply: true`, and the path to `wiki/<Customer>/<app>/index.md` plus the retrieval rule below |
+| Cursor | `.cursor/rules/obengineer-wiki.mdc` | `alwaysApply: true`, and the path to `wiki/apps/<app>/index.md` plus the retrieval rule below |
 | Claude Code | `CLAUDE.md` (or an `@import` from it) | the same pointer |
 | Codex / generic | `AGENTS.md` | the same pointer |
 
 The retrieval rule those pointers carry, verbatim, because it is the whole discipline:
 
-> Before changing instrumentation, read `wiki/<Customer>/<app>/index.md`, then only the notes
-> for the BTs and workflows in scope. Do not load the whole wiki. After a change lands,
+> Before changing instrumentation, read `wiki/apps/<app>/index.md`, then only the service
+> notes and the BT and workflow notes in scope. Do not load the whole wiki. After a change lands,
 > update the `status` and `updated` fields of the notes you touched in the same commit.
 
 "Do not load the whole wiki" is the point of having a wiki. A run that reads all of it has

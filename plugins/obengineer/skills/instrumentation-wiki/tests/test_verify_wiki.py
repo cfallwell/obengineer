@@ -30,7 +30,7 @@ verify = _load("verify_wiki")
 
 POINTER = """# Agents
 
-Before changing instrumentation, read `wiki/Customer/app/index.md`, then only the notes
+Before changing instrumentation, read `wiki/apps/app/services/payments/index.md`, then only the notes
 for the BTs and workflows in scope. Do not load the whole wiki. After a change lands, update
 the `status` and `updated` fields of the notes you touched in the same commit.
 """
@@ -53,7 +53,7 @@ def note(title: str, kind: str, status: str, body: str = "Content line.\n") -> s
 
 @pytest.fixture
 def wiki(tmp_path: Path) -> Path:
-    app = tmp_path / "wiki" / "Customer" / "app"
+    app = tmp_path / "wiki" / "apps" / "app" / "services" / "payments"
     for directory in ("meta", "contract", "findings", "business-transactions",
                       "use-cases", "slos", "business", "implementation/work-orders"):
         (app / directory).mkdir(parents=True, exist_ok=True)
@@ -112,8 +112,13 @@ def wiki(tmp_path: Path) -> Path:
     return app
 
 
+def repo_root(service: Path) -> Path:
+    # wiki/apps/<app>/services/<service> — five levels up is the repository root.
+    return service.parents[4]
+
+
 def failures(app: Path) -> list[str]:
-    return verify.check(app, app.parent.parent.parent, index_max_lines=200)
+    return verify.check(app, repo_root(app), index_max_lines=200)
 
 
 def test_a_conforming_wiki_passes(wiki: Path):
@@ -179,14 +184,32 @@ def test_versions_without_a_provenance_column_is_caught(wiki: Path):
 
 
 def test_a_missing_host_pointer_is_caught(wiki: Path):
-    (wiki.parent.parent.parent / "CLAUDE.md").unlink()
+    (repo_root(wiki) / "CLAUDE.md").unlink()
     assert any("no host pointer at CLAUDE.md" in f for f in failures(wiki))
 
 
 def test_a_pointer_without_the_retrieval_rule_is_caught(wiki: Path):
-    (wiki.parent.parent.parent / "AGENTS.md").write_text(
-        "Read `wiki/Customer/app/index.md` and update notes in the same commit.\n")
+    (repo_root(wiki) / "AGENTS.md").write_text(
+        "Read `wiki/apps/app/services/payments/index.md` and update notes in the same commit.\n")
     assert any("AGENTS.md does not carry the retrieval rule" in f for f in failures(wiki))
+
+
+def test_a_shared_service_path_wikilink_resolves(wiki: Path, tmp_path: Path):
+    other = tmp_path / "wiki" / "apps" / "other-app" / "services" / "payments"
+    other.mkdir(parents=True)
+    (other / "index.md").write_text(note("payments", "reference", "designed",
+                                         body="Used by [[apps/app/services/payments/index]].\n"))
+    text = (wiki / "index.md").read_text()
+    (wiki / "index.md").write_text(
+        text + "\nShared service: [[apps/other-app/services/payments/index]].\n")
+    assert failures(wiki) == []
+
+
+def test_a_missing_shared_service_path_is_broken(wiki: Path):
+    text = (wiki / "index.md").read_text()
+    (wiki / "index.md").write_text(
+        text + "\nShared service: [[apps/missing-app/services/payments/index]].\n")
+    assert any("broken wikilink" in f for f in failures(wiki))
 
 
 def test_a_credential_in_a_note_is_caught(wiki: Path):

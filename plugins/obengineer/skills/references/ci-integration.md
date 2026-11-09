@@ -50,7 +50,7 @@ reviewable and to keep it from becoming the thing everyone disables:
 a reviewable proposal, and a bot with merge rights is a bot nobody reads.
 
 **One work order per pull request**, from
-`wiki/<Customer>/<app>/implementation/work-orders/`. A pull request that instruments four
+`wiki/apps/<app>/services/<service>/implementation/work-orders/`. A pull request that instruments four
 workflows is a pull request that gets approved without being read.
 
 **Scoped to what the contract already names.** It implements accepted design; it does not
