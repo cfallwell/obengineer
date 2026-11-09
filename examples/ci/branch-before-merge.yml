@@ -1,0 +1,84 @@
+# Pre-merge branch job.
+#
+# Lives in the application repository. Runs on the pull-request head, before
+# merge, and updates the contract and one instrumentation slice on that same
+# branch. It never merges and it never pushes to the default branch.
+#
+# The strategy is skills/references/ci-integration.md, section "Pre-merge
+# branch job". Copy this file and point the two echo steps at the runner your
+# organisation already uses. Do not guess an MCP command here. GitHub, GitLab,
+# and Jira are used when the developer environment already has them; this
+# workflow only checks out the branch the forge already handed it.
+#
+# A commit message that starts with "obengineer:" is this job's own push.
+# Skipping it is what stops the job from looping.
+
+name: obengineer branch
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: obengineer-branch-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  on-branch:
+    if: github.event.pull_request.head.ref != github.event.repository.default_branch
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.head_ref }}
+          fetch-depth: 0
+
+      - name: ignore this job's own commit
+        id: gate
+        run: |
+          subject=$(git log -1 --pretty=%s)
+          case "$subject" in
+            obengineer:*)
+              echo "skip=true" >> "$GITHUB_OUTPUT"
+              echo "Head commit is already an obengineer update."
+              ;;
+            *)
+              echo "skip=false" >> "$GITHUB_OUTPUT"
+              ;;
+          esac
+
+      - name: require a developer scope
+        if: steps.gate.outputs.skip != 'true'
+        run: |
+          python3 - <<'PY'
+          import pathlib, sys
+          text = pathlib.Path("docs/observability/engagement-inputs.yaml").read_text() if pathlib.Path("docs/observability/engagement-inputs.yaml").exists() else ""
+          if "initial_scope:" not in text or "repositories: []" in text and "services: []" in text:
+              print("Name initial_scope.repositories or initial_scope.services before this job writes code.")
+              print("An empty scope is not permission to scan every project a host can see.")
+              sys.exit(1)
+          print("scope present")
+          PY
+
+      - name: layer-1 checks against this branch
+        if: steps.gate.outputs.skip != 'true'
+        run: |
+          echo "Run the checks from contract-checks.yml on this checkout."
+          echo "A key the contract does not name fails the pull request."
+
+      - name: update the contract and one slice on this branch
+        if: steps.gate.outputs.skip != 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          echo "Delta-update the contract for paths inside initial_scope, then implement one work order."
+          echo "Commit message prefix: obengineer:"
+          echo "Push to ${{ github.head_ref }}. Do not merge. Do not open a second pull request."
+          # your-agent-cli run \
+          #   --branch "${{ github.head_ref }}" \
+          #   --scope docs/observability/engagement-inputs.yaml \
+          #   --prompt-file .obengineer/prompts/03-implement-instrumentation.md

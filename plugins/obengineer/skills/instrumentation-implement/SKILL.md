@@ -51,6 +51,7 @@ The order is the dependency graph, not a preference.
 ## Rules
 
 - **One contract slice per PR.** A PR that adds the library, wires identity, and instruments three journeys cannot be reviewed or reverted.
+- **Run on the branch under review.** The checkout may be an unmerged pull-request branch. Commit the slice there. The default branch is not required, and this skill does not merge. The pre-merge job is [`../references/ci-integration.md`](../references/ci-integration.md).
 - **Never widen `init`.** Exactly one artifact initialises the provider. Remotes, micro-frontends, and page bundles consume the shared library.
 - **No enable-all.** Turn on the instrumentations the guide named, and no others. Each additional one costs runtime budget on a page that may already be loading several agents.
 - **Attribute names come from the guide.** If a name is wrong, change the guide and the schema first, then the code. Renaming in code alone breaks the dashboards the TAM already built.

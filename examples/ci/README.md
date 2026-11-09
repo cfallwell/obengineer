@@ -8,6 +8,7 @@ not a framework, and a workflow nobody read is a workflow nobody can debug.
 | File | Repository | Layer |
 |---|---|---|
 | [`contract-checks.yml`](contract-checks.yml) | the application repo | 1 — deterministic checks on every pull request |
+| [`branch-before-merge.yml`](branch-before-merge.yml) | the application repo | pre-merge — update the contract and one slice on the pull-request branch; never merge |
 | [`agent-instrument.yml`](agent-instrument.yml) | the application repo | 2 — the agent proposes instrumentation as a pull request |
 | [`terraform-plan-apply.yml`](terraform-plan-apply.yml) | the observability config repo | 3 — plan on pull request, apply on merge |
 

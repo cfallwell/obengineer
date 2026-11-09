@@ -24,6 +24,7 @@ gives the engagement an artifact that outlives the chat.
 | Section | Decides | Blank means |
 |---|---|---|
 | `engagement` | Filenames, document title, version on the deliverable | The run invents a name, and the next run invents a different one |
+| `initial_scope` | Which repositories and services the developer is starting with, and the QA or test environment. A connected GitHub, GitLab, or other repository MCP may list the candidates; the developer chooses | The run asks and does not scan every project the host can see. An empty branch means the current checkout, including an unmerged pull request |
 | `artifacts` | Whether the backend map starts from a diagram the human already has; whether an existing taxonomy of **this** application is extended | Journeys get named from a product playbook instead of this application. A file from a different site is not this row |
 | `cloud_diagrams` | Whether the run may draw QA, pre-production, or production architecture from a cloud inventory MCP already connected for this site | No generated diagram. The human's own diagrams still count. Any cloud |
 | `surfaces` | The live site scan. Required for whatever site this engagement names, unless `front_end_scan_notes` is `no browser: <reason>` | The run stops and asks for URLs. It does not invent a site and it does not reuse a previous scan |

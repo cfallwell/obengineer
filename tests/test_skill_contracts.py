@@ -826,6 +826,27 @@ def test_repeat_runs_are_deltas_and_carry_findings_forward():
     )
 
 
+def test_pre_merge_branch_job_updates_the_contract_without_merging():
+    """Skills run on an unmerged branch. A sprint move queues work; CI does not merge."""
+    spec = (SKILLS / "references" / "ci-integration.md").read_text()
+    mcp = (SKILLS / "references" / "mcp-servers.md").read_text()
+    template = (ROOT / "inputs" / "engagement-inputs.template.yaml").read_text()
+    example = (ROOT / "examples" / "ci" / "branch-before-merge.yml").read_text()
+
+    assert "Pre-merge branch job" in spec
+    assert "Do not merge" in spec
+    assert "obengineer:" in spec
+    assert "initial_scope" in spec
+    assert "never pushes to the default branch" in spec
+    assert "sprint" in mcp and "GitHub" in mcp and "GitLab" in mcp
+    assert "one Jira issue" in mcp or "one\nJira issue" in mcp
+    assert "initial_scope:" in template
+    assert "repositories:" in template and "services:" in template
+    assert "pull_request:" in example
+    assert "Do not merge" in example
+    assert "github.head_ref" in example
+
+
 def test_ci_layers_are_ordered_and_have_runnable_examples():
     spec = (SKILLS / "references" / "ci-integration.md").read_text()
     one = spec.index("Contract checks")

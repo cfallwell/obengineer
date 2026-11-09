@@ -81,7 +81,8 @@ engagement is for, drop those values and tell the human they were not kept.
 Before asking, look at the MCP servers already connected in this session.
 
 - **Splunk Observability Cloud and Splunk Enterprise are mandatory.** If either is absent, the gap report says so and points at copying that entry from `plugins/obengineer/.mcp.optional.json` with the organisation's own command. Do not invent a command. Tenant facts gathered without them are `stated`, not `measured`.
-- **Jira, if present.** When a Jira server is already connected, read issue keys that match `outcomes.known_pain` and record the keys. When it is not connected, do not add one.
+- **Jira, if present.** When a Jira server is already connected, read issue keys that match `outcomes.known_pain` and record the keys. After work orders exist, converting them into issues, and queueing a slice when its issue moves into a sprint, follows [`mcp-servers.md`](../references/mcp-servers.md). Intake does not create those issues and does not start coding. When Jira is not connected, do not add it.
+- **Repository hosts, if present.** When a GitHub, GitLab, or other repository MCP is already connected, list the projects and codebases it can see and let the developer choose `initial_scope` from that list. Do not adopt every repository it can reach, and do not add the server.
 - **Recommend, do not require,** the other servers in [`mcp-servers.md`](../references/mcp-servers.md): local OpenTelemetry tools, ThousandEyes when an off-box hop is in scope, and a cloud inventory MCP for whatever cloud this site runs on so analyze can generate diagrams.
 
 ### Step 2 — Tell them what to bring, then ask once for the gaps
@@ -103,7 +104,7 @@ Then the optional numbers, with this notice: **the more accurate the data, the t
 
 Ask in this order, because early answers make later questions unnecessary:
 
-1. **Application, customer, scope, date.** Without these there is no filename.
+1. **Application, customer, date, and the initial scope.** Which repositories and which services to start with, and the QA or test environment. Without the name there is no filename. Without the scope the run asks instead of scanning every project a connected host can see. The branch may be the one they already have open, including an unmerged pull request.
 2. **Artifacts.** Diagrams, prior contract, prior schema, house-style `.docx`. Say explicitly that a prior schema will be *extended* and its key names reused, never renamed for taste.
 3. **Surfaces.** The site scan. Production, pre-production, and QA URLs; whether a test account exists and who holds it. Ask for the holder, never the credential. Empty URL lists are a gap, not a default.
 4. **Backends and cloud diagrams.** Languages, deploy targets, buses, account boundaries, what terminates TLS, and which of QA, pre-production, or production can be inventoried for a generated diagram.

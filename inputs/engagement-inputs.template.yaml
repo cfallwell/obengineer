@@ -27,6 +27,19 @@ engagement:
   document_version: 1
 
 # ---------------------------------------------------------------------------
+# Where the developer wants to start. The run does not adopt every project a
+# connected GitHub, GitLab, or other repository host can see. Empty means ask
+# before touching a fleet. QA and test are in scope on purpose: name the
+# services and the branch the first slice is proven on. The branch may be an
+# unmerged pull request.
+# ---------------------------------------------------------------------------
+initial_scope:
+  repositories: []             # owner/name or a path the developer already has open
+  services: []                 # services to instrument first
+  environments: []             # qa, test, pre-prod — where this slice is proven
+  branch: ""                   # empty means the current checkout, including an unmerged branch
+
+# ---------------------------------------------------------------------------
 # Artifacts the human supplies. Paths relative to the workspace root.
 # ---------------------------------------------------------------------------
 artifacts:

@@ -46,12 +46,47 @@ not a startup failure.
 
 ## If present
 
-**Jira.** At the start of intake and analyze, look at the MCP servers already
-connected in the session. If one is a Jira server, read issue keys that match
-`outcomes.known_pain` and record the keys. If none is connected, do not declare
-a Jira server, do not guess a command, and do not ask the human to paste a
-token. Say that a Jira MCP, when the organisation already runs one, would
-supply those keys.
+Use a server only when the developer environment already has it connected.
+Do not add a `jira`, `github`, or `gitlab` entry to `.mcp.json` from this
+repository, and do not guess a command.
 
-Do not add a `jira` entry to `.mcp.json` from this repository. A guessed
-command is worse than a missing server.
+### Jira
+
+At intake, if a Jira server is already connected, read issue keys that match
+`outcomes.known_pain` and record the keys. If none is connected, say that a
+Jira MCP would supply those keys, and stop. Do not ask for a token.
+
+After the human accepts the contract, each accepted work order becomes **one
+Jira issue**. The work-order file stays the instruction. The issue is the
+queue. The issue names the work-order path, the developer's initial scope
+(repositories, services, and the QA or test environment), and the acceptance
+evidence. It is created in the backlog. Creating it does not start coding.
+
+**Moving that issue into a sprint is the trigger.** The engineering agent
+then queues that work order with the developer. It does not push to the
+default branch. It works on the branch the developer already has, or on the
+pull-request branch CI is checking. One issue per work order. A ticket per
+file is not a queue.
+
+Without a Jira server, the work-order file is the queue. Do not invent a
+project key.
+
+### Repository hosts
+
+GitHub, GitLab, and any other repository MCP already connected are how a run
+learns which projects and codebases the developer can see. List them. The
+developer chooses `initial_scope`. The run does not adopt every repository
+the server can reach.
+
+CI checks out the pull-request branch with the forge's own credentials. It
+does not shell out to a guessed host command. A codebase outside
+`initial_scope` stays out of scope until the developer adds it.
+
+## Simple setup
+
+The developer environment is the configuration. Connected MCP servers are the
+inventory. Splunk Observability Cloud and Splunk Enterprise remain mandatory
+for a tenant fact to be labelled `measured`. Everything else is used when it
+is already there. The only new thing the developer must name is the initial
+scope: which repositories and services to start with, and the QA or test
+environment those slices are proven in.

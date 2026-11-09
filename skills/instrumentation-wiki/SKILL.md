@@ -121,7 +121,10 @@ adds, the acceptance evidence, and what it must **not** do without a human decis
 
 These are what [`../instrumentation-implement/SKILL.md`](../instrumentation-implement/SKILL.md)
 executes and what Appendix C of the customer document summarises. Appendix C is the plan; the
-work order is the instruction.
+work order is the instruction. When a Jira MCP is already connected, each accepted work
+order also becomes one issue by the rule in
+[`../references/mcp-servers.md`](../references/mcp-servers.md). The file remains the
+instruction. Moving the issue into a sprint queues it with the developer. It does not merge code.
 
 ### Step 6 — Record versions and the upgrade path
 

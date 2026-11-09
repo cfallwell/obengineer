@@ -20,8 +20,11 @@ else as they have. Optional traffic baselines — daily average and peak session
 hourly log volume, request rate, infrastructure integrations — tighten the
 consumption expectation; `unknown` is acceptable and widens the range. Splunk
 Observability Cloud and Splunk Enterprise MCP servers are mandatory. Look for a
-Jira MCP only when one is already connected. Server classes:
-`skills/references/mcp-servers.md`.
+Jira MCP only when one is already connected. A connected GitHub, GitLab, or
+other repository MCP may list projects; the developer names `initial_scope`
+(repositories, services, and the QA or test environment) and the run does not
+adopt every repository it can see. Skills run on the current branch, including
+an unmerged pull request. Server classes: `skills/references/mcp-servers.md`.
 
 Two asks are easy to skip and both change what the deliverable can say:
 
