@@ -8,7 +8,7 @@
 
 Run **once per slice**. If the human does not pick a slice, follow the guide’s phase plan: trust the signal first, then the highest-ranked journey, then meters.
 
-**Invoke it, do not paste it.** `/obengineer-implement <slice>` reads this file in place.
+**Invoke it, do not paste it.** `/ob-implement <slice>` reads this file in place.
 The only thing this run needs from the human is which slice.
 
 ---

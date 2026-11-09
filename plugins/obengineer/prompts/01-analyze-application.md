@@ -5,7 +5,7 @@
 **Inputs:** `docs/observability/engagement-inputs.yaml`  
 **Human:** TAM + customer architect. Docs-only. No application code changes.
 
-**Invoke it, do not paste it.** `/obengineer-analyze` reads this file in place, so
+**Invoke it, do not paste it.** `/ob-analyze` reads this file in place, so
 there is one copy of the run contract and it is the copy under review. If your host
 has no commands installed, run [`../install.sh`](../install.sh) or tell the agent to
 read this file.

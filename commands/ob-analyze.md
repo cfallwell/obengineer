@@ -1,5 +1,5 @@
 ---
-description: Analyze a target application and produce the customer analysis document (run 1 of 4)
+description: Analyze — scan the application and write the customer analysis document
 ---
 
 Run obengineer run 1 — analyze.
