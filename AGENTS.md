@@ -50,6 +50,7 @@ it is the only way a disagreement becomes visible.
 | Terraform resource names across the three Splunk providers | `skills/references/splunk-terraform-providers.md` |
 | The `.docx` layout | `skills/customer-doc-render/references/document-format.json` |
 | What the human must supply | `inputs/engagement-inputs.template.yaml` |
+| The existing-telemetry pass: volumes, MetricSets, `sf.org` usage, SignalFlow cross-check | `skills/references/existing-telemetry.md` |
 
 The architect agent once carried the decision engine, the platform expertise, and a full
 output template inline — 7,214 words loaded on every run — while also linking to the
