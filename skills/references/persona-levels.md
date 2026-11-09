@@ -1,4 +1,4 @@
-# Persona levels — three audiences, three products
+# Persona levels — three defaults, extensible by decision
 
 Authoring reference for [`observability-as-code`](../observability-as-code/SKILL.md) and
 for the guide's Dashboards Overview.
@@ -10,6 +10,25 @@ incident, and the engineer cannot get to a trace.
 
 So build **three dashboard groups**, one per persona, from one contract — and be as
 disciplined about what each excludes as about what it contains.
+
+## Adding a persona on request
+
+Three is the default, not a ceiling. When a product manager or other stakeholder asks
+for another persona, ask one numbered round of **up to seven questions** before changing
+the analysis outputs or Terraform. Stop early when the answers are sufficient:
+
+1. Who is the audience, and which decision must this view help them make?
+2. What must this persona include that Executive, SRE, and Engineer views do not?
+3. What must it deliberately exclude so it does not become an existing view with a new title?
+4. Which business transactions, workflows, SLIs, SLOs, metrics, and time horizons matter?
+5. Which filters and groupings are required, and are those keys dimension-eligible within the cardinality budget?
+6. Which reporting outputs and Terraform-owned artifacts are expected, in which environments and provider modules?
+7. Who owns acceptance, thresholds, access, cost, and ongoing maintenance?
+
+Record the answers in the accepted contract and `meta/decisions.md`. Add the persona only
+when it has a distinct decision, inclusion set, and exclusion set. Update the dashboard
+specification, Terraform module layout, tests, and handover together; a prose-only persona
+is not implemented.
 
 ## The distinction that makes this work
 

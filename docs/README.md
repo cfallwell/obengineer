@@ -15,13 +15,6 @@ root [README](../README.md) is intentionally limited to a quick start.
 4. [How obengineer operates](how-it-works.md) — understand dispatch, sources of truth,
    state, evidence precedence, output flow, repeat runs, and safety boundaries.
 
-## Maintainer references
-
-- [Design rationale](design.md)
-- [Architecture review](reviews/2026-09-18-architecture-review.md)
-- [Contributing guide](../CONTRIBUTING.md)
-- [Agent instructions](../AGENTS.md)
-
 ## Canonical specifications
 
 The files below are executable contracts used by the agents. They take precedence
@@ -44,3 +37,11 @@ over explanatory documentation if behavior changes:
 - [`skills/observability-as-code/SKILL.md`](../skills/observability-as-code/SKILL.md)
   defines Terraform generation.
 - [`commands/`](../commands/) contains the installed command entry points.
+
+## Maintainer references
+
+- [Design rationale](design.md)
+- [Current architecture review — 9 Nov 2026](reviews/architecture-review.md)
+- [Archived architecture review — 18 Sep 2026](reviews/2026-09-18-architecture-review.md)
+- [Contributing guide](../CONTRIBUTING.md)
+- [Agent instructions](../AGENTS.md)

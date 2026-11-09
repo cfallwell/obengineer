@@ -88,6 +88,11 @@ Before asking, look at the MCP servers already connected in this session.
 
 - **Splunk Observability Cloud and Splunk Enterprise are mandatory.** If either is absent, the gap report says so and points at copying that entry from `plugins/obengineer/.mcp.optional.json` with the organisation's own command. Do not invent a command. Tenant facts gathered without them are `stated`, not `measured`.
 - **Memory repository `.env`.** API keys for those two servers live in `.env`, copied from `templates/memory-repo/.env.template` in the toolkit. Tell the human to fill that file. Do not read the values into the inputs file. The variable names and the analyze pass are [`existing-telemetry.md`](../references/existing-telemetry.md).
+- **Read entitlement before asking.** When those integrations are available, read
+  subscription usage, current/max MTS, MetricSet counts, and other measurable entitlement
+  facts through [`existing-telemetry.md`](../references/existing-telemetry.md). Record them
+  as measured and ask only for unavailable commercial or order-form limits. Measured
+  tenant evidence outranks a stated value; preserve any conflict for review.
 - **Developer tools.** Ask which tools they use — examples of shape: Jira, GitHub,
   GitLab, Artifactory — and match only those names to MCP servers and environment
   variable names already present. Record each match in `developer_tools.matched` as
@@ -122,15 +127,19 @@ Ask in this order, because early answers make later questions unnecessary:
 4. **Surfaces and security authorization.** The production site scan. An empty production URL list is a gap, not a default. A test or QA URL does not fill it. Record `security_assessment.mode`; safe-active requires explicit origins, exclusions, and request limits. Analysis access, when they have it: a token, an API key, or a dummy test login, each as a reference, never the secret. `unknown` is acceptable. Anything submitted is rotated by its owner when analysis completes. The rules are [`engagement-inputs.md`](../references/engagement-inputs.md) and [`security-assessment.md`](../references/security-assessment.md).
 5. **Backends and the production cloud diagram.** Languages, deploy targets, buses, account boundaries, what terminates TLS, and whether production can be inventoried for a generated diagram.
 6. **Tenancy.** Realm, org, environments. Identifiers only.
-7. **Entitlement, then the optional traffic baseline.** The entitlement numbers in the table below, then daily sessions, hourly log volume, request rate, and infrastructure integrations. Say the accuracy notice once, not once per field. An empty integration list is unsupplied, the same as `unknown`.
+7. **Remaining entitlement gaps, then the optional traffic baseline.** Do not re-ask
+   for tenant facts already measured. Ask for unavailable order-form terms, then daily
+   sessions, hourly log volume, request rate, and infrastructure integrations. Say the
+   accuracy notice once, not once per field. An empty integration list is unsupplied,
+   the same as `unknown`.
 8. **Constraints.** Privacy regime, residency, consent platform, change windows, who deploys.
 9. **Outcomes.** Known pain, and whether they want to nominate the first journey.
 10. **Business context.** The commentary and the numbers in Step 4.
 11. **Public-record research.** Whether it is permitted, the brand terms to search, and their own status or incident history pages.
 
-### Step 3 — Ask for entitlement as pricing, not as a limit
+### Step 3 — Resolve remaining entitlement gaps as pricing, not as a limit
 
-Ask for it plainly and say what it is for, because the reason has changed and the old
+Ask only for what the tenant read could not supply, and say what it is for, because the reason has changed and the old
 framing made people defensive: these numbers do not constrain the recommendation, they
 **price** it. What implementing the contract will consume, and any overage, goes into a
 separate document for the account team —

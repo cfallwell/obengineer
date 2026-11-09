@@ -45,6 +45,12 @@ gives the engagement an artifact that outlives the chat.
 Entitlement is the only section that cannot be measured from the application, and the
 only one that turns cardinality from a preference into arithmetic.
 
+**Read the tenant before asking the human.** The existing-telemetry pass reads every
+available subscription-usage and limit fact through the configured Splunk integrations.
+Write those values with measured provenance, then ask only for order-form terms or gaps the
+tenant does not expose. A measured value outranks a stated one; retain disagreements for
+review rather than silently choosing the larger or smaller number.
+
 **It is reference, not a ceiling.** Supplied, the numbers let the run price its own
 recommendations and hand the account team a document that says what implementing this
 will consume and where it goes over. They do not shrink the recommendation. A customer
