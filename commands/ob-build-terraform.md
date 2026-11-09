@@ -1,5 +1,5 @@
 ---
-description: Generate Terraform for the accepted contract — executive, SRE, and engineer dashboards, detectors, SLOs, Synthetics, and platform config
+description: Build Terraform — one application directory, plan only, no apply
 ---
 
 Run obengineer run 4 — observability as code.

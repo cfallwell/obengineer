@@ -1,5 +1,5 @@
 ---
-description: Grade a produced deliverable against the completeness bar before a human sees it
+description: Review — grade a deliverable against the completeness bar
 ---
 
 Review a deliverable.

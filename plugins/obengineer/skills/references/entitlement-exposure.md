@@ -37,6 +37,10 @@ Then the run cuts to fit — and this document records **what was cut and which 
 customer can no longer answer**, because a cut nobody can see is worse than an overage
 somebody has to approve.
 
+A measured `sf.org` series from [`existing-telemetry.md`](existing-telemetry.md) fills
+position today when this document exists. It does not by itself create the document.
+The customer analysis does not print those counts.
+
 When entitlement is `unknown` across the board **and** every `traffic_baseline` factor
 is unsupplied, **there is no exposure document**. A factor is supplied only when its
 value is neither `unknown` nor an empty collection (`[]` or `{}`).

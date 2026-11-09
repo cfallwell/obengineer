@@ -6,7 +6,7 @@
 **Depends on:** the Prompt 01 analysis, accepted by the human.  
 **Output:** PR 0 — documentation only. The wiki under `wiki/apps/<app>/services/<service>/`, `attribute-schema.json`, and the host memory pointers.
 
-**Invoke it, do not paste it.** `/obengineer-wiki` reads this file in place. Inputs come
+**Invoke it, do not paste it.** `/ob-wiki` reads this file in place. Inputs come
 from `engagement-inputs.yaml`, so nothing is re-attached and nothing is re-typed; the
 analysis document and diagram paths are already in that file from run 1.
 

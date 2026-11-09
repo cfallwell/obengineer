@@ -13,11 +13,15 @@ reinstalling. `--copy` writes copies instead, for a host that cannot follow link
 bundle that will be distributed.
 
 Commands are always written as files, because each one carries this bundle's resolved
-path. They are what makes the runs invokable — `/obengineer-analyze` instead of pasting
+path. They are what makes the runs invokable — `/ob-analyze` instead of pasting
 a prompt into the chat.
 
 Every install writes a manifest next to what it created, so `--uninstall` removes what
 this script put there and nothing else.
+
+A memory repository keeps its API keys in `.env`. The committed template is
+`templates/memory-repo/` in this toolkit. Copy `.env.template` to `.env` and fill it.
+This script does not copy that directory and does not write `.env`.
 """
 
 from __future__ import annotations
@@ -72,7 +76,7 @@ HOSTS: dict[str, Host] = {
         label="Cursor",
         user_dir=".cursor",
         project_dir=".cursor",
-        notes=("Commands appear as /obengineer-* in the chat.",),
+        notes=("Type /ob to list /ob-intake, /ob-analyze, /ob-wiki, /ob-implement, /ob-build-terraform, /ob-review, and /ob-render.",),
     ),
     "claude": Host(
         key="claude",
@@ -290,6 +294,10 @@ def main(argv=None) -> int:
         print(f"  /{command.stem}")
     print("\nOr name a skill directly: $engagement-intake, $baggage-propagation, "
           "$cardinality-budget, ...")
+    if project:
+        print("\nMemory-repo env template: templates/memory-repo/ in this toolkit.")
+        print("Copy .env.template to .env in the memory repository and fill it.")
+        print(".env is gitignored. This install does not write .env.")
     if args.dry_run:
         print("\n(dry run — nothing was written)")
     return 0

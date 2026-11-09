@@ -5,7 +5,7 @@
 **Inputs:** `docs/observability/engagement-inputs.yaml`  
 **Human:** TAM + customer architect. Docs-only. No application code changes.
 
-**Invoke it, do not paste it.** `/obengineer-analyze` reads this file in place, so
+**Invoke it, do not paste it.** `/ob-analyze` reads this file in place, so
 there is one copy of the run contract and it is the copy under review. If your host
 has no commands installed, run [`../install.sh`](../install.sh) or tell the agent to
 read this file.
@@ -56,6 +56,12 @@ The fields this run depends on:
 Never request or display an ingest token. Analysis access is recorded in the
 inputs file; what that section decides is
 [`../skills/references/engagement-inputs.md`](../skills/references/engagement-inputs.md).
+Splunk API values are not a second scheme. They live in the memory repository `.env`.
+
+**Existing telemetry is required.** Before the portfolio footprint is written,
+the analyze run uses the `splunk-observability` and `splunk-platform` MCP servers
+and the Splunk API endpoints (Observability and Enterprise). The procedure is
+[`../skills/references/existing-telemetry.md`](../skills/references/existing-telemetry.md).
 
 ## First: is this a first run or a delta?
 

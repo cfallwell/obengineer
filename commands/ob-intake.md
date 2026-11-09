@@ -1,5 +1,5 @@
 ---
-description: Collect the engagement inputs — artifacts, diagrams, tenancy, entitlement, constraints, and the business context behind the engagement — into engagement-inputs.yaml
+description: Intake — collect artifacts, tenancy, entitlement, and business context into engagement-inputs.yaml
 ---
 
 Run the obengineer intake.

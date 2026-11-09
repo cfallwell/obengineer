@@ -1,5 +1,5 @@
 ---
-description: Land one slice of an accepted instrumentation contract as a reviewable PR (run 3 of 3)
+description: Implement — land one slice of the accepted contract as a pull request
 ---
 
 Run obengineer run 3 — implement one slice.

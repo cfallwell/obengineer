@@ -362,6 +362,77 @@ def test_splunk_mcp_servers_are_mandatory_and_jira_is_discovered():
     )
 
 
+def test_analyze_requires_the_existing_telemetry_pass():
+    """The analyze run reads the tenant through both Splunk MCPs and the API endpoints.
+
+    The procedure has one home. The skill and the prompt point at it in one
+    sentence. The architect points at that home and does not carry the queries.
+    """
+    procedure = (SKILLS / "references" / "existing-telemetry.md").read_text()
+    skill = (SKILLS / "instrumentation-analyze" / "SKILL.md").read_text()
+    prompt = (PROMPTS / "01-analyze-application.md").read_text()
+    architect = (AGENTS / "instrumentation-architect.agent.md").read_text()
+    mcp_ref = (SKILLS / "references" / "mcp-servers.md").read_text()
+
+    assert "splunk-observability" in procedure and "splunk-platform" in procedure
+    assert "API endpoints" in procedure
+    assert "https://api.<realm>.signalfx.com" in procedure
+    assert "sf.org.numActiveTimeSeries" in procedure
+    assert "sf.org.apm.numTracesReceived" in procedure
+    assert "sf.org.apm.numSpanBytesReceived" in procedure
+    assert "SignalFlow" in procedure
+    assert "histogram('spans')" in procedure
+    assert "Never print" in procedure
+    for var in ("SPLUNK_REALM", "SPLUNK_ACCESS_TOKEN", "SPLUNK_HOST",
+                "SPLUNK_TOKEN", "SPLUNK_ENTERPRISE_INDEXES"):
+        assert var in procedure, f"the procedure must name {var}"
+
+    for name, text in (("analyze skill", skill), ("prompt 01", prompt)):
+        assert "existing-telemetry.md" in text, f"{name} must point at the procedure"
+        assert "splunk-observability" in text and "splunk-platform" in text, (
+            f"{name} must name both Splunk MCPs"
+        )
+        assert "API endpoints" in text, f"{name} must name the API endpoints"
+        assert "histogram('spans')" not in text, (
+            f"{name} must point at the procedure, not copy the queries"
+        )
+        assert "sf.org.numActiveTimeSeries" not in text
+
+    assert "API endpoints" in mcp_ref.split("## Existing telemetry", 1)[1]
+    assert "existing-telemetry.md" in architect
+    assert "histogram('spans')" not in architect, (
+        "the architect agent routes to the procedure; it does not carry it"
+    )
+    assert "sf.org.numActiveTimeSeries" not in architect
+
+
+def test_memory_repo_env_template_lists_the_variables_and_ignores_env():
+    """The memory repository copies this directory. .env is local. The template is not."""
+    root = ROOT / "templates" / "memory-repo"
+    env = (root / ".env.template").read_text()
+    ignore = (root / ".gitignore").read_text()
+    readme = (root / "README.md").read_text()
+
+    assert (root / ".env.template").is_file()
+    assert ".env" in ignore.split()
+    assert "!.env.template" in ignore
+    assert ".env.template" not in (ROOT / ".gitignore").read_text()
+    assert "cp .env.template .env" in readme
+    assert "gitignored" in readme.lower() or "gitignore" in readme.lower()
+    assert "splunk-observability" in readme and "splunk-platform" in readme
+    assert "API endpoints" in readme
+    assert "existing-telemetry.md" in readme
+
+    for var in ("SPLUNK_REALM", "SPLUNK_ACCESS_TOKEN", "SPLUNK_HOST",
+                "SPLUNK_TOKEN", "SPLUNK_ENTERPRISE_INDEXES", "TE_OAUTH_BEARER_TOKEN"):
+        assert var in env, f".env.template must list {var}"
+    assert "Splunk_O11y_API_Key" in env
+    assert "SPLUNK_ENTERPRISE_TOKEN" in env
+    for line in env.splitlines():
+        if line.startswith("SPLUNK_") or line.startswith("TE_"):
+            assert line.endswith("="), f"{line} must ship empty"
+
+
 def test_dora_and_mttx_measurement_is_an_m5_objective():
     """Observability Cloud cannot compute DORA or MTTx. ITSI can compute MTTx.
 
@@ -398,7 +469,7 @@ def test_analysis_access_is_a_reference_and_rotates_on_completion():
     template = (ROOT / "inputs" / "engagement-inputs.template.yaml").read_text()
     authority = (SKILLS / "references" / "engagement-inputs.md").read_text()
     intake = (SKILLS / "engagement-intake" / "SKILL.md").read_text()
-    command = (ROOT / "commands" / "obengineer-intake.md").read_text()
+    command = (ROOT / "commands" / "ob-intake.md").read_text()
 
     assert "analysis_access:" in template
     for field in ("token_ref: unknown", "api_key_ref: unknown", "login_id: unknown",
@@ -458,7 +529,8 @@ def test_commands_invoke_the_run_contracts_rather_than_copying_them():
     for prompt in sorted(PROMPTS.glob("0*.md")):
         referenced = any(prompt.name in c.read_text() for c in commands)
         assert referenced, f"{prompt.name} has no command that invokes it"
-    assert "obengineer-intake" in stems
+    assert "ob-intake" in stems
+    assert "ob-build-terraform" in stems
 
 
 def test_installer_offers_every_host_and_installs_every_skill():
@@ -470,7 +542,8 @@ def test_installer_offers_every_host_and_installs_every_skill():
     assert (ROOT / "install.sh").is_file()
     readme = (ROOT / "README.md").read_text()
     assert "./install.sh" in readme, "the README must show how to install"
-    assert "/obengineer-" in readme, "the README must show how to invoke"
+    assert "/ob-intake" in readme, "the README must show how to invoke"
+    assert "/ob-build-terraform" in readme
 
 
 # --------------------------------------------------------------------------- #
@@ -669,7 +742,7 @@ def test_intake_collects_the_business_context_no_scan_can_reach():
     assert "own words" in intake, (
         "the commentary is quoted, so it has to be asked for as prose"
     )
-    command = (ROOT / "commands" / "obengineer-intake.md").read_text()
+    command = (ROOT / "commands" / "ob-intake.md").read_text()
     assert "what hurts today" in command, (
         "the intake command must prompt for the business commentary itself, since "
         "a host may run the command without reading the skill first"
