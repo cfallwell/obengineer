@@ -861,9 +861,16 @@ def test_there_is_exactly_one_customer_facing_document():
 
 def test_wiki_is_addressable_and_host_readable():
     spec = (SKILLS / "references" / "agent-wiki.md").read_text()
-    # Customer above application, because tenancy and entitlement are
-    # customer-level facts that must not be duplicated per application.
-    assert spec.index("<Customer>/") < spec.index("<app>/")
+    # Apps, then the services those apps use. A shared service stays under each
+    # app and is joined with a wikilink.
+    layout = "wiki/apps/<app>/services/<service>/"
+    assert layout in spec
+    assert spec.index("apps/") < spec.index("<app>/") < spec.index("services/") < spec.index("<service>/")
+    assert "recorded under each app" in spec
+    assert "neither app owns" in spec
+    skill = (SKILLS / "instrumentation-wiki" / "SKILL.md").read_text()
+    assert layout in skill
+    assert "A human does not create them first." in skill
     for required in ("business-transactions/", "workflows/", "use-cases/",
                      "findings/", "detectors/", "slos/", "work-orders/",
                      "meta/", "index.md"):

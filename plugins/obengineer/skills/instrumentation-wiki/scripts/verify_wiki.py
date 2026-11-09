@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Prove an agent wiki is retrievable, resolvable, and safe to load into context.
 
-    python3 verify_wiki.py "wiki/<Customer>/<app>"
+    python3 verify_wiki.py "wiki/apps/<app>/services/<service>"
 
 The document has verify_render.py; without an equivalent the wiki's rules are
 enforced by whoever remembers them. Checks, all mechanical:
@@ -85,6 +85,51 @@ FRONTMATTER = re.compile(r"\A---\n(.*?)\n---\n", re.S)
 WIKILINK = re.compile(r"\[\[([^\]|#]+)")
 
 
+def wiki_root_of(service: Path) -> Path | None:
+    """The `wiki/` directory that holds `apps/<app>/services/<service>/`."""
+    resolved = service.resolve()
+    for parent in (resolved, *resolved.parents):
+        if parent.name == "wiki":
+            return parent
+    return None
+
+
+def repo_root_of(service: Path) -> Path:
+    """Host pointers live in the repository that contains `wiki/`."""
+    wiki = wiki_root_of(service)
+    if wiki is not None and wiki.parent != wiki:
+        return wiki.parent
+    resolved = service.resolve()
+    # wiki/apps/<app>/services/<service> — five levels up is the repository root.
+    return resolved.parents[4] if len(resolved.parents) >= 5 else Path(".")
+
+
+def note_outside_service(target: str, note: Path, service: Path) -> Path | None:
+    """Resolve a path wikilink that leaves this service, including a shared service.
+
+    A shared service is recorded under each app. The join is a path such as
+    `apps/<other-app>/services/<service>/index`, resolved from `wiki/`.
+    """
+    wiki = wiki_root_of(service)
+    if wiki is None or "/" not in target:
+        return None
+    prospects: list[Path] = []
+    if target.startswith("apps/"):
+        prospects.append(wiki / target)
+    joined = (note.parent / target).resolve()
+    try:
+        joined.relative_to(wiki)
+    except ValueError:
+        pass
+    else:
+        prospects.append(joined)
+    for prospect in prospects:
+        md = prospect if prospect.suffix == ".md" else Path(str(prospect) + ".md")
+        if md.is_file():
+            return md
+    return None
+
+
 def frontmatter(text: str) -> dict[str, str] | None:
     m = FRONTMATTER.match(text)
     if not m:
@@ -158,6 +203,13 @@ def check(app: Path, repo_root: Path, index_max_lines: int) -> list[str]:
                 if (p.parent / target).resolve().is_relative_to(app.resolve()) else target,
             }
             if candidates & set(by_path):
+                continue
+            if note_outside_service(target, p, app) is not None:
+                continue
+            # A slash is a path. A missing path is broken even when the last
+            # segment matches some other note's stem.
+            if "/" in target:
+                broken.append(f"{rel[p]} -> [[{target}]]")
                 continue
             hits = by_stem.get(Path(target).name, [])
             if len(hits) > 1:
@@ -270,7 +322,7 @@ def check(app: Path, repo_root: Path, index_max_lines: int) -> list[str]:
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("app", type=Path, help="wiki/<Customer>/<app>")
+    ap.add_argument("app", type=Path, help="wiki/apps/<app>/services/<service>")
     ap.add_argument("--repo-root", type=Path,
                     help="where the host pointers live (default: the wiki's parent repo)")
     ap.add_argument("--index-max-lines", type=int, default=200)
@@ -282,8 +334,7 @@ def main(argv=None) -> int:
 
     repo_root = args.repo_root
     if repo_root is None:
-        # wiki/<Customer>/<app> — three levels up is the repository root.
-        repo_root = app.parent.parent.parent if len(app.resolve().parents) >= 3 else Path(".")
+        repo_root = repo_root_of(app)
 
     failures = check(app, repo_root, args.index_max_lines)
     notes = len(list(app.rglob("*.md")))

@@ -57,10 +57,10 @@ render: ## Render a Markdown deliverable to .docx and verify the result
 	  $(PY) skills/customer-doc-render/scripts/render_customer_doc.py "$$src" -o "$$out" && \
 	  $(PY) skills/customer-doc-render/scripts/verify_render.py "$$src" "$$out"
 
-# make verify-wiki WIKI="wiki/<Customer>/<app>" ENGAGEMENT=<repo>
+# make verify-wiki WIKI="wiki/apps/<app>/services/<service>" ENGAGEMENT=<repo>
 .PHONY: verify-wiki
 verify-wiki: ## Verify an agent wiki: links, frontmatter, counts, pointers, secrets
-	@test -n "$(WIKI)" || { echo "usage: make verify-wiki WIKI=<wiki/Customer/app> [ENGAGEMENT=<repo>] [REPO_ROOT=<repo>]"; exit 2; }
+	@test -n "$(WIKI)" || { echo "usage: make verify-wiki WIKI=<wiki/apps/<app>/services/<service>> [ENGAGEMENT=<repo>] [REPO_ROOT=<repo>]"; exit 2; }
 	@root="$(REPO_ROOT)"; [[ -n "$$root" ]] || root="$(ENGAGEMENT)"; \
 	  $(PY) skills/instrumentation-wiki/scripts/verify_wiki.py "$(call at,$(WIKI))" \
 	    $${root:+--repo-root "$$root"}

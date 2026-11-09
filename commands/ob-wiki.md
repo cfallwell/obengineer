@@ -22,7 +22,7 @@ different tree.
 
 Not complete until:
 
-- `wiki/<Customer>/<app>/` exists with one note per business transaction, workflow, use case,
+- `wiki/apps/<app>/services/<service>/` exists with one note per business transaction, workflow, use case,
   finding, detector, and objective, each with frontmatter and `[[wikilinks]]`
 - `index.md` is a map of content — links and counts, not a summary
 - `contract/`, `meta/versions.md` with a provenance column, `meta/run-log.md`, and

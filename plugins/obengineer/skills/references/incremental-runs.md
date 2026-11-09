@@ -14,7 +14,7 @@ actually changed.
 
 ## Establishing which kind of run this is
 
-One check, first, before any scanning: does `wiki/<Customer>/<app>/index.md` exist?
+One check, first, before any scanning: does `wiki/apps/<app>/services/<service>/index.md` exist?
 
 | Answer | Run type | Behaviour |
 |---|---|---|
