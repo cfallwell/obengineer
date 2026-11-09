@@ -1,7 +1,8 @@
 # Design notes
 
-Why this agentry is shaped the way it is. For how to use it, see `../README.md`; for
-how to change it, `../CONTRIBUTING.md`.
+Why this agentry is shaped the way it is. For how to use it, start with the
+[documentation index](README.md); for how to change it, see
+[`CONTRIBUTING.md`](../CONTRIBUTING.md).
 
 ## The problem
 
