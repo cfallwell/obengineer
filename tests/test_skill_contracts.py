@@ -267,6 +267,115 @@ def test_terraform_reference_pins_versions_and_records_the_hard_negatives():
 # --------------------------------------------------------------------------- #
 # inputs are collected once, by reference
 # --------------------------------------------------------------------------- #
+def test_production_scan_is_required_and_previous_scans_of_this_site_are_inputs():
+    """The design runs against whatever site this engagement names.
+
+    The scan is the current production site. Test and QA vary from production
+    and are not a substitute. Previous scans of this site are inputs and are
+    compared with the current scan. A leftover from a different site is not.
+    """
+    intake = (SKILLS / "engagement-intake" / "SKILL.md").read_text()
+    analyze = (SKILLS / "instrumentation-analyze" / "SKILL.md").read_text()
+    template = (ROOT / "inputs" / "engagement-inputs.template.yaml").read_text()
+    prompt = (PROMPTS / "01-analyze-application.md").read_text()
+    incremental = (SKILLS / "references" / "incremental-runs.md").read_text()
+
+    for text in (intake, analyze, prompt):
+        assert "any site" in text.lower() or "whatever site" in text.lower(), (
+            "the run must say it applies to whatever site this engagement names"
+        )
+        assert "different site" in text, (
+            "a different site's scan must be rejected, not cited"
+        )
+    assert "production site scan is required" in intake.lower()
+    assert "test and qa" in intake.lower()
+    assert "previous scans of this site" in intake.lower()
+    assert "no browser" in template
+    assert "production_urls:" in template
+    assert "prior_scans:" in template
+    assert "cloud_diagrams:" in template
+    assert "qa, pre-prod, production" not in template
+    assert "production architecture" in analyze
+    assert "Do not draw" in analyze and "test or QA" in analyze
+    for outcome in ("Changes", "Merges", "Additions"):
+        assert outcome in incremental, (
+            "comparing previous scans of this site must record "
+            f"{outcome}"
+        )
+
+
+def test_traffic_baseline_feeds_a_prediction_not_a_license_ceiling():
+    """Optional session, log, APM, and infra baselines tighten an expectation.
+
+    They do not cap the design. The multiplications live in one skill.
+    """
+    template = (ROOT / "inputs" / "engagement-inputs.template.yaml").read_text()
+    budget = (SKILLS / "cardinality-budget" / "SKILL.md").read_text()
+    intake = (SKILLS / "engagement-intake" / "SKILL.md").read_text()
+    exposure = EXPOSURE.read_text()
+
+    for field in ("sessions_per_day_avg", "sessions_per_day_peak",
+                  "gb_per_hour_avg", "gb_per_hour_peak",
+                  "requests_per_minute_avg", "infra_integrations"):
+        assert field in template, f"traffic baseline must capture {field}"
+    assert "OPTIONAL" in template and "traffic_baseline:" in template
+    assert "more accurate" in intake.lower()
+    assert "sessions_per_day_avg × 30" in budget
+    assert "gb_per_hour_avg × 24" in budget
+    assert "entities × metrics_per_entity" in budget
+    assert "APM traces / minute, average = requests_per_minute_avg" in budget
+    trace_lines = [
+        line for line in budget.splitlines() if line.startswith("APM traces / minute")
+    ]
+    assert trace_lines and all("spans_per_trace" not in line for line in trace_lines), (
+        "that product is spans per minute, and TAPM is traces per minute"
+    )
+    assert "APM spans / minute, average = requests_per_minute_avg × spans_per_trace" in budget
+    assert "infra_integrations: unknown" in template
+    assert "infra_integrations: []" not in template
+    assert "infra_integrations: []` is unsupplied" in budget
+    assert "infra_integrations: []` is unsupplied" in exposure
+    assert "not a cap" in budget or "does not cap" in budget
+    assert "reference, not a ceiling" in exposure
+    assert "sessions_per_day_avg × 30" in exposure
+    trace_rows = exposure.split("APM spans / minute")[0]
+    assert "requests_per_minute × spans_per_trace" not in trace_rows
+
+
+def test_splunk_mcp_servers_are_mandatory_and_jira_is_discovered():
+    """Observability Cloud and Enterprise are required. Jira is used if present.
+
+    .mcp.json stays free of guessed commands and token values.
+    """
+    ref = (SKILLS / "references" / "mcp-servers.md").read_text()
+    intake = (SKILLS / "engagement-intake" / "SKILL.md").read_text()
+    config = json.loads((PLUGIN / ".mcp.json").read_text())
+
+    assert "Mandatory" in ref
+    assert "splunk-observability" in ref and "splunk-platform" in ref
+    assert "Jira" in ref and "already" in ref
+    assert "Jira" in intake and "already connected" in intake
+    assert "mandatory" in intake.lower()
+    assert config["mcpServers"] == {}, (
+        "a guessed MCP command in .mcp.json fails plugin startup; the operator "
+        "copies the entry and supplies the command"
+    )
+
+
+def test_dora_and_mttx_measurement_is_an_m5_objective():
+    """Observability Cloud cannot compute DORA or MTTx. ITSI can compute MTTx.
+
+    DORA cannot be computed in either product today. Section 24 must not grow a
+    false chart for either.
+    """
+    levels = (SKILLS / "references" / "service-levels.md").read_text()
+    assert "M5" in levels
+    assert "ITSI" in levels
+    assert "DORA" in levels
+    assert "Observability Cloud" in levels
+    assert "cannot be computed" in levels
+
+
 def test_inputs_template_captures_what_no_scan_can_measure():
     template = (ROOT / "inputs" / "engagement-inputs.template.yaml").read_text()
     for field in ("custom_mts_included", "custom_mts_in_use", "mms_slots_remaining",
@@ -276,6 +385,45 @@ def test_inputs_template_captures_what_no_scan_can_measure():
     assert "unknown" in template, (
         "unknown must be a legitimate answer, or the run stalls on procurement"
     )
+
+
+def test_analysis_access_is_a_reference_and_rotates_on_completion():
+    """A token, API key, or dummy test login may be submitted so the scan is complete.
+
+    The template used to forbid that submission and left rotation optional.
+    The file stores a reference. The secret is rotated when the analysis
+    completes. unknown stays valid. The field list stays in the template;
+    what it decides stays in engagement-inputs.md.
+    """
+    template = (ROOT / "inputs" / "engagement-inputs.template.yaml").read_text()
+    authority = (SKILLS / "references" / "engagement-inputs.md").read_text()
+    intake = (SKILLS / "engagement-intake" / "SKILL.md").read_text()
+    command = (ROOT / "commands" / "obengineer-intake.md").read_text()
+
+    assert "analysis_access:" in template
+    for field in ("token_ref: unknown", "api_key_ref: unknown", "login_id: unknown",
+                  "password_ref: unknown", "rotate_on_completion: unknown"):
+        assert field in template, f"analysis access must keep {field}"
+    assert "dummy" in template.lower()
+    assert "NEVER put a token" not in template
+    assert "test_account:" not in template
+    assert "rotates_after_run:" not in template
+
+    creds = authority.split("## Credentials", 1)[1].split("## ", 1)[0]
+    assert "analysis_access" in creds
+    assert "dummy account used for testing only" in creds
+    assert "rotate_on_completion" in creds
+    assert "token_ref" in creds and "password_ref" in creds
+    assert "`unknown`" in creds
+    assert "production login is not an input" in creds
+
+    # Intake follows the authority. It does not grow a second field list.
+    for field in ("token_ref", "api_key_ref", "password_ref", "login_id"):
+        assert field not in intake
+    assert "dummy test" in intake.lower()
+    assert "rotated when the analysis completes" in intake
+    assert "Never request or store a credential value" not in command
+    assert "dummy test login" in command
 
 
 def test_prompts_reference_the_inputs_file_instead_of_carrying_placeholders():
@@ -564,9 +712,12 @@ def test_entitlement_prices_the_recommendation_and_never_silently_caps_it():
 def test_the_analysis_run_owns_both_new_outputs():
     skill = (SKILLS / "instrumentation-analyze" / "SKILL.md").read_text()
     assert "entitlement-exposure-<app>-<date>.md" in skill
-    assert "only when `entitlement` was supplied" in skill, (
-        "the exposure document is conditional; produced unconditionally it is "
-        "fabricated"
+    output = skill.split("## Output", 1)[1].split("## ", 1)[0]
+    assert "traffic_baseline" in output, (
+        "a baseline with no entitlement still requires the exposure document"
+    )
+    assert "empty collection" in output, (
+        "an empty integration list is not a supplied baseline"
     )
     assert "public record" in skill and "twelve months" in skill
     assert "business-value.md" in skill
@@ -739,6 +890,36 @@ def test_repeat_runs_are_deltas_and_carry_findings_forward():
         "the template must carry the delta subsection, or a repeat run has nowhere "
         "to put what changed"
     )
+
+
+def test_pre_merge_branch_job_updates_the_contract_without_merging():
+    """Skills run on an unmerged branch. A sprint move queues work; CI does not merge."""
+    spec = (SKILLS / "references" / "ci-integration.md").read_text()
+    mcp = (SKILLS / "references" / "mcp-servers.md").read_text()
+    template = (ROOT / "inputs" / "engagement-inputs.template.yaml").read_text()
+    example = (ROOT / "examples" / "ci" / "branch-before-merge.yml").read_text()
+
+    assert "Pre-merge branch job" in spec
+    assert "Do not merge" in spec
+    assert "obengineer:" in spec
+    assert "initial_scope" in spec
+    assert "authorized" in spec
+    assert "never pushes to the default branch" in spec
+    assert "sprint" in mcp and "GitHub" in mcp and "GitLab" in mcp
+    assert "option" in mcp
+    assert "does not create issues" in mcp
+    assert "developer_tools" in mcp
+    assert "initial_scope:" in template
+    assert "authorized: unknown" in template
+    assert "parent_folders:" in template
+    assert "developer_tools:" in template
+    implement = (SKILLS / "instrumentation-implement" / "SKILL.md").read_text()
+    intake = (SKILLS / "engagement-intake" / "SKILL.md").read_text()
+    assert "parent_folders" in implement
+    assert "does not ask for instrumentation scope" in intake.lower() or "Do not ask for instrumentation scope" in intake
+    assert "pull_request:" in example
+    assert "Do not merge" in example
+    assert "github.head_ref" in example
 
 
 def test_ci_layers_are_ordered_and_have_runnable_examples():

@@ -145,8 +145,9 @@ labelled as an example of shape.
 ### OE-SECRETS — placeholders only
 Tokens are `window.__<ORG>_RUM_TOKEN__`, `${SPLUNK_ACCESS_TOKEN}`, or a named secret
 store. Any literal that looks like a credential fails review and the credential
-scan. Optional MCP servers stay in `.mcp.optional.json` with `${VAR}` references
-rather than being wired with a guessed command.
+scan. MCP classification lives in `skills/references/mcp-servers.md`. Commands stay
+in `.mcp.optional.json` until the operator copies them into `.mcp.json`, with
+`${VAR}` references and no guessed command.
 
 ### OE-TEST — prove changed behaviour
 A change to the renderer or verifier needs a test that fails without it. The

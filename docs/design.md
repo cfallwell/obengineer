@@ -53,7 +53,7 @@ So the merge path is a deliberate constraint, not an aspiration:
 - **Skill names are the public API.** `$instrumentation-analyze`, `$baggage-propagation`, and the rest are referenced from prompts, from agent files, and from the customer documents this produces. Renaming one is a breaking change with no deprecation path, so treat it as one.
 - **Nothing resolves paths above the bundle root.** Skills reach `../references/` and `../../agents/`, never an absolute path or a repository name. A bundle that only knows its own root can be moved by moving the directory.
 - **Hosts are wired by generated links, not by hand.** `scripts/sync_plugin_skills.py` writes `.cursor/skills/` and `.agents/skills/`, so adopting a new host means teaching one script, and a move breaks nothing that a re-run will not fix.
-- **MCP servers are declared, never assumed.** `.mcp.json` ships empty. A server that exists in one org and not another must not be a startup dependency, and a toolset that absorbs this one should not inherit a hardcoded endpoint.
+- **MCP servers are declared, never assumed.** `.mcp.json` ships with an empty `mcpServers` object because the command is organisation-specific. Splunk Observability Cloud and Splunk Enterprise are mandatory to enable; the operator copies those entries and supplies the command. Other servers are recommended or used only when already present. The list has one home: `skills/references/mcp-servers.md`. A toolset that absorbs this one must not inherit a hardcoded endpoint or a token.
 
 ## Why the template is a file, not a habit
 
@@ -77,13 +77,14 @@ counted inside code fences. Both are fixed and both have tests, but a proper par
 switch yet is that the current output is exactly the shape customers accept and a
 parser swap would need the same verification suite to prove it.
 
-**MCP servers other than the local one are described rather than enabled.** A server
-whose command cannot be verified in the environment that authored it should not be
-declared active: it fails at session start, and a plugin that fails at session start
-gets uninstalled. `.mcp.optional.json` documents the three that matter — Splunk
-Observability Cloud, the Splunk platform, and ThousandEyes — with the environment
-variables each needs and no credential values, so an operator can enable one in a
-minute.
+**MCP commands are described rather than hardcoded.** A server whose command cannot
+be verified in the environment that authored it should not be declared active: it
+fails at session start, and a plugin that fails at session start gets uninstalled.
+`.mcp.optional.json` documents the entries. Splunk Observability Cloud and Splunk
+Enterprise are mandatory for the operator to copy in. ThousandEyes, a local
+OpenTelemetry tools server, and a cloud inventory MCP are recommended.
+Jira is used when the host already has it. No credential values. The classification
+lives in `skills/references/mcp-servers.md`.
 
 ## What this agentry deliberately does not do
 

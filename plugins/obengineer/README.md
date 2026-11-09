@@ -31,16 +31,12 @@ never fails a session.
 
 ## MCP servers
 
-`.mcp.json` declares **no servers by default**, and the skills work without any. Every
-server they can use needs an endpoint, command, or token that only your organisation
-can supply, and a server that fails to start is worse than one that was never
-declared.
-
-`.mcp.optional.json` describes the four that pair with these skills — a local
-OpenTelemetry audit-and-verify server, Splunk Observability Cloud, the Splunk platform,
-and ThousandEyes — with what each is used for and the environment variables it needs.
-Copy the entry you want into `.mcp.json`, supply the command, and export those
-variables.
+`.mcp.json` ships with an empty `mcpServers` object so a placeholder command cannot
+fail plugin startup. **Splunk Observability Cloud and Splunk Enterprise are
+mandatory:** copy those two entries from `.mcp.optional.json` and supply your
+organisation's command. ThousandEyes and the local OpenTelemetry tools server are
+recommended. A Jira MCP is used only when this host already has one. Classification:
+the plugin copy of `skills/references/mcp-servers.md`.
 
 **Never put a token value in either file.** Use `${VAR}` references only; both files
 are committed.

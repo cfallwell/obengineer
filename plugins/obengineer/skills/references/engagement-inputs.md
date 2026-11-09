@@ -24,13 +24,18 @@ gives the engagement an artifact that outlives the chat.
 | Section | Decides | Blank means |
 |---|---|---|
 | `engagement` | Filenames, document title, version on the deliverable | The run invents a name, and the next run invents a different one |
-| `artifacts` | Whether the backend map is diagram-driven or guessed; whether an existing taxonomy is extended | Journeys get named from a product playbook instead of this application |
-| `surfaces` | Whether there is a front-end scan at all, and whether authenticated pages can be reached | The scan covers only anonymous surfaces, and the checkout journey is missing |
+| `initial_scope` | What engineering has authorized to instrument, after the contract exists: the full scope, a subset of repositories, or a subset of a repository by parent folder. Intake does not ask for it | Instrumentation stops and asks. An empty authorization is not permission to scan every project a host can see. An empty branch means the current checkout, including an unmerged pull request |
+| `artifacts` | Whether the backend map starts from a diagram the human already has; whether an existing taxonomy of **this** application is extended; which earlier scans of **this** site to compare | Journeys get named from a product playbook instead of this application. A file from a different site is not this row |
+| `cloud_diagrams` | Whether the run may draw production architecture from a cloud inventory MCP already connected for this site. Test and QA inventories are not the diagram | No generated diagram. The human's own diagrams still count. Any cloud |
+| `surfaces` | The live production site scan. Required for whatever site this engagement names, unless `front_end_scan_notes` is `no browser: <reason>`. Test and QA URLs are not the scan | The run stops and asks for the production URL. It does not invent a site and it does not substitute a test or QA environment |
+| `analysis_access` | Whether a token, an API key, or a dummy test login was submitted so the scan can see authenticated surfaces, and that it is rotated when the analysis completes | The scan stays unauthenticated and says so. `unknown` is acceptable. A secret value in the file is not |
+| `traffic_baseline` | The optional averages and peaks the consumption prediction multiplies: daily sessions, hourly log volume, request rate, infrastructure integrations | The expectation is a wide range that names the missing factor. The design is not capped |
 | `backends` | Which SDK sections and which bus inject/extract subsections the guide must contain | The messaging boundary section is written as `Not in evidence` for a bus that exists |
 | `tenancy` | Whether exit criteria can be phrased as queries a TAM can run | Exit criteria become assertions instead of checks |
 | `entitlement` | What the recommendation will **cost** in MTS, MMS slots, and runs — priced in a separate document for the account team | No entitlement exposure document; the recommendation stands and says the budget was not supplied |
 | `constraints` | What is vetoed regardless of technical merit | The guide recommends something legal or platform ownership will reject |
 | `outcomes` | Journey ranking when several candidates are equally instrumentable | The run picks a defensible journey that nobody asked for |
+| `developer_tools` | Which tools the human says they use, and which of those already have an MCP server or an environment variable name in this environment | The run does not guess a server and does not ask for a token. Credentials stay in the user environment or the MCP server |
 | `business_context` | The Business Value Realization section: what an outage costs this business, what triage costs, what the current MTTx actually is | The section is written from public evidence and measured performance only, and names the three numbers that would make it quantitative |
 | `public_evidence` | Whether the analysis reads the last twelve months of the public record — outage coverage, complaints, field performance | The value case rests on the customer's recollection alone, which is the version that survives least contact with a sceptical executive |
 
@@ -66,7 +71,7 @@ A cut nobody can see is worse than an overage somebody has to approve.
 | `hosts_licensed`, `containers_licensed` | Order form; usage on the same page |
 | `traces_per_minute` | APM entitlement on the order form |
 | `mms_slots_remaining` | Settings → **APM MetricSets**: count the Monitoring MetricSets already defined |
-| `tms_cardinality_ceiling` | Not on any page. It is a number the customer agrees to; propose one and get it accepted. |
+| `tms_cardinality_ceiling` | Optional. An observed peak of distinct values on an existing Troubleshooting MetricSet. A baseline the prediction can compare with, not a cap the design must fit under. |
 | `sessions_per_month` (RUM) | Order form; usage in Subscription Usage |
 | Synthetics run quota | Order form; Synthetics usage page |
 | Platform `ingest_gb_per_day`, `retention_days` | The platform license and index definitions |
@@ -83,8 +88,12 @@ proposed MTS for one promotion
 
 Compare the sum of proposed promotions against
 `custom_mts_included - custom_mts_in_use` and keep headroom for growth. The full
-method, including the defaults to use when the numbers are `unknown`, is
-[`../cardinality-budget/SKILL.md`](../cardinality-budget/SKILL.md).
+method is a **prediction**, not a license ceiling: RUM sessions, APM trace rate,
+hourly log volume, and infrastructure-integration metrics come from
+`traffic_baseline` when the human supplied them. Unknown factors widen the range.
+[`../cardinality-budget/SKILL.md`](../cardinality-budget/SKILL.md) is the only
+formula. More accurate baselines produce a tighter expectation. They do not
+change what the application needs.
 
 Two entitlement answers are hard vetoes rather than budget inputs:
 
@@ -137,15 +146,74 @@ missing the market where customers are actually complaining.
 `competitors` is for field-performance comparison only. It is not a competitive teardown,
 and a document that reads as one gets forwarded to the wrong people.
 
+## The site, and the scans that belong to it
+
+The design runs against any site. `engagement.application` and `surfaces` name
+the one this file is about. A URL, diagram, brand term, or schema from a
+**different** site is not evidence. Remove it. `prior_contract`, `prior_schema`,
+and `prior_scans` are earlier revisions of **this** site only.
+
+A previous scan of this site is an input. Several may be listed. Comparing them
+with the current production scan — changes, merges, and additions, including
+uninstrumented code that has already shipped — is
+[`incremental-runs.md`](incremental-runs.md).
+
+The live scan is the **current production site**. Test and QA environments vary
+from production and are not the scan. `front_end_scan_notes: "no browser: <reason>"`
+is the only opt-out. A non-production URL does not satisfy the requirement.
+
+`cloud_diagrams.generate: true` lets the analyze run draw a mermaid diagram of
+production when a cloud inventory MCP for this site is already connected. The
+capability is any cloud. No access means an open item, not a failed intake, and
+never a stored credential.
+
+Which MCP servers are mandatory, recommended, or used only when already present:
+[`mcp-servers.md`](mcp-servers.md).
+
+## Traffic baseline
+
+Optional, and worth asking for in the same breath as entitlement. Daily average
+and peak sessions, hourly log volume, request rate, spans per trace, and the
+entity count of each infrastructure integration are the factors the prediction
+uses. The formulas have one home:
+[`../cardinality-budget/SKILL.md`](../cardinality-budget/SKILL.md). Tell the human
+that more accurate numbers produce a tighter expectation, and that `unknown` is
+a legitimate answer. A round number they are unsure of stays `unknown`. An empty
+list is unsupplied, the same as `unknown`.
+
+## Developer tools
+
+Ask for the list the human actually uses. Examples of shape: Jira, GitHub,
+GitLab, Artifactory. Then match that list to MCP servers already connected and
+to environment variable **names** already present. Record the server key or the
+variable name in `developer_tools.matched`. Never read the value into this file,
+and never ask the human to paste one. A tool with no match stays in `named` and
+is not installed by the run. How a matched server is used:
+[`mcp-servers.md`](mcp-servers.md).
+
 ## Credentials
 
-The file records **who holds** a credential, never its value. That applies to ingest
-tokens, API tokens, and test-account passwords alike.
+A token, an API key, or a login may be submitted so the analysis can see
+authenticated surfaces. Without one, checkout, subscription, and account
+journeys stay closed, and the scan records that limit.
 
-A test account is worth asking about, because an unauthenticated scan cannot see
-checkout, subscription, or account journeys — which are usually the ones the engagement
-is about. Record `held_by` and `rotates_after_run`, and have the human supply the
-credential in the session rather than in the file. A credential in a file gets committed.
+`analysis_access` stores a **reference**: `${ENV_VAR}` or the name of a secret.
+Never the token, the key, or the password. A value written here gets committed.
+
+`login_id` and `password_ref` are a **dummy account used for testing only**.
+A production login is not an input. `login_id` names that dummy account.
+`password_ref` points at its password and does not contain it.
+
+When any of `token_ref`, `api_key_ref`, `login_id`, or `password_ref` is
+supplied, `rotate_on_completion` is `true`. The token, the API key, the login
+ID, and the password are rotated when the analysis completes. `unknown` on
+every field means nothing was submitted; leave `rotate_on_completion` as
+`unknown`.
+
+`tenancy.tokens_held_by` is a different fact: who can issue the ingest token
+when instrumentation starts. It is a name, not a token.
+`developer_tools.matched` records a server key or an environment variable name
+already present. It is not permission to read that variable.
 
 ## Precedence when sources disagree
 

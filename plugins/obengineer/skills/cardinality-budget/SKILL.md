@@ -75,26 +75,89 @@ which phase it lands in, and the levers — raise the entitlement, aggregate wit
 Pipeline Management rule, or drop specific promotions with the question each drop makes
 unanswerable. Recommend one.
 
+### The prediction, when a baseline was supplied
+
+License ceilings are not how this skill decides. `traffic_baseline` in the inputs is
+optional. Each supplied factor is applied, the arithmetic is shown, and the result
+is an **expectation** with an average and a peak. A missing factor widens that row
+into a range that names the missing factor. It does not invent the factor, and it
+does not drop the recommendation.
+
+More accurate baselines produce a tighter expectation. A round number the human is
+unsure of stays `unknown`.
+
+```
+RUM sessions / month, average = sessions_per_day_avg × 30
+RUM sessions / month, peak    = sessions_per_day_peak × 30
+beacon volume / day           = sessions_per_day × page_views_per_session
+```
+
+```
+APM traces / minute, average = requests_per_minute_avg
+APM traces / minute, peak    = requests_per_minute_peak
+```
+
+`requests_per_minute` is the root-request rate: one trace start per request.
+Do not multiply it by `spans_per_trace`. That product is spans per minute, and
+the entitlement it would be compared with is `traces_per_minute`.
+
+```
+APM spans / minute, average = requests_per_minute_avg × spans_per_trace
+APM spans / minute, peak    = requests_per_minute_peak × spans_per_trace
+```
+
+Span volume stays span volume. It is not compared with `traces_per_minute`.
+The inputs have no span-rate entitlement; do not invent one. A missing
+`spans_per_trace` widens the span row and names the missing factor. The trace
+row does not depend on it.
+
+```
+log GB / day, average = gb_per_hour_avg × 24
+log GB / day, peak    = gb_per_hour_peak × 24
+```
+
+```
+infra series, per integration = entities × metrics_per_entity
+```
+
+Infrastructure series are the metrics an integration already emits (Kubernetes, a
+cloud provider, a host agent) — the integration this site runs, named by the human,
+never a vendor assumed by the run. They are not the custom MTS from a span-tag
+promotion. Add the two only after both are computed, and label the sum.
+
+Custom MTS from promotions stays the formula at the top of this skill. Compare each
+expectation with the matching entitlement field when that field was supplied:
+`sessions_per_month`, `traces_per_minute`, `ingest_gb_per_day`,
+`custom_mts_included - custom_mts_in_use`. Span volume has no matching field, so
+it is shown and not subtracted from `traces_per_minute`. The comparison is the
+exposure document's job. This skill does not cap the design to make the comparison fit.
+
+`tms_cardinality_ceiling`, when the human supplied an observed peak, is a baseline
+the Troubleshooting MetricSet prediction is set beside. It is not a maximum the
+design must stay under.
+
 ### When the numbers are `unknown`
 
-There is then **no exposure document and no assumed limit**. Recommend what the application
-needs, state in the deliverable that the budget was not supplied, and record the ask.
+When entitlement is `unknown` throughout **and** every `traffic_baseline` factor
+is unsupplied, there is no exposure document and no assumed limit. A factor is
+supplied only when its value is neither `unknown` nor an empty collection (`[]`
+or `{}`). `infra_integrations: []` is unsupplied. Recommend what the application
+needs, state that the budget was not supplied, and record the ask.
 
-The defaults below are not a budget to design against; they are the sanity bounds that apply
-regardless of entitlement, because a design that breaks them is badly shaped rather than
-merely expensive. Keep the arithmetic visible either way — an unpriced promotion cannot be
-reviewed even when nothing constrains it.
+When a baseline exists and entitlement does not, write the expectation range and do
+not invent a license to subtract it from.
 
-| Sanity bound | Default | Why it holds at any entitlement |
+Two outcomes are still zero, and neither is a license ceiling. They are shape:
+
+| Outcome | Count | Why |
 |---|---|---|
-| Distinct values of any single promoted tag | ≤ 100 | Past that, a chart grouped by it is unreadable and a detector grouped by it is unroutable |
-| Per-tag ceiling for a Troubleshooting MetricSet | ≤ 10,000 distinct values | Beyond it, Tag Spotlight stops being a tool and becomes a search |
-| Identity keys promoted to dimensions | 0 | Unbounded by construction |
+| Identity keys promoted to dimensions | 0 | Unbounded by construction. Account, order, cart, session, and request identifiers stay attribute-only |
 | Promotions with no named consumer | 0 | Nothing reads them, so nothing is lost by not having them |
-| Total new MTS across the contract, when reporting only | stated, not capped | The number goes in the exposure document; the recommendation is not cut to reach it |
 
-Every one of these is a number a customer can disagree with, which is the point. A bound
-stated as a number gets corrected; a bound stated as a principle gets ignored.
+A Monitoring `group by` whose predicted distinct values are past a hundred, or a
+Troubleshooting pivot past ten thousand, is called out on the expectation as hard to
+read or hard to pivot. That note does not remove the tag and does not reduce the
+predicted license. The customer can still promote it, and they will see the cost.
 
 ## Process
 
@@ -137,7 +200,7 @@ no way to see the cost, so nobody objects.
 ### Step 3 — Size the MetricSets, do not just name them
 
 - **Monitoring MetricSets** produce the metrics detectors and dashboards read. They are a bounded resource, and unlike MTS a shortage is not a bill — it is a MetricSet that cannot be created. Count the slots already used. If the contract needs more than `mms_slots_remaining`, say so with the number, order the promotions so the ones an SLI depends on come first, and put the shortfall in the exposure document. What must not happen is the TAM discovering the limit during configuration.
-- **Troubleshooting MetricSets** serve Tag Spotlight and ad-hoc grouping. Cheaper, still not free, and governed by the agreed per-tag ceiling. This is where identity-adjacent keys go when someone needs to slice by them — the honest answer to "but I need to group by tenant" is usually a TMS, not an MMS.
+- **Troubleshooting MetricSets** serve Tag Spotlight and ad-hoc grouping. Cheaper, still not free. Predict their distinct values from the enum, and set `tms_cardinality_ceiling` beside that prediction when the human observed a peak. The peak is a baseline, not a cap. This is where identity-adjacent keys go when someone needs to slice by them — the honest answer to "but I need to group by tenant" is usually a TMS, not an MMS.
 - **The workflow tag is a special case.** Exactly one span tag becomes the APM Business Workflow. Name it explicitly, say which value shape it carries, and state that the workflow name is itself a bounded enum. An unbounded workflow tag is a cardinality incident with a dashboard attached to it.
 
 ### Step 4 — Push the enforcement into the pipeline

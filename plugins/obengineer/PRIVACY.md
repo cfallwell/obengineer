@@ -4,7 +4,7 @@
 
 - Files in your workspace, to inventory the application and to read a guide it is asked to render.
 - URLs you explicitly provide for a front-end scan.
-- Any MCP server you enable in `.mcp.json`. None are enabled by default.
+- Any MCP server you enable in `.mcp.json`. None are enabled in the committed file. Splunk Observability Cloud and Splunk Enterprise are mandatory for you to enable with your own command. A Jira server is read only when one is already connected.
 
 ## What it writes
 
@@ -16,7 +16,7 @@ you have accepted.
 ## What it does not do
 
 - No telemetry about your usage is collected or transmitted by this plugin.
-- No data is sent to Splunk, Cisco, or any third party. The optional MCP servers you
+- No data is sent to Splunk, Cisco, or any third party by this plugin. The MCP servers you
   enable yourself talk to your own tenants with your own credentials.
 - No credential is stored. Tokens are referenced as `${ENV_VAR}` or placeholders, never
   captured into a deliverable.

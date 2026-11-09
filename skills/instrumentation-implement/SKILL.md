@@ -31,6 +31,18 @@ Prompt: [`../../prompts/03-implement-instrumentation.md`](../../prompts/03-imple
 `instrumentation-analyze` first. Implementing against a draft produces attribute names
 that have to be renamed across every service later.
 
+**Scope, before any code.** Engineering authorizes `initial_scope` after the
+contract exists: `full`, `repositories`, or `parent_folders`. `unknown` means
+stop and ask. The field meaning is
+[`../references/engagement-inputs.md`](../references/engagement-inputs.md). The
+job that refuses to write code without that authorization is
+[`../references/ci-integration.md`](../references/ci-integration.md). Do not
+adopt every repository a connected host can see. A parent-folder authorization
+limits the slice to those folders. When a Jira server is already connected,
+generating one backlog issue per accepted work order is engineering's option,
+and only when they ask. The rule is
+[`../references/mcp-servers.md`](../references/mcp-servers.md).
+
 ## PR order
 
 The order is the dependency graph, not a preference.
@@ -51,6 +63,7 @@ The order is the dependency graph, not a preference.
 ## Rules
 
 - **One contract slice per PR.** A PR that adds the library, wires identity, and instruments three journeys cannot be reviewed or reverted.
+- **Run on the branch under review.** The checkout may be an unmerged pull-request branch. Commit the slice there. The default branch is not required, and this skill does not merge. The pre-merge job is [`../references/ci-integration.md`](../references/ci-integration.md).
 - **Never widen `init`.** Exactly one artifact initialises the provider. Remotes, micro-frontends, and page bundles consume the shared library.
 - **No enable-all.** Turn on the instrumentations the guide named, and no others. Each additional one costs runtime budget on a page that may already be loading several agents.
 - **Attribute names come from the guide.** If a name is wrong, change the guide and the schema first, then the code. Renaming in code alone breaks the dashboards the TAM already built.

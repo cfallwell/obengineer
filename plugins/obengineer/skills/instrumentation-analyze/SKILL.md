@@ -10,9 +10,9 @@ description: >-
   SLOs in the customer's voice, and composite use cases. Closes with a business
   value realization section built from the customer's own numbers, the last twelve
   months of the public record, and measured performance. Emits the Markdown, the
-  customer-review .docx rendered from it, attribute-schema.json, and — only when
-  entitlement was supplied — a separate entitlement exposure document for the
-  account team. Use when the
+  customer-review .docx rendered from it, attribute-schema.json, and — when
+  entitlement or a supplied traffic baseline exists — a separate entitlement
+  exposure document for the account team. Use when the
   user types $instrumentation-analyze, asks to "analyze this site or app",
   "Prompt 01", for the analysis document, what business transactions exist, why
   RUM data looks wrong, or which observability products are missing. Read-only
@@ -61,7 +61,7 @@ Prompt: [`../../prompts/01-analyze-application.md`](../../prompts/01-analyze-app
 | Markdown | `docs/observability/analysis-<app>-<date>.md` | always |
 | Word | `docs/observability/<Customer>-<App>-Analysis-<date>.docx` | always |
 | Schema | `docs/observability/attribute-schema.json` | always |
-| Entitlement exposure | `docs/observability/entitlement-exposure-<app>-<date>.md` | only when `entitlement` was supplied |
+| Entitlement exposure | `docs/observability/entitlement-exposure-<app>-<date>.md` | when `entitlement` was supplied, or a `traffic_baseline` factor was supplied. A factor is supplied only when it is neither `unknown` nor an empty collection (`[]` or `{}`). `infra_integrations: []` is unsupplied |
 
 One customer document. If a run is about to produce a second one, it has recreated the
 artifact this design removed. The exposure document is not a second customer document: it is
@@ -70,7 +70,7 @@ in exactly one document-control line.
 
 ## Rules
 
-- **Assume nothing.** Not the industry, not a storefront, not named journeys, not the cloud, not a prior customer's taxonomy. Derive every name from this session's evidence.
+- **Assume nothing.** Not the industry, not a storefront, not named journeys, not the cloud, not a prior customer's taxonomy. The design runs against whatever site this engagement names. A scan, diagram, or schema from a different site is not evidence; do not cite it. Previous scans of this site are inputs; compare them with the current production scan per [`../references/incremental-runs.md`](../references/incremental-runs.md). Derive every name from this session's evidence.
 - **Never store a credential.** A found token is a finding referenced by shape and location, never by value. See [`../references/critical-findings.md`](../references/critical-findings.md).
 - **Mark gaps as gaps.** "Not in evidence" with a named next step is a finding, not an omission.
 - **Nothing goes under an appendix heading that the argument depends on.** Appendices are the dictionary, long code, the work-order plan, supplementary evidence, and open items.
@@ -112,6 +112,32 @@ or warm cache, authenticated or not. Section 26 reuses these numbers as the perf
 baseline of the value case, and a measurement whose conditions were not recorded is
 unreproducible, which means the first person to re-measure gets a different answer and the
 value case loses its floor.
+
+A live production site scan is required. If `production_urls` is empty and the inputs do not say
+`no browser` with a reason, stop and run intake. Test and QA URLs are not the scan.
+Do not scan a site left over from a different engagement, and do not proceed from memory of one.
+When `artifacts.prior_scans` names earlier scans of this site, compare them with the
+current production scan before writing: changes, merges, and additions, per
+[`../references/incremental-runs.md`](../references/incremental-runs.md).
+
+Which MCP servers must be connected before a tenant fact is labelled `measured`:
+[`../references/mcp-servers.md`](../references/mcp-servers.md). Splunk Observability
+Cloud and Splunk Enterprise are mandatory. Jira is read only when a Jira server is
+already connected.
+
+### Step 2a — Generate diagrams from a cloud environment when access exists
+
+When `cloud_diagrams.generate` is true and a cloud inventory MCP for **this** site is
+already connected, draw the production architecture and write
+`docs/observability/diagrams/production.md` as mermaid. Label the diagram `generated`, and
+name the environment, the date, and the server it came from. Any cloud. Do not draw
+test or QA: those environments vary from production and would make the contract
+inconsistent with the site that was scanned.
+
+A diagram the human attached stays their evidence. A generated diagram is additional.
+It does not replace theirs, and it does not contain a credential, account key, or
+token. If generation was requested and no inventory server is connected, record an
+open item and continue the site scan.
 
 ### Step 3 — Raise the critical findings while the evidence is in hand
 
@@ -224,19 +250,25 @@ named and unfilled, and the asks. Short and honest beats fabricated and quantita
 
 ### Step 11 — Price it for the account team, if there is anything to price against
 
-When `entitlement` carries real numbers, write
-`docs/observability/entitlement-exposure-<app>-<date>.md` per
-[`../references/entitlement-exposure.md`](../references/entitlement-exposure.md): position
-today, what the recommendation adds with the arithmetic visible per row, the projected
-position, each overage with options and a recommendation, and growth headroom.
+Write `docs/observability/entitlement-exposure-<app>-<date>.md` only when `entitlement` was supplied
+or when a `traffic_baseline` factor was supplied, per
+[`../references/entitlement-exposure.md`](../references/entitlement-exposure.md). A factor is
+supplied only when it is neither `unknown` nor an empty collection (`[]` or `{}`).
+`infra_integrations: []` is unsupplied. The arithmetic
+is the prediction in `cardinality-budget`: custom MTS from promotions, and — where a baseline
+was given — RUM sessions, APM trace rate, log GB/day, and infrastructure-integration series.
+Show each multiplication. Do not invent a second formula here.
 
-The analysis document gets one line in document control saying the exposure document exists
-and that the recommendation was not trimmed to fit. No licensed totals, no consumption, no
-overage figures in the customer document.
+Entitlement numbers compare that prediction with a license. Baselines with no entitlement
+produce an expectation range and no overage claim. The analysis document gets one line in
+document control saying the exposure document exists and that the recommendation was not
+trimmed to fit. No licensed totals, no consumption, no overage figures in the customer
+document.
 
-When entitlement is `unknown` throughout: no exposure document, no assumed limit, and one
-document-control line saying the budget was not supplied. Recommend as though there is enough
-licensing, because that is the honest position when nobody has said otherwise.
+When entitlement is `unknown` throughout and every traffic baseline factor is unsupplied: no exposure
+document, no assumed limit, and one document-control line saying the budget was not supplied.
+Recommend as though there is enough licensing, because that is the honest position when
+nobody has said otherwise.
 
 ### Step 12 — Render, verify, and check yourself
 

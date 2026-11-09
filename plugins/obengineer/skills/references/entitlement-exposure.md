@@ -37,10 +37,18 @@ Then the run cuts to fit — and this document records **what was cut and which 
 customer can no longer answer**, because a cut nobody can see is worse than an overage
 somebody has to approve.
 
-When entitlement is `unknown` across the board, **there is no exposure document**. The
-analysis proceeds as though there is enough licensing, its document control says the budget
-was not supplied, and Open Items carries the ask. Do not invent a limit in order to have
-something to compare against.
+When entitlement is `unknown` across the board **and** every `traffic_baseline` factor
+is unsupplied, **there is no exposure document**. A factor is supplied only when its
+value is neither `unknown` nor an empty collection (`[]` or `{}`).
+`infra_integrations: []` is unsupplied. The analysis proceeds as though there is
+enough licensing, its document control says the budget was not supplied, and Open Items
+carries the ask. Do not invent a limit in order to have something to compare against.
+
+When a traffic baseline factor was supplied and entitlement was not, the document still exists.
+It is an expectation range from the prediction, with no overage claim, because there is
+no license to exceed. More accurate baselines tighten that range. They do not cap the
+recommendation. The formulas have one home:
+[`../cardinality-budget/SKILL.md`](../cardinality-budget/SKILL.md).
 
 ## Where it lives
 
@@ -73,9 +81,15 @@ the arithmetic inherits the weaker of the two.
 | Synthetics runs per month | | | | |
 | Platform GB/day | | | | |
 | ThousandEyes units / test slots | | | | |
+| RUM sessions / month (predicted) | | | | `sessions_per_day_avg × 30`, peak from `sessions_per_day_peak` |
+| APM traces / minute (predicted) | | | | root-request rate, `requests_per_minute`. Not multiplied by `spans_per_trace` |
+| APM spans / minute (predicted) | | | | `requests_per_minute × spans_per_trace`. Span volume. Not compared with `traces_per_minute` |
+| Platform GB/day (predicted) | | | | `gb_per_hour × 24`, average and peak |
+| Infra series, per integration (predicted) | | | | `entities × metrics_per_entity` |
 
 `unknown` in a row is a legitimate entry and makes every derived number in that row's
-class a range rather than a value. Say so in the row rather than in a footnote.
+class a range rather than a value. Say so in the row rather than in a footnote. A
+predicted row with a missing factor names the factor. It does not fill it.
 
 ### 3. What the recommendation adds
 
@@ -131,7 +145,7 @@ than to an assertion.
 
 - **The analysis document grew a licensing section.** Two audiences, one artifact, and the technical reader now distrusts the recommendation.
 - **A dimension disappeared between the cardinality section and the catalogue.** Something trimmed to fit without saying so. Either it is recommended, or it is a recorded cut.
-- **The exposure document exists with no supplied entitlement.** Then every number in it is invented, and it will be quoted as though it were not.
+- **The exposure document exists when neither entitlement nor a supplied baseline was given.** Then every number in it is invented, and it will be quoted as though it were not. A baseline-only document is an expectation range, not a license.
 - **An overage stated with no options.** A problem handed to somebody with no lever is a problem that gets ignored.
 - **Consumption numbers with no read date.** Consumption moves weekly; a headroom figure with no date is a headroom figure from an unknown week.
 - **The document reads as a quote.** It prices resources, not products. The commercial construction is the account team's job and they are better at it.

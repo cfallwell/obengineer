@@ -15,7 +15,7 @@ a production URL with a session in it.
 - **The SessionStart hook is read-only.** It checks for `python-docx` and probes
   `127.0.0.1` for the optional local MCP server. It installs nothing, contacts no
   external host, and always exits 0.
-- **Optional MCP servers ship disabled.** No command is guessed on your behalf.
+- **MCP servers ship with no command in `.mcp.json`.** Splunk Observability Cloud and Splunk Enterprise are mandatory for the operator to enable by copying the entry and supplying their own command. No command is guessed. Other servers are recommended or used only when already present.
 - **Generated guidance is deny-list aware.** The instrumentation contract's PII deny
   list covers credentials, tokens, and card data, and the same list is emitted into
   `attribute-schema.json` so CI can enforce it.

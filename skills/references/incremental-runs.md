@@ -38,6 +38,21 @@ In this order, and only this, before touching the target:
 
 Then scan. Reading after scanning means the scan invents names that already exist.
 
+## Previous scans of this site
+
+A previous scan of **this** site is an input. Several previous scans are inputs.
+Compare each of them with the current production scan. The comparison writes
+three lists, and each changed surface is in exactly one:
+
+- **Changes** — present in a previous scan and in the current scan, and the two disagree.
+- **Merges** — the same surface recorded more than once. Keep the name already accepted.
+- **Additions** — in the current scan and in no previous scan. This is how uninstrumented code that has already been released enters the contract.
+
+A scan, diagram, or taxonomy from a **different** site is not an input. Do not
+cite it. This comparison runs when `artifacts.prior_scans` is non-empty and on
+every repeat run, whether or not a wiki already exists. The current scan is
+production. Test and QA scans are not a substitute: those environments vary.
+
 ## What the delta document contains
 
 Same section list as a first run — every heading stays, because a customer comparing two

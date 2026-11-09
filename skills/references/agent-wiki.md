@@ -53,7 +53,7 @@ wiki/
         value-model.md            # the value arithmetic and its coefficients, each labelled
         public-evidence.md        # cited public sources with their read dates
         asks.md                   # the inputs that would make the value case quantitative
-        entitlement-exposure.md   # the priced position, when entitlement was supplied
+        entitlement-exposure.md   # when entitlement or a supplied baseline exists; absent when neither does
       implementation/
         work-orders/<nn>-<slice>.md   # what the implementer agent will do, one note per PR-sized slice
         enforcement.md            # the CI checks that keep the contract true
@@ -202,4 +202,4 @@ See [`incremental-runs.md`](incremental-runs.md) for how a later run consumes it
 - **Notes with no `updated` field.** The delta run cannot tell stale from current, so it will re-derive everything and produce a full rewrite.
 - **A credential in the wiki.** The same rule as the document, and more dangerous here because a wiki is loaded into agent context by default. Record who holds it, never the value.
 - **A `business/` figure with no label or no source.** The value case is only as strong as the provenance of its inputs, and the wiki is where that provenance is supposed to survive.
-- **`business/entitlement-exposure.md` present when no entitlement was supplied.** Then it was invented, and the next run will inherit it as fact.
+- **`business/entitlement-exposure.md` present when neither entitlement nor a supplied baseline was given.** Then it was invented, and the next run will inherit it as fact. An empty integration list is not a supplied baseline.

@@ -114,3 +114,4 @@ disappears. An engineer's question is almost always about the tail.
 - **The engineer group has no data link.** The path from symptom to span is the entire point; without it this is the SRE view with more charts.
 - **A persona's dashboard variable is bound to an attribute-only key.** Empty dropdown, and it will be read as broken instrumentation.
 - **Every detector is `Critical`.** Severity carries no information, and the group has trained its audience to ignore it.
+- **An executive tile labelled MTTx or DORA.** Observability Cloud computes neither. Where those measurements can live is milestone M5 in [`service-levels.md`](service-levels.md).

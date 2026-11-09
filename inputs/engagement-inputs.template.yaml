@@ -10,8 +10,15 @@
 # "Open items" rather than inventing a value. What is NOT acceptable is deleting
 # a key: an absent key looks like an oversight, `unknown` looks like a decision.
 #
-# NEVER put a token, password, or API key in this file. It records whether a
-# credential exists and who holds it, never its value.
+# This file describes ONE engagement and whatever site that engagement names.
+# A previous scan of this site is an input. A scan, diagram, or taxonomy from
+# a different site is not. Delete the other site rather than leaving it for a
+# later run to cite.
+#
+# A token, an API key, or a login may be submitted so the analysis can see
+# authenticated surfaces. Record a reference under analysis_access, never the
+# secret. A login is a dummy account used for testing only. Whatever was
+# submitted is rotated when the analysis completes. unknown is valid.
 
 schema_version: 1
 
@@ -23,28 +30,69 @@ engagement:
   document_version: 1
 
 # ---------------------------------------------------------------------------
+# Instrumentation scope. Intake does not ask for this and does not fill it.
+# After the contract exists, engineering authorizes it before any
+# instrumentation code is written. full, a subset of repositories, or a
+# subset of one repository by parent folder. The run does not adopt every
+# project a connected host can see. unknown means not yet authorized.
+# ---------------------------------------------------------------------------
+initial_scope:
+  authorized: unknown          # unknown | full | repositories | parent_folders
+  repositories: []             # owner/name, when authorized is repositories
+  parent_folders: []           # repo-relative parent folders, when authorized is parent_folders
+  branch: ""                   # empty means the current checkout, including an unmerged branch
+
+# ---------------------------------------------------------------------------
 # Artifacts the human supplies. Paths relative to the workspace root.
 # ---------------------------------------------------------------------------
 artifacts:
   diagrams: []                 # C4, sequence, MFE map, account/VPC — paths or "attached in chat"
   narrative: ""                # path to an architecture write-up, if one exists
-  prior_contract: ""           # an existing analysis document to extend, not replace
-  prior_schema: ""             # an existing attribute-schema.json — reuse its key names
+  prior_contract: ""           # an existing analysis of THIS application. A document from another site is not an input
+  prior_schema: ""             # an existing attribute-schema.json for THIS application — reuse its key names
+  prior_scans: []              # earlier scans of THIS site. Empty means the first scan. A different site is not an entry
   house_style_docx: ""         # an approved .docx whose layout the output must match
-  front_end_scan_notes: ""     # path, or "no browser", or "" to scan live
+  front_end_scan_notes: ""     # path, or "no browser: <reason>". Empty means the live site scan still has to run
 
 # ---------------------------------------------------------------------------
-# Front-end surfaces to deep-scan. Omit or empty if there is no browser.
+# Cloud diagrams. The run draws production when a cloud inventory MCP for
+# THIS site's cloud is already connected. Test and QA inventories vary from
+# production and are not the diagram. Any cloud. Never a credential.
+# generate true means "try"; it does not block the site scan when no
+# inventory server is connected.
+# ---------------------------------------------------------------------------
+cloud_diagrams:
+  generate: true
+  environments: []             # production
+  notes: ""                    # which account or region, and who can grant read-only access. Never a key.
+
+# ---------------------------------------------------------------------------
+# Front-end surfaces to deep-scan. The current production site is the scan.
+# Test and QA environments vary from production and are not the scan.
+# The only opt-out is front_end_scan_notes set to "no browser: <reason>".
 # ---------------------------------------------------------------------------
 surfaces:
-  production_urls: []
-  non_production_urls: []
+  production_urls: []          # required unless front_end_scan_notes is "no browser: <reason>"
+  non_production_urls: []      # not the scan. Recorded only if already named. The design does not use them.
   host_and_remotes: ""         # which bundle owns provider boot, which are remotes
   edge_cdn: ""
-  test_account:
-    available: false
-    held_by: ""                # who to ask. Never the credential itself.
-    rotates_after_run: false
+
+# ---------------------------------------------------------------------------
+# Analysis access. OPTIONAL. Every field may stay `unknown`.
+#
+# Submitted so the scan can see authenticated surfaces. A reference only:
+# ${ENV_VAR} or a secret name. Never the secret value. Login is a dummy
+# account used for testing only. When any reference below is supplied,
+# rotate_on_completion is true: that token, API key, login ID, and password
+# are rotated when the analysis completes. What this decides:
+# skills/references/engagement-inputs.md
+# ---------------------------------------------------------------------------
+analysis_access:
+  token_ref: unknown            # ${ENV_VAR} or secret name. Never the token.
+  api_key_ref: unknown          # ${ENV_VAR} or secret name. Never the key.
+  login_id: unknown             # dummy test account only. Never a production login.
+  password_ref: unknown         # ${ENV_VAR} or secret name for that dummy account.
+  rotate_on_completion: unknown # true once any field above was submitted
 
 # ---------------------------------------------------------------------------
 # Backends, from the diagrams or from the team.
@@ -97,7 +145,7 @@ entitlement:
     containers_licensed: unknown
     traces_per_minute: unknown         # APM TAPM entitlement
     mms_slots_remaining: unknown       # Monitoring MetricSets are a bounded resource
-    tms_cardinality_ceiling: unknown   # per-tag ceiling agreed for Troubleshooting MetricSets
+    tms_cardinality_ceiling: unknown   # optional observed peak distinct values on an existing Troubleshooting MetricSet. A baseline for the prediction, not a cap
   rum:
     entitled: unknown
     sessions_per_month: unknown
@@ -118,6 +166,36 @@ entitlement:
     cloud_agent_units: unknown
     enterprise_agents: unknown
     test_slots_available: unknown
+
+# ---------------------------------------------------------------------------
+# Traffic baseline. OPTIONAL. Every field may stay `unknown`.
+#
+# These numbers feed the consumption prediction (RUM sessions, APM trace rate,
+# log ingest, infrastructure metrics from cloud and host integrations). They
+# do not cap the design. The more accurate they are, the tighter the
+# expectation; unknown widens the range and the run says which factor was
+# missing. A guess presented as a measurement is worse than `unknown`.
+# ---------------------------------------------------------------------------
+traffic_baseline:
+  rum:
+    sessions_per_day_avg: unknown
+    sessions_per_day_peak: unknown
+    page_views_per_session: unknown
+  apm:
+    requests_per_minute_avg: unknown
+    requests_per_minute_peak: unknown
+    spans_per_trace: unknown
+  logs:
+    gb_per_hour_avg: unknown       # hourly log volume, average
+    gb_per_hour_peak: unknown
+  infra_integrations: unknown
+    # Unsupplied. A supplied value is a list, and [] is still unsupplied.
+    # One entry per integration that already emits infrastructure metrics
+    # (kubernetes, a cloud provider, a host agent). Example shape, not a
+    # requirement to invent a vendor:
+    # - name: ""                     # the integration the site actually runs
+    #   entities: unknown            # hosts, containers, or that integration's unit
+    #   metrics_per_entity: unknown
 
 # ---------------------------------------------------------------------------
 # Standards the deliverable must follow.
@@ -150,6 +228,16 @@ outcomes:
   first_journey: ""            # leave blank to have the run rank candidates and propose one
   known_pain: []               # incidents that prompted the engagement
   audiences: ["sre", "engineer", "executive"]
+
+# ---------------------------------------------------------------------------
+# Developer tools the human names. Intake asks for the list, then matches it
+# to MCP servers and environment variable names already present. Record the
+# server key or the variable name. Never a token, password, or API key.
+# Examples of shape, not a required set: jira, github, gitlab, artifactory.
+# ---------------------------------------------------------------------------
+developer_tools:
+  named: []                    # what the human says they use
+  matched: []                  # server key or env var name already present. Never a value.
 
 # ---------------------------------------------------------------------------
 # Business context, in the customer's words and numbers.
