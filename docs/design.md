@@ -77,8 +77,11 @@ use a CommonMark syntax tree (`markdown-it-py` or an equivalent maintained parse
 the existing `.docx` writer. The migration is complete only when the current structural,
 cross-reference, credential, and round-trip verification suite passes and visual output
 matches the approved format. Until then, the line-based implementation receives defect
-fixes but no new Markdown syntax. The parser direction is settled; output compatibility is
-the migration gate.
+fixes but no new Markdown syntax. Today, `python-docx` remains the only renderer runtime
+dependency. The parser migration explicitly includes adding and pinning the maintained
+parser dependency and updating the README, `make deps`, plugin bootstrap check, and
+dependency documentation in the same change. The parser direction is settled; output
+compatibility and an atomic dependency-contract update are the migration gates.
 
 **MCP commands remain operator-supplied rather than hardcoded.** A server command or URL
 cannot be verified by the repository because it is organisation-specific. Hardcoding a
@@ -92,10 +95,13 @@ the human named it and the host already has its MCP. The classification lives in
 
 ## What this agentry deliberately does not do
 
-- **It does not apply Terraform automatically.** `/ob-terraform` reads the tenant,
-  generates import-aware Terraform for dashboards, detectors, SLOs, and the other
-  supported artifacts, then produces a reviewed plan. A human runs `terraform apply`
-  manually; the agent never applies its own plan.
+- **It does not apply Terraform automatically.** With tenant access, `/ob-terraform`
+  inventories existing objects, generates import-aware Terraform for dashboards,
+  detectors, SLOs, and other supported artifacts, and produces a reviewed plan. Without
+  MCP or planning credentials, it generates the code with unresolved imports clearly
+  marked and validates provider schemas; it reports that result as schema-checked, not
+  planned. A human supplies the missing access, reviews the eventual plan, and runs
+  `terraform apply` manually. The agent never applies its own plan.
 - **It does not remediate the security findings the analysis surfaces.** The authorized
   OWASP/credential/API assessment records confidence-rated findings and P0 fixes with
   owners; runtime remediation is a separately accepted work order.
