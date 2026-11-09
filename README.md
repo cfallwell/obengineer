@@ -23,6 +23,8 @@ Do these two steps in this order.
 
    Pass `--claude`, `--codex`, or `--all` in place of `--cursor` when those hosts should receive the same install. Restart the host so it loads the new skills and commands. Open the memory repository in the host and run the commands there. They write `docs/observability/`, the wiki, and `terraform/` into that repository.
 
+   Copy `templates/memory-repo/.gitignore` and `templates/memory-repo/.env.template` into the memory repository. Then copy `.env.template` to `.env` and fill it. `.env` is gitignored. That template path is in this repository. It is not on every branch today.
+
 ## Install
 
 `install.sh` is a thin wrapper around `scripts/install.py`.
@@ -76,7 +78,7 @@ Seven commands. Each one reads its prompt file in place under `prompts/`, so the
 | Command | Does | Produces |
 |---|---|---|
 | `/obengineer-intake` | Asks for the inputs a scan cannot measure, in one round | `docs/observability/engagement-inputs.yaml` |
-| `/obengineer-analyze` | Deep-scans the front end, maps the backends from diagrams, raises the findings, and writes the full recommendation set | `analysis-<app>-<date>.md`, a customer `.docx`, `attribute-schema.json` |
+| `/obengineer-analyze` | Deep-scans the front end, maps the backends from diagrams, reads existing telemetry through the `splunk-observability` and `splunk-platform` MCPs, raises the findings, and writes the full recommendation set | `analysis-<app>-<date>.md`, a customer `.docx`, `attribute-schema.json` |
 | `/obengineer-wiki` | Turns the accepted analysis into the notes the agents retrieve by subject | `wiki/<Customer>/<app>/`, work orders, tracked versions |
 | `/obengineer-implement` | Lands one contract slice with the CI check that keeps it enforced | A single-concern pull request |
 | `/obengineer-as-code` | Generates Terraform for the contract at three persona levels | A `terraform/` tree and a plan |
@@ -102,6 +104,8 @@ Intake writes `engagement-inputs.yaml` once. Later runs read that file, so the r
 ```
 obengineer/                         # toolkit repository
 <memory-repo>/                      # memory repository
+    ├── .env.template               # copied from templates/memory-repo/
+    ├── .env                        # local only; gitignored
     ├── docs/observability/         # the customer document and its .docx
     ├── wiki/<Customer>/<app>/      # the agent wiki
     ├── AGENTS.md · CLAUDE.md       # host pointers into that wiki
@@ -109,6 +113,18 @@ obengineer/                         # toolkit repository
 ```
 
 Paths in the skills — `docs/observability/…`, `wiki/<Customer>/<app>/…` — are relative to the memory repository.
+
+## Environment file
+
+`templates/memory-repo/` holds `.env.template` and a `.gitignore` for a new memory repository. Copy both into that repository, then:
+
+```bash
+cp .env.template .env
+```
+
+Fill `.env`. Do not commit it. The copied `.gitignore` ignores `.env` and does not ignore `.env.template`.
+
+The analyze run reads those variables from `.env` or from the process environment. It uses the `splunk-observability` and `splunk-platform` MCP servers to inventory existing telemetry. The procedure is `skills/references/existing-telemetry.md`. That path is in this repository. It is not on every branch today. Install does not write `.env`.
 
 ## Inputs
 
@@ -183,7 +199,7 @@ Two more govern money, and they stay separate. [`business-value.md`](skills/refe
 
 ## MCP servers
 
-`plugins/obengineer/.mcp.json` ships with an empty `mcpServers` object. Copy an entry from `.mcp.optional.json` and supply your own command. Splunk Observability Cloud and Splunk Enterprise are mandatory. ThousandEyes, a local OpenTelemetry tools server, and a cloud inventory server for the cloud the site runs on are recommended. A Jira server is used when the host already has one connected. The classification lives in [`skills/references/mcp-servers.md`](skills/references/mcp-servers.md).
+`plugins/obengineer/.mcp.json` ships with an empty `mcpServers` object. Copy an entry from `.mcp.optional.json` and supply your own command. Splunk Observability Cloud (`splunk-observability`) and Splunk Enterprise (`splunk-platform`) are mandatory. The analyze run uses both, with the variables in the memory repository `.env`, when it inventories existing telemetry. ThousandEyes, a local OpenTelemetry tools server, and a cloud inventory server for the cloud the site runs on are recommended. A Jira server is used when the host already has one connected. The classification lives in [`skills/references/mcp-servers.md`](skills/references/mcp-servers.md).
 
 Keep token values out of both files. Use `${VAR}` references. Both files are committed. The design runs against any site. Put the current site's endpoint in the copied entry.
 
