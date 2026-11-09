@@ -136,7 +136,7 @@ It writes three files under `docs/observability/`:
 
 When entitlement or a supplied traffic baseline is present, it also writes `entitlement-exposure-<app>-<date>.md` for the account team. That file is Markdown only.
 
-Inventory of telemetry the tenant already collects is specified in `skills/references/existing-telemetry.md`, using `.env` and the `splunk-observability` and `splunk-platform` MCP servers. That file is not on this branch. It is added with the env template on `memory-repo-env-template`.
+The analyze run uses `.env`, the `splunk-observability` and `splunk-platform` MCP servers, and the API endpoints to inventory telemetry the tenant already collects. The procedure is `skills/references/existing-telemetry.md`. That file is not on this branch. It is added with the env template on `memory-repo-env-template`.
 
 ### `/ob-wiki`
 
