@@ -31,6 +31,18 @@ Prompt: [`../../prompts/03-implement-instrumentation.md`](../../prompts/03-imple
 `instrumentation-analyze` first. Implementing against a draft produces attribute names
 that have to be renamed across every service later.
 
+**Scope, before any code.** Engineering authorizes `initial_scope` after the
+contract exists: `full`, `repositories`, or `parent_folders`. `unknown` means
+stop and ask. The field meaning is
+[`../references/engagement-inputs.md`](../references/engagement-inputs.md). The
+job that refuses to write code without that authorization is
+[`../references/ci-integration.md`](../references/ci-integration.md). Do not
+adopt every repository a connected host can see. A parent-folder authorization
+limits the slice to those folders. When a Jira server is already connected,
+generating one backlog issue per accepted work order is engineering's option,
+and only when they ask. The rule is
+[`../references/mcp-servers.md`](../references/mcp-servers.md).
+
 ## PR order
 
 The order is the dependency graph, not a preference.

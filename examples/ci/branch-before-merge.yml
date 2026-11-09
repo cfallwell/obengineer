@@ -55,13 +55,17 @@ jobs:
         if: steps.gate.outputs.skip != 'true'
         run: |
           python3 - <<'PY'
-          import pathlib, sys
-          text = pathlib.Path("docs/observability/engagement-inputs.yaml").read_text() if pathlib.Path("docs/observability/engagement-inputs.yaml").exists() else ""
-          if "initial_scope:" not in text or "repositories: []" in text and "services: []" in text:
-              print("Name initial_scope.repositories or initial_scope.services before this job writes code.")
-              print("An empty scope is not permission to scan every project a host can see.")
+          import pathlib, re, sys
+          path = pathlib.Path("docs/observability/engagement-inputs.yaml")
+          text = path.read_text() if path.exists() else ""
+          match = re.search(r"(?m)^initial_scope:\n(?:  .*\n)*?  authorized:\s*(\S+)", text)
+          authorized = match.group(1) if match else ""
+          if authorized not in ("full", "repositories", "parent_folders"):
+              print("Engineering must authorize initial_scope before this job writes code.")
+              print("authorized: full, repositories, or parent_folders.")
+              print("unknown is not permission to scan every project a host can see.")
               sys.exit(1)
-          print("scope present")
+          print("scope authorized:", authorized)
           PY
 
       - name: layer-1 checks against this branch
@@ -75,7 +79,7 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          echo "Delta-update the contract for paths inside initial_scope, then implement one work order."
+          echo "Delta-update the contract for paths inside the authorized initial_scope, then implement one work order."
           echo "Commit message prefix: obengineer:"
           echo "Push to ${{ github.head_ref }}. Do not merge. Do not open a second pull request."
           # your-agent-cli run \

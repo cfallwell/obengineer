@@ -86,7 +86,7 @@ keys, and finding ids exactly. Extend from new evidence; never rename for taste.
 | `business/value-model.md` | The value arithmetic and every coefficient, each labelled `stated`, `measured`, `public`, or `derived`, with the unfilled ones left visibly unfilled |
 | `business/public-evidence.md` | Each cited source with its URL, publication, date, source class, and **the date it was read** |
 | `business/asks.md` | The inputs that would make the value case quantitative, and where the customer finds each |
-| `business/entitlement-exposure.md` | The priced position, when entitlement was supplied — and absent when it was not |
+| `business/entitlement-exposure.md` | The account-team document when entitlement or a supplied traffic baseline exists — and absent when neither does |
 | `meta/*` | Versions, run log, decisions, and the engagement inputs as run |
 
 Every note gets the frontmatter from `agent-wiki.md`: `type`, `customer`, `app`, `status`,
@@ -121,8 +121,9 @@ adds, the acceptance evidence, and what it must **not** do without a human decis
 
 These are what [`../instrumentation-implement/SKILL.md`](../instrumentation-implement/SKILL.md)
 executes and what Appendix C of the customer document summarises. Appendix C is the plan; the
-work order is the instruction. When a Jira MCP is already connected, each accepted work
-order also becomes one issue by the rule in
+work order is the instruction. When a Jira MCP is already connected, engineering
+may choose to generate one backlog issue per accepted work order, and only when
+they ask. The rule is
 [`../references/mcp-servers.md`](../references/mcp-servers.md). The file remains the
 instruction. Moving the issue into a sprint queues it with the developer. It does not merge code.
 
@@ -143,8 +144,11 @@ visibly missing; `public-evidence.md` carries the sources **with the date each w
 because a citation with no read date points at a page that may since have changed; `asks.md`
 carries what is still needed.
 
-`business/entitlement-exposure.md` exists only when the customer supplied entitlement numbers.
-Written without them it is invented, and the next run inherits the invention as fact. The
+`business/entitlement-exposure.md` exists when entitlement was supplied or a traffic
+baseline factor was supplied. A factor is supplied only when it is neither `unknown`
+nor an empty collection. Written with neither, it is invented, and the next run
+inherits the invention as fact. A baseline with no entitlement is an expectation
+range, not an overage. The
 customer document never carries these numbers at all —
 [`../references/entitlement-exposure.md`](../references/entitlement-exposure.md) explains why
 the audience for them is the account team.

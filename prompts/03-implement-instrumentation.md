@@ -29,7 +29,11 @@ PII deny list is enforced. If you see tokens in the repo, stop and report. Do no
 - Engagement inputs: `docs/observability/engagement-inputs.yaml` — `backends.languages` and
   `.deploy_targets` for which SDK, `constraints.who_deploys_front_end` and
   `.who_deploys_collector` for whether this slice is deployable at all, and
-  `constraints.change_windows` for when.
+  `constraints.change_windows` for when. `initial_scope.authorized` must be
+  `full`, `repositories`, or `parent_folders` before this run writes code.
+  `unknown` means stop and ask engineering to authorize the full scope, a
+  subset of repositories, or a subset of a repository by parent folder. Do not
+  adopt every repository a connected host can see.
 - **Slice (the one thing the human supplies — pick one, or “follow guide phase plan”):**
   - [ ] Phase 0 — signal trust (RUM/APM bootstrap as specified: early load, kill switch, allowlist, classifier, app name, replay policy, **no** journey spans)
   - [ ] Shared libraries only (`@<org>/otel-common` or guide names + stamp processor + baggage boot + message inject/extract)

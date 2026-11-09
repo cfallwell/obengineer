@@ -7,11 +7,14 @@ description: >-
   percentile standard, and the business context behind the engagement — current
   MTTx, incident volume, triage and tooling cost, revenue exposure, and the
   customer's own commentary on what hurts — into a single engagement-inputs.yaml.
-  Guides the human on suggested inputs first. A live site scan is required for
-  whatever site this engagement names. Optional traffic baselines (daily sessions,
-  hourly log volume, infrastructure integrations) tighten the consumption
-  prediction; unknown widens it. Asks only for what is missing, one short round
-  of questions, and records `unknown` rather than guessing. Use when the user types $engagement-intake,
+  Guides the human on suggested inputs first. A live production site scan is
+  required for whatever site this engagement names. Test and QA environments
+  are not the scan. Optional traffic baselines (daily sessions, hourly log
+  volume, infrastructure integrations) tighten the consumption prediction;
+  unknown widens it. Asks which developer tools they use and matches that list
+  to MCP servers and environment variable names already present. Asks only for
+  what is missing, one short round of questions, and records `unknown` rather
+  than guessing. Does not collect instrumentation scope. Use when the user types $engagement-intake,
   starts an engagement, says they have diagrams or a URL to analyze, asks what
   information you need, or when any other skill finds the inputs file absent or
   incomplete. Never requests or stores a credential value.
@@ -39,8 +42,9 @@ Which MCP servers are mandatory, recommended, or used only when already present:
 [`../references/mcp-servers.md`](../references/mcp-servers.md).
 
 The design runs against **any site**. This file is that site. A URL, diagram, or
-schema from an already scanned site is not an input; if one is in the file, remove
-it and say so.
+schema from a **different** site is not an input; if one is in the file, remove
+it and say so. Previous scans of this site are inputs. Comparing them with the
+current production scan is [`../references/incremental-runs.md`](../references/incremental-runs.md).
 
 ## The rule that makes this worth having
 
@@ -81,9 +85,10 @@ engagement is for, drop those values and tell the human they were not kept.
 Before asking, look at the MCP servers already connected in this session.
 
 - **Splunk Observability Cloud and Splunk Enterprise are mandatory.** If either is absent, the gap report says so and points at copying that entry from `plugins/obengineer/.mcp.optional.json` with the organisation's own command. Do not invent a command. Tenant facts gathered without them are `stated`, not `measured`.
-- **Jira, if present.** When a Jira server is already connected, read issue keys that match `outcomes.known_pain` and record the keys. After work orders exist, converting them into issues, and queueing a slice when its issue moves into a sprint, follows [`mcp-servers.md`](../references/mcp-servers.md). Intake does not create those issues and does not start coding. When Jira is not connected, do not add it.
-- **Repository hosts, if present.** When a GitHub, GitLab, or other repository MCP is already connected, list the projects and codebases it can see and let the developer choose `initial_scope` from that list. Do not adopt every repository it can reach, and do not add the server.
-- **Recommend, do not require,** the other servers in [`mcp-servers.md`](../references/mcp-servers.md): local OpenTelemetry tools, ThousandEyes when an off-box hop is in scope, and a cloud inventory MCP for whatever cloud this site runs on so analyze can generate diagrams.
+- **Developer tools.** Ask which tools they use — examples of shape: Jira, GitHub, GitLab, Artifactory — and match the list to MCP servers already connected and to environment variable names already present. Record the server key or the variable name in `developer_tools`. Never read or store a value. Do not add a server that is not already connected. The procedure is [`mcp-servers.md`](../references/mcp-servers.md).
+- **Jira, if present.** When a Jira server is already connected, read issue keys that match `outcomes.known_pain` and record the keys. Generating backlog issues is engineering's option after the contract exists, and only when they ask. Intake does not create those issues and does not start coding. When Jira is not connected, do not add it. The rule is [`mcp-servers.md`](../references/mcp-servers.md).
+- **Repository hosts, if present.** When a GitHub, GitLab, or other repository MCP is already connected, match it to the named tool list. Do not choose `initial_scope` here, and do not adopt every repository it can reach. Scope authorization is the instrumentation phase.
+- **Recommend, do not require,** the other servers in [`mcp-servers.md`](../references/mcp-servers.md): local OpenTelemetry tools, ThousandEyes when an off-box hop is in scope, and a cloud inventory MCP for whatever cloud this site runs on so analyze can generate the production diagram.
 
 ### Step 2 — Tell them what to bring, then ask once for the gaps
 
@@ -91,7 +96,7 @@ The first message has two parts. The guidance comes first, then the numbered gap
 
 **Guidance, in substance:**
 
-The design runs against whatever site this engagement names. Bring as much as you have. A live **site scan is required**: every production, pre-production, and QA URL you can open. Diagrams you already have are welcome. If you can grant read-only access to a QA, pre-production, or production cloud environment, the run can generate the architecture diagram from that inventory — any cloud, no credential stored in the file. The only way to skip the scan is to write `no browser` and the reason.
+The design runs against whatever site this engagement names. Bring as much as you have. A live **production site scan is required**: the current production URL. Test and QA environments vary from production and are not the scan. Previous scans of this site are welcome; a scan of a different site is not. Diagrams you already have of this site are welcome. If you can grant read-only access to the production cloud environment, the run can generate the architecture diagram from that inventory — any cloud, no credential stored in the file. The only way to skip the scan is to write `no browser` and the reason.
 
 Then the optional numbers, with this notice: **the more accurate the data, the tighter the consumption expectation.** Every one of them may be `unknown`. Unknown widens the range. It does not block the design, and it does not cap it.
 
@@ -104,16 +109,17 @@ Then the optional numbers, with this notice: **the more accurate the data, the t
 
 Ask in this order, because early answers make later questions unnecessary:
 
-1. **Application, customer, date, and the initial scope.** Which repositories and which services to start with, and the QA or test environment. Without the name there is no filename. Without the scope the run asks instead of scanning every project a connected host can see. The branch may be the one they already have open, including an unmerged pull request.
-2. **Artifacts.** Diagrams, prior contract, prior schema, house-style `.docx`. Say explicitly that a prior schema will be *extended* and its key names reused, never renamed for taste.
-3. **Surfaces.** The site scan. Production, pre-production, and QA URLs; whether a test account exists and who holds it. Ask for the holder, never the credential. Empty URL lists are a gap, not a default.
-4. **Backends and cloud diagrams.** Languages, deploy targets, buses, account boundaries, what terminates TLS, and which of QA, pre-production, or production can be inventoried for a generated diagram.
-5. **Tenancy.** Realm, org, environments. Identifiers only.
-6. **Entitlement, then the optional traffic baseline.** The entitlement numbers in the table below, then daily sessions, hourly log volume, request rate, and infrastructure integrations. Say the accuracy notice once, not once per field.
-7. **Constraints.** Privacy regime, residency, consent platform, change windows, who deploys.
-8. **Outcomes.** Known pain, and whether they want to nominate the first journey.
-9. **Business context.** The commentary and the numbers in Step 4.
-10. **Public-record research.** Whether it is permitted, the brand terms to search, and their own status or incident history pages.
+1. **Application, customer, and date.** Without the name there is no filename. Do not ask for instrumentation scope. Engineering authorizes that after the contract exists.
+2. **Developer tools.** The list they use. Examples of shape: Jira, GitHub, GitLab, Artifactory. Then match it. A miss is an open item, not a prompt for a token.
+3. **Artifacts.** Diagrams, prior contract, prior schema, earlier scans of this site, house-style `.docx`. Say explicitly that a prior schema will be *extended* and its key names reused, never renamed for taste. Previous scans of this site are compared with the current production scan.
+4. **Surfaces.** The production site scan. Whether a test account exists and who holds it. Ask for the holder, never the credential. An empty production URL list is a gap, not a default. A test or QA URL does not fill it.
+5. **Backends and the production cloud diagram.** Languages, deploy targets, buses, account boundaries, what terminates TLS, and whether production can be inventoried for a generated diagram.
+6. **Tenancy.** Realm, org, environments. Identifiers only.
+7. **Entitlement, then the optional traffic baseline.** The entitlement numbers in the table below, then daily sessions, hourly log volume, request rate, and infrastructure integrations. Say the accuracy notice once, not once per field. An empty integration list is unsupplied, the same as `unknown`.
+8. **Constraints.** Privacy regime, residency, consent platform, change windows, who deploys.
+9. **Outcomes.** Known pain, and whether they want to nominate the first journey.
+10. **Business context.** The commentary and the numbers in Step 4.
+11. **Public-record research.** Whether it is permitted, the brand terms to search, and their own status or incident history pages.
 
 ### Step 3 — Ask for entitlement as pricing, not as a limit
 
@@ -142,10 +148,15 @@ Two answers remain hard vetoes rather than pricing inputs, and they do shape the
 recommendation: `session_replay_accepted_in_writing` and `log_observer_connect_entitled`.
 
 If the human does not have the numbers, record `unknown`, note who would, and move on.
-There is then **no exposure document**, the recommendation is written as though there is
-enough licensing, and the deliverable says the budget was not supplied. Do not stall the run
-on a procurement question, and do not invent a limit so that there is something to design
-around.
+There is **no exposure document** only when entitlement is `unknown` throughout and
+every traffic-baseline factor is unsupplied — neither `unknown` nor an empty
+collection counts as supplied. A supplied baseline with no entitlement is still
+written, as an expectation range. The rule is
+[`../references/entitlement-exposure.md`](../references/entitlement-exposure.md).
+The recommendation is written as though there is enough licensing, and the
+deliverable says the budget was not supplied. Do not stall the run on a
+procurement question, and do not invent a limit so that there is something to
+design around.
 
 Ask one more thing, once: **has the customer asked for a recommendation that fits inside
 what they already own?** Only a yes sets `fit_to_entitlement: true`, and then cutting to fit
@@ -191,7 +202,7 @@ Refuse to proceed, and say which check failed, when:
 - **A referenced path does not exist.** A diagram in the file but not on disk becomes a phantom citation in the deliverable.
 - **`standards.percentile` is not a single value.** One percentile, everywhere. Two percentiles in one contract means two definitions of "slow".
 - **A URL is in `surfaces` but the human said there is no browser.** One of the two is wrong; ask which.
-- **Both URL lists are empty and `front_end_scan_notes` is not `no browser` with a reason.** The site scan is required. Ask for the URLs. Do not proceed by reusing another site.
+- **`production_urls` is empty and `front_end_scan_notes` is not `no browser` with a reason.** The production scan is required. A test or QA URL does not satisfy it. Ask for the production URL. Do not proceed by reusing a different site. Previous scans of this site stay.
 - **`session_replay_entitled` is true but `session_replay_accepted_in_writing` is false.** Replay stays out of the recommendation until the cost and Core Web Vitals risk are accepted in writing.
 - **A business figure arrived as a benchmark.** "Retail typically loses $X a minute" is not this customer's number. Record `unknown` and name the ask.
 - **`fit_to_entitlement: true` with no entitlement numbers.** Nothing to fit to; either get the numbers or set it back to false.

@@ -11,8 +11,9 @@
 # a key: an absent key looks like an oversight, `unknown` looks like a decision.
 #
 # This file describes ONE engagement and whatever site that engagement names.
-# A scan, diagram, or taxonomy from a different site is not an input. Delete
-# it from this file rather than leaving it for a later run to cite.
+# A previous scan of this site is an input. A scan, diagram, or taxonomy from
+# a different site is not. Delete the other site rather than leaving it for a
+# later run to cite.
 #
 # NEVER put a token, password, or API key in this file. It records whether a
 # credential exists and who holds it, never its value.
@@ -27,16 +28,16 @@ engagement:
   document_version: 1
 
 # ---------------------------------------------------------------------------
-# Where the developer wants to start. The run does not adopt every project a
-# connected GitHub, GitLab, or other repository host can see. Empty means ask
-# before touching a fleet. QA and test are in scope on purpose: name the
-# services and the branch the first slice is proven on. The branch may be an
-# unmerged pull request.
+# Instrumentation scope. Intake does not ask for this and does not fill it.
+# After the contract exists, engineering authorizes it before any
+# instrumentation code is written. full, a subset of repositories, or a
+# subset of one repository by parent folder. The run does not adopt every
+# project a connected host can see. unknown means not yet authorized.
 # ---------------------------------------------------------------------------
 initial_scope:
-  repositories: []             # owner/name or a path the developer already has open
-  services: []                 # services to instrument first
-  environments: []             # qa, test, pre-prod — where this slice is proven
+  authorized: unknown          # unknown | full | repositories | parent_folders
+  repositories: []             # owner/name, when authorized is repositories
+  parent_folders: []           # repo-relative parent folders, when authorized is parent_folders
   branch: ""                   # empty means the current checkout, including an unmerged branch
 
 # ---------------------------------------------------------------------------
@@ -47,28 +48,30 @@ artifacts:
   narrative: ""                # path to an architecture write-up, if one exists
   prior_contract: ""           # an existing analysis of THIS application. A document from another site is not an input
   prior_schema: ""             # an existing attribute-schema.json for THIS application — reuse its key names
+  prior_scans: []              # earlier scans of THIS site. Empty means the first scan. A different site is not an entry
   house_style_docx: ""         # an approved .docx whose layout the output must match
   front_end_scan_notes: ""     # path, or "no browser: <reason>". Empty means the live site scan still has to run
 
 # ---------------------------------------------------------------------------
-# Cloud diagrams. The run draws these from QA, pre-production, or production
-# when a cloud inventory MCP for THIS site's cloud is already connected.
-# Any cloud. Never a credential. generate true means "try"; it does not block
-# the site scan when no inventory server is connected.
+# Cloud diagrams. The run draws production when a cloud inventory MCP for
+# THIS site's cloud is already connected. Test and QA inventories vary from
+# production and are not the diagram. Any cloud. Never a credential.
+# generate true means "try"; it does not block the site scan when no
+# inventory server is connected.
 # ---------------------------------------------------------------------------
 cloud_diagrams:
   generate: true
-  environments: []             # any of: qa, pre-prod, production
+  environments: []             # production
   notes: ""                    # which account or region, and who can grant read-only access. Never a key.
 
 # ---------------------------------------------------------------------------
-# Front-end surfaces to deep-scan. A live site scan is required.
-# Provide every URL you have — production, pre-production, and QA. The only
-# opt-out is front_end_scan_notes set to "no browser: <reason>".
+# Front-end surfaces to deep-scan. The current production site is the scan.
+# Test and QA environments vary from production and are not the scan.
+# The only opt-out is front_end_scan_notes set to "no browser: <reason>".
 # ---------------------------------------------------------------------------
 surfaces:
-  production_urls: []          # required unless non_production_urls is set, or there is no browser
-  non_production_urls: []      # QA and pre-production. Bring these too; they are often the safer scan
+  production_urls: []          # required unless front_end_scan_notes is "no browser: <reason>"
+  non_production_urls: []      # not the scan. Recorded only if already named. The design does not use them.
   host_and_remotes: ""         # which bundle owns provider boot, which are remotes
   edge_cdn: ""
   test_account:
@@ -170,7 +173,8 @@ traffic_baseline:
   logs:
     gb_per_hour_avg: unknown       # hourly log volume, average
     gb_per_hour_peak: unknown
-  infra_integrations: []
+  infra_integrations: unknown
+    # Unsupplied. A supplied value is a list, and [] is still unsupplied.
     # One entry per integration that already emits infrastructure metrics
     # (kubernetes, a cloud provider, a host agent). Example shape, not a
     # requirement to invent a vendor:
@@ -209,6 +213,16 @@ outcomes:
   first_journey: ""            # leave blank to have the run rank candidates and propose one
   known_pain: []               # incidents that prompted the engagement
   audiences: ["sre", "engineer", "executive"]
+
+# ---------------------------------------------------------------------------
+# Developer tools the human names. Intake asks for the list, then matches it
+# to MCP servers and environment variable names already present. Record the
+# server key or the variable name. Never a token, password, or API key.
+# Examples of shape, not a required set: jira, github, gitlab, artifactory.
+# ---------------------------------------------------------------------------
+developer_tools:
+  named: []                    # what the human says they use
+  matched: []                  # server key or env var name already present. Never a value.
 
 # ---------------------------------------------------------------------------
 # Business context, in the customer's words and numbers.

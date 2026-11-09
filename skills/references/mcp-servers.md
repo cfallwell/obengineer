@@ -42,7 +42,7 @@ not a startup failure.
 |---|---|
 | `local-otel-tools` | The team runs a local server that reads a Collector config or SDK setup and reports what it would emit |
 | `thousandeyes` | The evidence shows an off-box hop: CDN, DNS, SaaS, or a path APM cannot see |
-| A cloud inventory MCP for the cloud this site actually runs on | Diagram generation for QA, pre-production, or production. Any vendor. The run uses a server that is already connected; it does not install one and it does not assume a provider |
+| A cloud inventory MCP for the cloud this site actually runs on | Diagram generation for production. Test and QA inventories vary from production and are not the diagram. Any vendor. The run uses a server that is already connected; it does not install one and it does not assume a provider |
 
 ## If present
 
@@ -50,17 +50,30 @@ Use a server only when the developer environment already has it connected.
 Do not add a `jira`, `github`, or `gitlab` entry to `.mcp.json` from this
 repository, and do not guess a command.
 
+### Developer tools already in the environment
+
+Intake asks the human which tools they use. Examples of shape: Jira, GitHub,
+GitLab, Artifactory. Match that list to MCP servers already connected and to
+environment variable names already present. Record the server key or the
+variable name in `developer_tools.matched`. Do not read the value, do not write it into
+`engagement-inputs.yaml`, and do not ask the human to paste it. A credential
+stays in the user environment or in the MCP server that already holds it.
+
+A named tool with no match is not installed by the run.
+
 ### Jira
 
 At intake, if a Jira server is already connected, read issue keys that match
 `outcomes.known_pain` and record the keys. If none is connected, say that a
 Jira MCP would supply those keys, and stop. Do not ask for a token.
 
-After the human accepts the contract, each accepted work order becomes **one
-Jira issue**. The work-order file stays the instruction. The issue is the
-queue. The issue names the work-order path, the developer's initial scope
-(repositories, services, and the QA or test environment), and the acceptance
-evidence. It is created in the backlog. Creating it does not start coding.
+After the human accepts the contract, engineering has the **option** of
+generating backlog issues, and only when a Jira server is already connected.
+One backlog issue per accepted work order, and only when engineering asks.
+The run does not create issues on its own. The work-order file stays the
+instruction. The issue, when created, names the work-order path, the
+authorized `initial_scope`, and the acceptance evidence. It is created in
+the backlog. Creating it does not start coding.
 
 **Moving that issue into a sprint is the trigger.** The engineering agent
 then queues that work order with the developer. It does not push to the
@@ -74,19 +87,25 @@ project key.
 ### Repository hosts
 
 GitHub, GitLab, and any other repository MCP already connected are how a run
-learns which projects and codebases the developer can see. List them. The
-developer chooses `initial_scope`. The run does not adopt every repository
-the server can reach.
+learns which projects and codebases the developer can see. At intake, matching
+them to `developer_tools` is the whole use. Choosing what to instrument is not
+an intake question.
+
+After the contract exists, engineering authorizes `initial_scope`: the full
+scope, a subset of repositories, or a subset of a repository by parent folder.
+A connected host may list candidates. The run does not adopt every repository
+the server can reach, and it does not write instrumentation code until
+`initial_scope.authorized` is `full`, `repositories`, or `parent_folders`.
 
 CI checks out the pull-request branch with the forge's own credentials. It
-does not shell out to a guessed host command. A codebase outside
-`initial_scope` stays out of scope until the developer adds it.
+does not shell out to a guessed host command. A path outside the authorized
+scope stays out until engineering adds it.
 
 ## Simple setup
 
 The developer environment is the configuration. Connected MCP servers are the
 inventory. Splunk Observability Cloud and Splunk Enterprise remain mandatory
 for a tenant fact to be labelled `measured`. Everything else is used when it
-is already there. The only new thing the developer must name is the initial
-scope: which repositories and services to start with, and the QA or test
-environment those slices are proven in.
+is already there. At intake the human names the developer tools they use.
+Instrumentation scope is authorized later, by engineering, against the
+accepted contract.

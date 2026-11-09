@@ -182,8 +182,9 @@ in a separate `entitlement-exposure-<app>-<date>.md`. The recommendation itself 
 application needs: a customer who learns that full checkout observability needs 40,000 more MTS
 may buy them, phase them, or promote fewer dimensions, and all three beat a dimension being
 dropped silently. Trimming to fit happens only when `fit_to_entitlement` is set because they
-asked. Given nothing, there is no exposure document and the run recommends as though there is
-enough licensing.
+asked. Given neither entitlement nor a supplied traffic baseline, there is no exposure
+document and the run recommends as though there is enough licensing. An empty list is
+not a supplied baseline. A baseline with no entitlement is an expectation range.
 
 **Business context is what makes the value section real.** Current MTTD/MTTA/MTTR, incidents a
 month, how many people join a bridge, what an engineering hour costs, what fraction of incidents
@@ -206,7 +207,7 @@ Four runs, each with a run contract and an agent definition:
 
 | Run | Prompt | Output |
 |---|---|---|
-| Analyze | [`prompts/01-analyze-application.md`](prompts/01-analyze-application.md) | **The customer document** — architecture observed, critical findings, the full recommendation set, and the business value realization it closes on — plus its `.docx`, `attribute-schema.json`, and, when entitlement was supplied, the account team's entitlement exposure document |
+| Analyze | [`prompts/01-analyze-application.md`](prompts/01-analyze-application.md) | **The customer document** — architecture observed, critical findings, the full recommendation set, and the business value realization it closes on — plus its `.docx`, `attribute-schema.json`, and, when entitlement or a supplied traffic baseline exists, the account team's entitlement exposure document |
 | Wiki | [`prompts/02-build-instrumentation-wiki.md`](prompts/02-build-instrumentation-wiki.md) | `wiki/<Customer>/<app>/` — one note per BT, workflow, use case, finding, detector, and objective, plus work orders, the value workings, and tracked versions |
 | Implement | [`prompts/03-implement-instrumentation.md`](prompts/03-implement-instrumentation.md) | Small reviewable PRs, one contract slice each |
 | Configure | [`prompts/04-generate-observability-as-code.md`](prompts/04-generate-observability-as-code.md) | A `terraform/` tree and a plan — executive, SRE, and engineer modules |
@@ -237,7 +238,7 @@ pipeline possible at all. See
 | Skill | Purpose |
 |---|---|
 | `$engagement-intake` | Collect and validate the inputs no scan can reach — artifacts, tenancy, entitlement, privacy regime, who deploys what, and the business context behind the engagement — into one file, asking only for what is missing |
-| `$instrumentation-analyze` | Deep-scan the front end (script order, competing agents, where the agent initialises, router, CSP, consent, status-versus-content), map backends and buses, inventory the existing portfolio footprint, enumerate business transactions from evidence — then write the customer document in canonical template order, findings at section 4 and the catalogue closing the body, emit all three artifacts, read the last twelve months of the public record for the value section, and price the recommendation for the account team when entitlement was supplied |
+| `$instrumentation-analyze` | Deep-scan the front end (script order, competing agents, where the agent initialises, router, CSP, consent, status-versus-content), map backends and buses, inventory the existing portfolio footprint, enumerate business transactions from evidence — then write the customer document in canonical template order, findings at section 4 and the catalogue closing the body, emit all three artifacts, read the last twelve months of the public record for the value section, and price the recommendation for the account team when entitlement or a supplied traffic baseline exists |
 | `$instrumentation-wiki` | Turn the accepted analysis into one note per subject, with work orders, the value workings and their cited sources, tracked versions, and the host memory pointers |
 | `$baggage-propagation` | The cross-cutting attribute set and W3C Baggage contract: set once, propagate, stamp on every span via `SpanProcessor.onStart` — and the byte budget that decides which keys earn a place in the header |
 | `$cardinality-budget` | Dimension versus attribute-only as arithmetic: MTS cost per promotion, MMS and TMS sizing, the classifiers that replace raw URLs and topic names, and the priced overage the account team gets when the total exceeds what the customer owns |

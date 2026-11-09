@@ -267,31 +267,41 @@ def test_terraform_reference_pins_versions_and_records_the_hard_negatives():
 # --------------------------------------------------------------------------- #
 # inputs are collected once, by reference
 # --------------------------------------------------------------------------- #
-def test_any_site_scan_is_required_and_prior_scans_are_not_evidence():
+def test_production_scan_is_required_and_previous_scans_of_this_site_are_inputs():
     """The design runs against whatever site this engagement names.
 
-    A leftover URL or diagram from an already scanned site is not an input, and
-    a run with no URLs and no explicit no-browser reason must stop and ask.
+    The scan is the current production site. Test and QA vary from production
+    and are not a substitute. Previous scans of this site are inputs and are
+    compared with the current scan. A leftover from a different site is not.
     """
     intake = (SKILLS / "engagement-intake" / "SKILL.md").read_text()
     analyze = (SKILLS / "instrumentation-analyze" / "SKILL.md").read_text()
     template = (ROOT / "inputs" / "engagement-inputs.template.yaml").read_text()
     prompt = (PROMPTS / "01-analyze-application.md").read_text()
+    incremental = (SKILLS / "references" / "incremental-runs.md").read_text()
 
     for text in (intake, analyze, prompt):
         assert "any site" in text.lower() or "whatever site" in text.lower(), (
             "the run must say it applies to whatever site this engagement names"
         )
-        assert "already scanned" in text or "different site" in text, (
-            "a previous site's scan must be rejected, not cited"
+        assert "different site" in text, (
+            "a different site's scan must be rejected, not cited"
         )
-    assert "site scan is required" in intake.lower()
+    assert "production site scan is required" in intake.lower()
+    assert "test and qa" in intake.lower()
+    assert "previous scans of this site" in intake.lower()
     assert "no browser" in template
+    assert "production_urls:" in template
+    assert "prior_scans:" in template
     assert "cloud_diagrams:" in template
-    assert "qa, pre-prod, production" in template
-    assert "generated" in analyze and "pre-production" in analyze, (
-        "analyze must be able to draw QA, pre-production, or production diagrams"
-    )
+    assert "qa, pre-prod, production" not in template
+    assert "production architecture" in analyze
+    assert "Do not draw" in analyze and "test or QA" in analyze
+    for outcome in ("Changes", "Merges", "Additions"):
+        assert outcome in incremental, (
+            "comparing previous scans of this site must record "
+            f"{outcome}"
+        )
 
 
 def test_traffic_baseline_feeds_a_prediction_not_a_license_ceiling():
@@ -313,9 +323,23 @@ def test_traffic_baseline_feeds_a_prediction_not_a_license_ceiling():
     assert "sessions_per_day_avg × 30" in budget
     assert "gb_per_hour_avg × 24" in budget
     assert "entities × metrics_per_entity" in budget
+    assert "APM traces / minute, average = requests_per_minute_avg" in budget
+    trace_lines = [
+        line for line in budget.splitlines() if line.startswith("APM traces / minute")
+    ]
+    assert trace_lines and all("spans_per_trace" not in line for line in trace_lines), (
+        "that product is spans per minute, and TAPM is traces per minute"
+    )
+    assert "APM spans / minute, average = requests_per_minute_avg × spans_per_trace" in budget
+    assert "infra_integrations: unknown" in template
+    assert "infra_integrations: []" not in template
+    assert "infra_integrations: []` is unsupplied" in budget
+    assert "infra_integrations: []` is unsupplied" in exposure
     assert "not a cap" in budget or "does not cap" in budget
     assert "reference, not a ceiling" in exposure
     assert "sessions_per_day_avg × 30" in exposure
+    trace_rows = exposure.split("APM spans / minute")[0]
+    assert "requests_per_minute × spans_per_trace" not in trace_rows
 
 
 def test_splunk_mcp_servers_are_mandatory_and_jira_is_discovered():
@@ -649,9 +673,12 @@ def test_entitlement_prices_the_recommendation_and_never_silently_caps_it():
 def test_the_analysis_run_owns_both_new_outputs():
     skill = (SKILLS / "instrumentation-analyze" / "SKILL.md").read_text()
     assert "entitlement-exposure-<app>-<date>.md" in skill
-    assert "only when `entitlement` was supplied" in skill, (
-        "the exposure document is conditional; produced unconditionally it is "
-        "fabricated"
+    output = skill.split("## Output", 1)[1].split("## ", 1)[0]
+    assert "traffic_baseline" in output, (
+        "a baseline with no entitlement still requires the exposure document"
+    )
+    assert "empty collection" in output, (
+        "an empty integration list is not a supplied baseline"
     )
     assert "public record" in skill and "twelve months" in skill
     assert "business-value.md" in skill
@@ -837,11 +864,20 @@ def test_pre_merge_branch_job_updates_the_contract_without_merging():
     assert "Do not merge" in spec
     assert "obengineer:" in spec
     assert "initial_scope" in spec
+    assert "authorized" in spec
     assert "never pushes to the default branch" in spec
     assert "sprint" in mcp and "GitHub" in mcp and "GitLab" in mcp
-    assert "one Jira issue" in mcp or "one\nJira issue" in mcp
+    assert "option" in mcp
+    assert "does not create issues" in mcp
+    assert "developer_tools" in mcp
     assert "initial_scope:" in template
-    assert "repositories:" in template and "services:" in template
+    assert "authorized: unknown" in template
+    assert "parent_folders:" in template
+    assert "developer_tools:" in template
+    implement = (SKILLS / "instrumentation-implement" / "SKILL.md").read_text()
+    intake = (SKILLS / "engagement-intake" / "SKILL.md").read_text()
+    assert "parent_folders" in implement
+    assert "does not ask for instrumentation scope" in intake.lower() or "Do not ask for instrumentation scope" in intake
     assert "pull_request:" in example
     assert "Do not merge" in example
     assert "github.head_ref" in example

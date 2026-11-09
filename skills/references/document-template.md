@@ -752,7 +752,7 @@ Appendix E.
 - [ ] Every public-record entry carries a URL, a publication, a date, and its source class
 - [ ] Measured performance states the conditions it was measured under, and what instrumentation will not change
 - [ ] No licensing, consumption, or overage number appears in this document
-- [ ] Entitlement exposure document written when entitlement was supplied, referenced in one document-control line, and not otherwise cited
+- [ ] Entitlement exposure document written when entitlement or a supplied traffic baseline exists (a factor neither `unknown` nor an empty collection), referenced in one document-control line, and not otherwise cited. Absent when neither was supplied
 - [ ] Appendix A dictionary agrees with `attribute-schema.json`
 - [ ] Appendix C work order lists slices, files, CI checks, and acceptance evidence
 - [ ] Appendix E open items are answerable questions

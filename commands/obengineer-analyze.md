@@ -29,8 +29,8 @@ Not complete until all three artifacts exist and the render verifier exits 0:
 - `docs/observability/<Customer>-<App>-Analysis-<date>.docx`, rendered from that Markdown
 - `docs/observability/attribute-schema.json`
 
-Plus a fourth, **only when `entitlement` was supplied**:
-`docs/observability/entitlement-exposure-<app>-<date>.md`, addressed to the account team,
+Plus a fourth, when entitlement or a supplied traffic baseline exists:
+`docs/observability/entitlement-exposure-<app>-<date>.md` for the account team,
 markdown only, never rendered. Spec:
 `{{OBENGINEER_ROOT}}/skills/references/entitlement-exposure.md`.
 

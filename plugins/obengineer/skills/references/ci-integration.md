@@ -81,11 +81,12 @@ The default branch is not a precondition. The job that does this is
 It is the strategy for updating the contract and the code **before** a pull
 request merges. It does not merge.
 
-The developer names the starting point in `initial_scope`: repositories,
-services, and the QA or test environment. A diff outside that scope is
-skipped. An empty scope is not permission to scan every project a connected
-GitHub, GitLab, or other repository MCP can see. The job asks the developer
-to name the scope and exits without writing code.
+Engineering authorizes the starting point in `initial_scope` after the contract
+exists: `full`, a subset of `repositories`, or `parent_folders` inside a
+repository. Intake does not collect this. A diff outside that scope is
+skipped. `authorized: unknown` is not permission to scan every project a
+connected GitHub, GitLab, or other repository MCP can see. The job asks
+engineering to authorize the scope and exits without writing code.
 
 On each update of a pull request whose paths are in scope:
 
@@ -94,7 +95,7 @@ On each update of a pull request whose paths are in scope:
 3. **Update the contract on that same branch** when the diff introduces code the contract does not yet cover. Delta mode only: the new paths, the notes they touch, and the schema keys they require. Naming still happens once, in that commit. The job does not invent a workflow the evidence does not support.
 4. **Implement one work order on that same branch**, the slice the contract update just named, inside the protected-path refusals. One slice. The commit lands on the head branch.
 5. **Push to the head branch. Do not merge.** A human merges. The job has no merge permission. If the token cannot push to the head (a fork pull request), fail the check and post the diff as a review comment. Do not open a second pull request for the same slice.
-6. **When a Jira MCP is already connected**, the accepted work order is one issue, and moving that issue into a sprint is what queues the work with the developer. The rule is [`mcp-servers.md`](mcp-servers.md). CI does not listen for the sprint transition. The developer environment does. The branch job is what keeps the branch and the contract together until merge.
+6. **When a Jira MCP is already connected**, engineering may choose to generate one backlog issue for the accepted work order. The run does not create the issue unless engineering asks. Moving that issue into a sprint is what queues the work with the developer. The rule is [`mcp-servers.md`](mcp-servers.md). CI does not listen for the sprint transition and does not create the issue. The developer environment does. The branch job is what keeps the branch and the contract together until merge.
 
 Layer 2 still opens a fresh pull request when a human labels work on the default line of development. This job is the other door: the developer already opened the branch, and the skills run there before merge.
 

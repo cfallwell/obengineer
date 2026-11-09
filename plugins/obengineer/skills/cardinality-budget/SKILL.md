@@ -78,7 +78,7 @@ unanswerable. Recommend one.
 ### The prediction, when a baseline was supplied
 
 License ceilings are not how this skill decides. `traffic_baseline` in the inputs is
-optional. Each supplied factor is multiplied, the arithmetic is shown, and the result
+optional. Each supplied factor is applied, the arithmetic is shown, and the result
 is an **expectation** with an average and a peak. A missing factor widens that row
 into a range that names the missing factor. It does not invent the factor, and it
 does not drop the recommendation.
@@ -93,9 +93,23 @@ beacon volume / day           = sessions_per_day × page_views_per_session
 ```
 
 ```
-APM traces / minute, average = requests_per_minute_avg × spans_per_trace
-APM traces / minute, peak    = requests_per_minute_peak × spans_per_trace
+APM traces / minute, average = requests_per_minute_avg
+APM traces / minute, peak    = requests_per_minute_peak
 ```
+
+`requests_per_minute` is the root-request rate: one trace start per request.
+Do not multiply it by `spans_per_trace`. That product is spans per minute, and
+the entitlement it would be compared with is `traces_per_minute`.
+
+```
+APM spans / minute, average = requests_per_minute_avg × spans_per_trace
+APM spans / minute, peak    = requests_per_minute_peak × spans_per_trace
+```
+
+Span volume stays span volume. It is not compared with `traces_per_minute`.
+The inputs have no span-rate entitlement; do not invent one. A missing
+`spans_per_trace` widens the span row and names the missing factor. The trace
+row does not depend on it.
 
 ```
 log GB / day, average = gb_per_hour_avg × 24
@@ -114,8 +128,9 @@ promotion. Add the two only after both are computed, and label the sum.
 Custom MTS from promotions stays the formula at the top of this skill. Compare each
 expectation with the matching entitlement field when that field was supplied:
 `sessions_per_month`, `traces_per_minute`, `ingest_gb_per_day`,
-`custom_mts_included - custom_mts_in_use`. The comparison is the exposure document's
-job. This skill does not cap the design to make the comparison fit.
+`custom_mts_included - custom_mts_in_use`. Span volume has no matching field, so
+it is shown and not subtracted from `traces_per_minute`. The comparison is the
+exposure document's job. This skill does not cap the design to make the comparison fit.
 
 `tms_cardinality_ceiling`, when the human supplied an observed peak, is a baseline
 the Troubleshooting MetricSet prediction is set beside. It is not a maximum the
@@ -123,9 +138,11 @@ design must stay under.
 
 ### When the numbers are `unknown`
 
-When entitlement is `unknown` throughout **and** every `traffic_baseline` field is
-`unknown`, there is no exposure document and no assumed limit. Recommend what the
-application needs, state that the budget was not supplied, and record the ask.
+When entitlement is `unknown` throughout **and** every `traffic_baseline` factor
+is unsupplied, there is no exposure document and no assumed limit. A factor is
+supplied only when its value is neither `unknown` nor an empty collection (`[]`
+or `{}`). `infra_integrations: []` is unsupplied. Recommend what the application
+needs, state that the budget was not supplied, and record the ask.
 
 When a baseline exists and entitlement does not, write the expectation range and do
 not invent a license to subtract it from.
