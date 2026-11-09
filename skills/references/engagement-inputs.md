@@ -24,11 +24,12 @@ gives the engagement an artifact that outlives the chat.
 | Section | Decides | Blank means |
 |---|---|---|
 | `engagement` | Filenames, document title, version on the deliverable | The run invents a name, and the next run invents a different one |
-| `initial_scope` | What engineering has authorized to instrument, after the contract exists: the full scope, a subset of repositories, or a subset of a repository by parent folder. Intake does not ask for it | Instrumentation stops and asks. An empty authorization is not permission to scan every project a host can see. An empty branch means the current checkout, including an unmerged pull request |
+| `initial_scope` | What engineering has authorized to instrument, after the contract exists: the full scope, repository-qualified repositories or parent folders, and optional per-repository branches. Intake does not ask for it | Instrumentation stops and asks. An empty authorization is not permission to scan every project a host can see. An empty branch mapping means each current checkout, including an unmerged pull request |
 | `artifacts` | Whether the backend map starts from a diagram the human already has; whether an existing taxonomy of **this** application is extended; which earlier scans of **this** site to compare | Journeys get named from a product playbook instead of this application. A file from a different site is not this row |
 | `cloud_diagrams` | Whether the run may draw production architecture from a cloud inventory MCP already connected for this site. Test and QA inventories are not the diagram | No generated diagram. The human's own diagrams still count. Any cloud |
 | `surfaces` | The live production site scan. Required for whatever site this engagement names, unless `front_end_scan_notes` is `no browser: <reason>`. Test and QA URLs are not the scan | The run stops and asks for the production URL. It does not invent a site and it does not substitute a test or QA environment |
-| `analysis_access` | Whether a token, an API key, or a dummy test login was submitted so the scan can see authenticated surfaces, and that it is rotated when the analysis completes | The scan stays unauthenticated and says so. `unknown` is acceptable. A secret value in the file is not |
+| `security_assessment` | Whether security screening is passive, explicitly safe-active, or opted out; and the origins, exclusions, and request limits for safe-active checks | Passive source/runtime review only. No mutation, brute force, load, destructive fuzzing, or cross-tenant access |
+| `analysis_access` | Whether a token, an API key, or a dummy test login was submitted so the scan can see authenticated surfaces, and that its owner must rotate it when analysis completes | The scan stays unauthenticated and says so. `unknown` is acceptable. A secret value in the file is not |
 | `traffic_baseline` | The optional averages and peaks the consumption prediction multiplies: daily sessions, hourly log volume, request rate, infrastructure integrations | The expectation is a wide range that names the missing factor. The design is not capped |
 | `backends` | Which SDK sections and which bus inject/extract subsections the guide must contain | The messaging boundary section is written as `Not in evidence` for a bus that exists |
 | `tenancy` | Whether exit criteria can be phrased as queries a TAM can run | Exit criteria become assertions instead of checks |
@@ -185,11 +186,26 @@ list is unsupplied, the same as `unknown`.
 
 Ask for the list the human actually uses. Examples of shape: Jira, GitHub,
 GitLab, Artifactory. Then match that list to MCP servers already connected and
-to environment variable **names** already present. Record the server key or the
-variable name in `developer_tools.matched`. Never read the value into this file,
+to environment variable **names** already present. Record `{tool, via, key}` in
+`developer_tools.matched`. Never read the value into this file,
 and never ask the human to paste one. A tool with no match stays in `named` and
 is not installed by the run. How a matched server is used:
 [`mcp-servers.md`](mcp-servers.md).
+
+Jira is usable only when the human named Jira **and** `matched` records a connected
+Jira MCP. A connected server the human did not name is ignored. A named tool without
+a match remains a manual workflow; the wiki work order supplies copy/paste-ready text.
+
+Repository and Jira ownership are mapped after analysis in
+`docs/observability/implementation-map.json`, when the contract subjects are known.
+Intake does not guess repository or project ownership.
+
+## Security assessment authorization
+
+`security_assessment.mode` defaults to `passive`. `safe-active` is valid only with
+explicit `authorized_origins`, exclusions, and request limits. It permits non-mutating
+checks only. `none` records an intentional coverage gap. The complete assessment and
+OWASP coverage rules are in [`security-assessment.md`](security-assessment.md).
 
 ## Credentials
 
@@ -206,14 +222,14 @@ A production login is not an input. `login_id` names that dummy account.
 
 When any of `token_ref`, `api_key_ref`, `login_id`, or `password_ref` is
 supplied, `rotate_on_completion` is `true`. The token, the API key, the login
-ID, and the password are rotated when the analysis completes. `unknown` on
+ID, and the password must be rotated by their owner when analysis completes. `unknown` on
 every field means nothing was submitted; leave `rotate_on_completion` as
 `unknown`.
 
 `tenancy.tokens_held_by` is a different fact: who can issue the ingest token
 when instrumentation starts. It is a name, not a token.
-`developer_tools.matched` records a server key or an environment variable name
-already present. It is not permission to read that variable.
+`developer_tools.matched` records `{tool, via, key}` for a server key or environment
+variable name already present. It records no value and is not permission to read one.
 
 Splunk API credentials are the memory repository `.env`, copied from
 `templates/memory-repo/.env.template`. They are not new fields.

@@ -54,8 +54,9 @@ repository, and do not guess a command.
 
 Intake asks the human which tools they use. Examples of shape: Jira, GitHub,
 GitLab, Artifactory. Match that list to MCP servers already connected and to
-environment variable names already present. Record the server key or the
-variable name in `developer_tools.matched`. Do not read the value, do not write it into
+environment variable names already present. Record each match as
+`{tool: "<named tool>", via: "mcp" | "env", key: "<server or variable name>"}` in
+`developer_tools.matched`. Do not read the value, do not write it into
 `engagement-inputs.yaml`, and do not ask the human to paste it. A credential
 stays in the user environment or in the MCP server that already holds it.
 
@@ -63,13 +64,15 @@ A named tool with no match is not installed by the run.
 
 ### Jira
 
-At intake, if a Jira server is already connected, read issue keys that match
-`outcomes.known_pain` and record the keys. If none is connected, say that a
-Jira MCP would supply those keys, and stop. Do not ask for a token.
+Jira is enabled only when the human named Jira under `developer_tools.named`
+**and** `developer_tools.matched` contains
+`{tool: "jira", via: "mcp", key: "<connected server key>"}`. At intake, only
+then read issue keys that match `outcomes.known_pain`. Connected-but-unnamed
+Jira and named-but-unavailable Jira are not used. Do not ask for a token.
 
 After the human accepts the contract, engineering has the **option** of
-generating backlog issues, and only when a Jira server is already connected.
-One backlog issue per accepted work order, and only when engineering asks.
+generating backlog issues, and only when Jira is enabled by the predicate above.
+Create at most one linked issue per mapped project, and only when engineering asks.
 The run does not create issues on its own. The work-order file stays the
 instruction. The issue, when created, names the work-order path, the
 authorized `initial_scope`, and the acceptance evidence. It is created in
@@ -78,11 +81,16 @@ the backlog. Creating it does not start coding.
 **Moving that issue into a sprint is the trigger.** The engineering agent
 then queues that work order with the developer. It does not push to the
 default branch. It works on the branch the developer already has, or on the
-pull-request branch CI is checking. One issue per work order. A ticket per
-file is not a queue.
+pull-request branch CI is checking. One issue per mapped project is the maximum;
+a ticket per file is not a queue.
 
-Without a Jira server, the work-order file is the queue. Do not invent a
-project key.
+Without enabled Jira, the app-level work-order file is the queue. It carries
+copy/paste-ready issue text for whatever engineering tool the team uses. Do not
+attempt Jira, invent a project key, or treat Jira as the default.
+
+For a unified multi-repository work order, create at most one requested issue per
+mapped Jira project. Link sibling issues and repository pull requests to the work-order
+id. The wiki work order remains authoritative.
 
 ### Repository hosts
 

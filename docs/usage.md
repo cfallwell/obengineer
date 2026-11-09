@@ -92,6 +92,8 @@ with guesses.
 - front-end production behavior, including script order, router behavior, competing
   agents, provider initialization, CSP, consent, and status-versus-content behavior;
 - backend and messaging architecture from source and diagrams;
+- exposed credentials, API inventory, and authorized OWASP Web 2025/API 2023 security
+  checks with explicit coverage and limitations;
 - existing Observability Cloud and Enterprise telemetry through enabled MCP servers
   and approved APIs; and
 - an existing wiki's metadata and accepted names when this is a repeat run.
@@ -106,6 +108,7 @@ Required:
 docs/observability/analysis-<app>-<date>.md
 docs/observability/<Customer>-<App>-Analysis-<date>.docx
 docs/observability/attribute-schema.json
+docs/observability/implementation-map.json
 ```
 
 Conditional:
@@ -117,16 +120,26 @@ docs/observability/entitlement-exposure-<app>-<date>.md
 The entitlement exposure file exists when entitlement or a meaningful traffic baseline
 was supplied. It is for the account team and is not rendered into the customer document.
 
+Intake itself creates no git history. Analysis includes the validated intake file, creates
+`initial-<app>-analysis` for the first run or `ci-initiated-<app>-analysis` for a later
+CI run, commits evidence/security, contract/map, and render/review as phase commits, then
+opens one docs-only PR. It never merges that PR.
+
 ### Completion conditions
 
-Analysis is incomplete until:
+Analysis is complete only when:
 
 - the Markdown follows the canonical section order;
-- Critical Findings is section 4;
+- section 4 is Critical Findings and includes exposed-credential/API checks, complete
+  OWASP coverage matrices, and confidence-rated findings;
+- every confirmed or high-confidence vulnerability is also listed under section 5's
+  P0 recommended fixes;
 - cross-cutting attributes and baggage propagation includes all required code patterns;
 - business transactions, workflows, metrics, joins, detectors, objectives, and use
   cases form a consistent catalogue;
 - the attribute dictionary agrees with `attribute-schema.json`;
+- every accepted target maps to repository legs in `implementation-map.json`, or the
+  missing ownership is an explicit engineering question;
 - Business Value Realization is the last body section and labels each figure by origin;
 - the Word file was generated from Markdown, not edited independently;
 - the render verifier exits successfully; and
@@ -139,27 +152,39 @@ dimension eligibility, thresholds and objectives, rollout order, work boundaries
 known open items. Later runs reuse accepted names exactly because dashboards, detectors,
 MetricSets, and code depend on them.
 
-Do not treat a generated document as accepted merely because rendering succeeded.
-
-## Run 2: build the wiki
+Do not treat a generated document as accepted merely because rendering succeeded. Review
+and merge the analysis PR, then accept the exact analysis commit with:
 
 ```text
-/ob-wiki
+/ob-generate accept docs/observability/analysis-<app>-<date>.md at <analysis-commit-sha>
+```
+
+The command verifies the Markdown, schema, and implementation map at that SHA and writes
+`analysis-<app>-<date>.acceptance.yaml`. A missing path/SHA or later file changes stop
+generation and require a new review.
+
+## Run 2: accept and generate the wiki
+
+```text
+/ob-generate accept docs/observability/analysis-<app>-<date>.md at <analysis-commit-sha>
 ```
 
 ### Preconditions
 
-- a person has accepted the analysis;
+- a person supplies the reviewed analysis path and exact commit SHA;
 - the analysis and `attribute-schema.json` are present; and
 - accepted application and service names are known.
 
-The command stops if acceptance is missing.
+If the path or SHA is missing, the command prints the exact acceptance invocation and
+stops. File presence, successful rendering, generic approval, or merge alone is not
+acceptance.
 
 ### What it writes
 
 ```text
 wiki/README.md
 wiki/apps/<app>/index.md
+wiki/apps/<app>/implementation/work-orders/
 wiki/apps/<app>/services/<service>/
     index.md
     meta/
@@ -174,9 +199,7 @@ wiki/apps/<app>/services/<service>/
     detectors/
     slos/
     business/
-    implementation/
-        work-orders/
-        enforcement.md
+    implementation/enforcement.md
     as-code/
 ```
 
@@ -190,7 +213,8 @@ The customer-facing Markdown remains the only narrative document. The wiki split
 accepted catalogue into one retrievable note per subject, allowing an implementation
 run to load the index and only the relevant workflow, contract, and work-order notes.
 
-`implementation/work-orders/` defines pull-request-sized slices and their order.
+App-level `implementation/work-orders/` defines bounded unified work orders. One order
+may span service and repository boundaries and coordinates one linked PR per repository.
 `meta/run-log.md`, `meta/versions.md`, and `meta/decisions.md` preserve state for repeat
 runs. `attribute-schema.json` remains the machine-readable enforcement contract.
 
@@ -201,7 +225,7 @@ Wiki generation does not write application code, Terraform, or another `.docx`.
 From the toolkit checkout:
 
 ```bash
-export ENGAGEMENT=/path/to/memory-repo
+export OB_PROJECT=/path/to/project-repo
 make verify-wiki WIKI="wiki/apps/<app>/services/<service>"
 ```
 
@@ -210,29 +234,42 @@ wikilinks, recognized index counts, promoted-note content, pointer rules, limite
 and value provenance, and credential-shaped values. The canonical wiki reference remains
 the authority for directories and metadata that the current verifier does not enforce.
 
-## Run 3: implement one contract slice
+## Run 3: implement one bounded target
 
 ```text
-/ob-implement workflow: <accepted-workflow-name>
+/ob-implement use-case:<accepted-id>
 ```
 
-Omit the slice only when the run should follow the accepted phase plan automatically:
-Phase 0, then the highest-ranked journey, then meters.
+Supported selectors are `work-order:<id>`, `business-transaction:<id>`,
+`workflow:<name>`, `use-case:<id>`, `detector:<id>`, `objective:<id>`, and
+`config:<id>`. Omit the selector only to follow the accepted phase plan.
 
 ### Preconditions
 
 - the analysis is accepted;
-- the requested slice exists in a wiki work order;
+- the selector resolves to exactly one accepted app-level work order;
 - `attribute-schema.json` contains every attribute the slice needs;
-- `initial_scope.authorized` permits the target repository or folder; and
-- the application repository and branch to change are checked out and available.
+- `implementation-map.json` maps every repository leg;
+- `initial_scope.authorized` permits each repository and path; and
+- every mapped repository and branch is available.
 
 If the contract lacks a needed attribute or work order, implementation stops and sends
 the gap back to analysis. It does not improve the contract in passing.
 
 ### Behavior
 
-One invocation implements one slice in one reviewable change. The dependency order is:
+One invocation executes one unified work order. A business transaction, workflow, or
+end-to-end use case may cross separate frontend, SSR, Node, GraphQL, backend, Collector,
+or configuration repositories. The run opens at most one linked PR per repository plus a
+coordination PR in the artifact repository. Every PR names the work-order id and links its
+siblings. Agents never merge them.
+
+For Splunk APM Business Transactions, implementation emits bounded `<org>.bt` as a global
+span tag, propagated and stamped across repository boundaries. The TAM separately
+configures the tenant's Global tag include rule. `workflow.name` remains finer-grained
+intent; one BT can group many workflows. Raw URLs never become BT values.
+
+Typical runtime dependency order is:
 
 1. shared OpenTelemetry helper library and validation;
 2. exactly one provider initialization point;
@@ -243,7 +280,7 @@ One invocation implements one slice in one reviewable change. The dependency ord
 7. bounded custom meters;
 8. Collector derivation and redaction;
 9. deterministic contract checks; then
-10. remaining journeys, one per change.
+10. remaining accepted work orders.
 
 The run works on the branch under review and does not merge it. It does not touch paths
 outside authorized scope, add names outside the schema, enable every automatic
@@ -251,14 +288,15 @@ instrumentation, embed credentials, remediate unrelated findings, or arm detecto
 
 ### Required proof
 
-The change should state its work order, contract sections, files, refusals, and runnable
-verification. Depending on the slice, proof includes:
+Each linked change states its work order, repository leg, contract sections, sibling PRs,
+files, refusals, and runnable verification. Depending on the target, proof includes:
 
 - a single initialization and session identity;
 - one trace across browser and backend;
 - propagated cross-cutting keys;
 - producer and consumer continuity across a bus;
 - a bounded workflow in APM;
+- a registered `<org>.bt` / `workflow.name` pair visible across all repository legs;
 - meters with only approved dimensions; or
 - Collector-derived dimensions appearing before span metrics.
 
@@ -266,10 +304,15 @@ The implementation eventually adds deterministic CI checks for schema agreement,
 workflow-name validity, one provider initialization, baggage allowlisting, classifier
 coverage, and deny-list enforcement.
 
+Jira is used only when the human named it and a Jira MCP is connected. A unified work
+order can create one linked issue per mapped Jira project when engineering requests it.
+Otherwise the wiki work order is the queue and provides copy/paste-ready issue text for the
+team's chosen tool.
+
 ## Run 4: generate observability Terraform
 
 ```text
-/ob-build-terraform
+/ob-terraform
 ```
 
 This run is independent of implementation after contract acceptance.
@@ -359,7 +402,7 @@ Markdown and render again.
 Equivalent toolkit command:
 
 ```bash
-export ENGAGEMENT=/path/to/memory-repo
+export OB_PROJECT=/path/to/project-repo
 make render FILE=docs/observability/analysis-<app>-<date>.md \
   OUT=docs/observability/<Customer>-<App>-Analysis-<date>.docx
 ```
@@ -377,7 +420,7 @@ When `wiki/apps/<app>/services/<service>/index.md` and `meta/run-log.md` exist,
 - accepted workflow names, attribute keys, finding IDs, and SLI names remain stable;
 - changes, removals, drift, and version movement are reported;
 - new catalogue entries are additive;
-- old findings become fixed, open, regressed, or accepted rather than disappearing; and
+- old findings become fixed, open, regressed, or risk-accepted rather than disappearing; and
 - only notes actually reconsidered receive new `updated` and `run` values.
 
 When an application has been rewritten beyond a meaningful delta, declare a re-baseline
@@ -393,8 +436,12 @@ and archive the prior wiki. Do not silently convert a delta into a new first run
 │   ├── analysis-<app>-<date>.md
 │   ├── <Customer>-<App>-Analysis-<date>.docx
 │   ├── attribute-schema.json
+│   ├── implementation-map.json
+│   ├── analysis-<app>-<date>.acceptance.yaml
 │   └── entitlement-exposure-<app>-<date>.md   conditional
-├── wiki/apps/<app>/services/<service>/
+├── wiki/apps/<app>/
+│   ├── implementation/work-orders/
+│   └── services/<service>/
 └── terraform/apps/<app>/
 ```
 

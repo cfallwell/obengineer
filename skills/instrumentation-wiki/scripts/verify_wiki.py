@@ -25,6 +25,8 @@ Exit code 0 when every check passes, 1 otherwise.
 from __future__ import annotations
 
 import argparse
+import importlib.util
+import json
 import re
 import sys
 from pathlib import Path
@@ -63,7 +65,10 @@ VALUE_LABELS = ("stated", "measured", "public", "derived")
 NOTE_TYPES = {"index", "reference", "bt", "workflow", "use-case", "finding",
               "detector", "sli", "work-order"}
 NOTE_STATUS = {"proposed", "designed", "implemented", "verified", "retired"}
-FINDING_STATUS = {"open", "fixed", "regressed", "accepted"}
+FINDING_STATUS = {"open", "fixed", "regressed", "risk-accepted"}
+WORK_ORDER_STATUS = {
+    "proposed", "accepted", "in-progress", "blocked", "implemented", "verified", "retired"
+}
 
 # index.md count rows, and the directory each is counted from. A count that
 # disagrees with the tree is worse than an absent one: it is read as current.
@@ -147,15 +152,77 @@ def body(text: str) -> str:
     return text[m.end():] if m else text
 
 
+def acceptance_verifier():
+    path = Path(__file__).with_name("verify_analysis_acceptance.py")
+    spec = importlib.util.spec_from_file_location("verify_analysis_acceptance", path)
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = module
+    spec.loader.exec_module(module)
+    return module.verify
+
+
 def check(app: Path, repo_root: Path, index_max_lines: int) -> list[str]:
     failures: list[str] = []
-    notes = sorted(p for p in app.rglob("*.md"))
-    rel = {p: str(p.relative_to(app)) for p in notes}
+    app_root = app.parents[1]  # wiki/apps/<app>/services/<service> -> wiki/apps/<app>
+    app_work_orders = list((app_root / "implementation" / "work-orders").glob("*.md"))
+    notes = sorted(set(app.rglob("*.md")) | set(app_work_orders))
+    rel = {
+        p: str(p.relative_to(repo_root)) if p.is_relative_to(repo_root) else str(p)
+        for p in notes
+    }
 
     # ---- layout ----------------------------------------------------------
     for required in REQUIRED:
         if not (app / required).is_file():
             failures.append(f"missing required note: {required}")
+
+    acceptance_name = re.compile(
+        rf"analysis-{re.escape(app_root.name)}-\d{{4}}-\d{{2}}-\d{{2}}"
+        r"\.acceptance\.yaml$"
+    )
+    acceptances = sorted(
+        path for path in (repo_root / "docs" / "observability").glob(
+            "analysis-*.acceptance.yaml"
+        )
+        if acceptance_name.fullmatch(path.name)
+    )
+    if not acceptances:
+        failures.append("missing exact-commit analysis acceptance record")
+    else:
+        acceptance_path = acceptances[-1]
+        acceptance = acceptance_path.read_text()
+        accepted = {
+            match.group(1): match.group(2).strip()
+            for match in re.finditer(
+                r"^([a-z_]+):\s*([^#\n]+?)\s*$", acceptance, re.M
+            )
+        }
+        required_fields = (
+            "status", "analysis", "analysis_commit", "analysis_pr",
+            "accepted_by", "accepted_at",
+        )
+        for field in required_fields:
+            if not accepted.get(field):
+                failures.append(
+                    f"acceptance record {acceptance_path.name} is missing {field}"
+                )
+        if accepted.get("status") != "accepted":
+            failures.append(
+                f"acceptance record {acceptance_path.name} status is not accepted"
+            )
+        accepted_analysis = re.compile(
+            rf"docs/observability/analysis-{re.escape(app_root.name)}-"
+            r"\d{4}-\d{2}-\d{2}\.md$"
+        )
+        if not accepted_analysis.fullmatch(accepted.get("analysis", "")):
+            failures.append(
+                f"acceptance record {acceptance_path.name} targets another application"
+            )
+        if accepted.get("analysis") and accepted.get("analysis_commit"):
+            for failure in acceptance_verifier()(
+                repo_root, Path(accepted["analysis"]), accepted["analysis_commit"]
+            ):
+                failures.append(f"acceptance record {acceptance_path.name}: {failure}")
 
     # ---- frontmatter -----------------------------------------------------
     fields: dict[Path, dict[str, str]] = {}
@@ -171,7 +238,11 @@ def check(app: Path, repo_root: Path, index_max_lines: int) -> list[str]:
         kind = fm.get("type", "")
         if kind and kind not in NOTE_TYPES:
             failures.append(f"{rel[p]}: type {kind!r} is not one of {sorted(NOTE_TYPES)}")
-        allowed = FINDING_STATUS if kind == "finding" else NOTE_STATUS
+        allowed = (
+            FINDING_STATUS if kind == "finding"
+            else WORK_ORDER_STATUS if kind == "work-order"
+            else NOTE_STATUS
+        )
         status = fm.get("status", "")
         if status and status not in allowed:
             failures.append(
@@ -180,11 +251,44 @@ def check(app: Path, repo_root: Path, index_max_lines: int) -> list[str]:
         if updated and not re.fullmatch(r"\d{4}-\d{2}-\d{2}", updated):
             failures.append(f"{rel[p]}: updated {updated!r} is not an ISO date")
 
+    # ---- unified work orders ---------------------------------------------
+    for p in app_work_orders:
+        content = body(p.read_text()).lower()
+        for heading in (
+            "## target selectors",
+            "## repository legs",
+            "## acceptance evidence",
+            "## coordination",
+        ):
+            if heading not in content:
+                failures.append(f"{rel[p]}: work order is missing {heading}")
+        if "## jira issues" not in content and "## manual issue text" not in content:
+            failures.append(
+                f"{rel[p]}: work order needs Jira issues or manual issue text"
+            )
+
+    implementation_map = repo_root / "docs" / "observability" / "implementation-map.json"
+    if implementation_map.is_file():
+        try:
+            mapped_orders = {
+                target.get("work_order")
+                for target in json.loads(implementation_map.read_text()).get("targets", [])
+                if isinstance(target, dict)
+            }
+        except json.JSONDecodeError:
+            mapped_orders = set()
+        available_orders = {path.stem for path in app_work_orders}
+        for order in sorted(mapped_orders - available_orders):
+            failures.append(f"implementation map has no app-level work order: {order}")
+
     # ---- links -----------------------------------------------------------
     # Obsidian resolves a bare name by shortest path, a slashed name by path.
     # Both are legal here; an ambiguous bare name is not, because the tool and
     # the agent may pick different notes.
-    by_path = {str(p.relative_to(app).with_suffix("")): p for p in notes}
+    by_path = {
+        str(p.relative_to(app).with_suffix("")): p
+        for p in notes if p.is_relative_to(app)
+    }
     by_stem: dict[str, list[Path]] = {}
     for p in notes:
         by_stem.setdefault(p.stem, []).append(p)
@@ -241,7 +345,12 @@ def check(app: Path, repo_root: Path, index_max_lines: int) -> list[str]:
             claimed = re.search(r"\d+", row.group(2))
             if not claimed:
                 continue
-            actual = len(list((app / directory).glob("*.md"))) if (app / directory).is_dir() else 0
+            counted_root = (
+                app_root / "implementation" / "work-orders"
+                if directory == "implementation/work-orders"
+                else app / directory
+            )
+            actual = len(list(counted_root.glob("*.md"))) if counted_root.is_dir() else 0
             if int(claimed.group()) != actual:
                 failures.append(
                     f"index.md claims {claimed.group()} for {label!r}; "
@@ -306,7 +415,9 @@ def check(app: Path, repo_root: Path, index_max_lines: int) -> list[str]:
                 failures.append(f"{pointer} does not carry {label}")
 
     # ---- secrets ---------------------------------------------------------
-    for p in sorted(app.rglob("*")):
+    security_files = list(app.rglob("*"))
+    security_files += list((app_root / "implementation" / "work-orders").glob("*.md"))
+    for p in sorted(set(security_files)):
         if not p.is_file() or p.suffix not in (".md", ".json", ".yaml", ".yml"):
             continue
         text = p.read_text(errors="replace")
@@ -314,7 +425,9 @@ def check(app: Path, repo_root: Path, index_max_lines: int) -> list[str]:
             hits = pattern.findall(text)
             if hits:
                 failures.append(
-                    f"possible {label} in {p.relative_to(app)} ({len(hits)} match(es))")
+                    f"possible {label} in "
+                    f"{p.relative_to(repo_root) if p.is_relative_to(repo_root) else p} "
+                    f"({len(hits)} match(es))")
 
     return failures
 

@@ -4,8 +4,8 @@
 # with real blast radius. Three rules make it safe enough to leave on:
 #
 #   1. It opens a pull request. It never pushes to the default branch. No exception.
-#   2. One work order per pull request. A PR that instruments four workflows is a PR
-#      that gets approved without being read.
+#   2. One unified work order per run. It may coordinate one linked PR per mapped
+#      repository; this single-repository example executes only this repository's leg.
 #   3. It implements what the contract already names. If the diff needs a workflow,
 #      meter, or dimension that is not in the wiki, it stops and says which section
 #      is missing rather than inventing one — that is an analysis run's job, and the
@@ -71,11 +71,11 @@ jobs:
           # Explicit input wins; otherwise the lowest-numbered work order whose
           # status is not implemented.
           if [ -n "${{ inputs.work_order }}" ]; then
-            echo "order=wiki/apps/<app>/services/<service>/implementation/work-orders/${{ inputs.work_order }}.md" >> "$GITHUB_OUTPUT"
+            echo "order=wiki/apps/<app>/implementation/work-orders/${{ inputs.work_order }}.md" >> "$GITHUB_OUTPUT"
             exit 0
           fi
           next=$(grep -l 'status: \(proposed\|accepted\)' \
-                   wiki/apps/<app>/services/<service>/implementation/work-orders/*.md | sort | head -1)
+                   wiki/apps/<app>/implementation/work-orders/*.md | sort | head -1)
           if [ -z "$next" ]; then
             echo "No open work order. Nothing to propose."
             echo "order=" >> "$GITHUB_OUTPUT"
@@ -124,6 +124,9 @@ jobs:
           # reconstruct intent from a diff.
           body: |
             Generated from `${{ steps.pick.outputs.order }}`.
+
+            **Unified work order and sibling PRs**
+            <!-- work-order id, coordination PR, and every mapped repository PR -->
 
             **Contract sections implemented**
             <!-- filled by the agent -->

@@ -2,30 +2,45 @@
 
 **Agent:** [`../agents/instrumentation-implementer.agent.md`](../agents/instrumentation-implementer.agent.md)  
 **Skills:** `instrumentation-implement`  
-**Inputs:** `docs/observability/engagement-inputs.yaml` + the accepted guide and schema  
-**Depends on:** merged (or explicitly approved) Instrumentation Guide + `attribute-schema.json`.  
-**Output:** small code PRs. No deploys. No secrets.
+**Inputs:** accepted guide, schema, implementation map, wiki work order, and engagement inputs
+**Depends on:** canonical exact-commit acceptance record, verified analysis artifacts,
+schema, implementation map, and accepted work order.
+**Output:** one linked PR per repository leg plus a coordination PR. No deploys. No secrets.
 
-Run **once per slice**. If the human does not pick a slice, follow the guide’s phase plan: trust the signal first, then the highest-ranked journey, then meters.
+Run **once per unified work order**. Accept any bounded target selector defined in
+`skills/references/implementation-work-orders.md`. If the human does not pick one, follow
+the accepted phase plan.
 
-**Invoke it, do not paste it.** `/ob-implement <slice>` reads this file in place.
-The only thing this run needs from the human is which slice.
+**Invoke it, do not paste it.** `/ob-implement <target-selector>` reads this file in
+place. If omitted, the accepted phase plan selects the next work order.
 
 ---
 
 ## System reminder
 
-Follow `instrumentation-implementer.agent.md`. Read the guide and `attribute-schema.json` before any edit. Do not invent attributes. Do not enable always-on session replay unless the guide says the human accepted it. Do not call `SplunkRum.init` from an MFE. Diff budget 400 lines. Tests in the same PR. Zero-code agents/annotations are allowed only **together with** the shared library and stamp processor.
+Follow `instrumentation-implementer.agent.md`. Before any edit run
+`python3 <obengineer-root>/skills/instrumentation-wiki/scripts/verify_analysis_acceptance.py --record docs/observability/analysis-<app>-<date>.acceptance.yaml --repo .`.
+Read the guide, schema, map, and accepted work order.
+Do not invent attributes. Do not enable always-on session replay unless accepted. Do not
+call `SplunkRum.init` from an MFE. Use the work order's accepted review budget. Tests stay
+in each repository PR. Zero-code agents/annotations are allowed only **together with** the
+shared library and stamp processor.
 
-Implement so the result works in **Splunk Observability Cloud**: stable `applicationName`, `workflow.name` for APM Business Workflows, low-cardinality tags for MMS, `traceparent` for Related Content, schema-approved meter dimensions. Do not assume journey names from another application.
+Implement so the result works in **Splunk Observability Cloud**: stable `applicationName`,
+bounded propagated `<org>.bt` for the APM Business Transaction Global tag rule,
+`workflow.name` for subordinate intent, low-cardinality tags for MMS, `traceparent` for
+Related Content, and schema-approved meter dimensions. Do not assume journey names from
+another application.
 
 PII deny list is enforced. If you see tokens in the repo, stop and report. Do not search the repo for unrelated specs.
 
 ## Inputs
 
 - Analysis document: `docs/observability/analysis-<app>-<date>.md`
-- Wiki work orders: `wiki/apps/<app>/services/<service>/implementation/work-orders/`
+- Wiki work orders: `wiki/apps/<app>/implementation/work-orders/`
 - Schema: `docs/observability/attribute-schema.json`
+- Map: `docs/observability/implementation-map.json`
+- Acceptance: `docs/observability/analysis-<app>-<date>.acceptance.yaml`
 - Engagement inputs: `docs/observability/engagement-inputs.yaml` — `backends.languages` and
   `.deploy_targets` for which SDK, `constraints.who_deploys_front_end` and
   `.who_deploys_collector` for whether this slice is deployable at all, and
@@ -34,15 +49,19 @@ PII deny list is enforced. If you see tokens in the repo, stop and report. Do no
   `unknown` means stop and ask engineering to authorize the full scope, a
   subset of repositories, or a subset of a repository by parent folder. Do not
   adopt every repository a connected host can see.
-- **Slice (the one thing the human supplies — pick one, or “follow guide phase plan”):**
-  - [ ] Phase 0 — signal trust (RUM/APM bootstrap as specified: early load, kill switch, allowlist, classifier, app name, replay policy, **no** journey spans)
-  - [ ] Shared libraries only (`@<org>/otel-common` or guide names + stamp processor + baggage boot + message inject/extract)
-  - [ ] Workflow: `[name from guide]` steps: `[list]`
-  - [ ] Custom meters only: `[schema metric names — at least one business if the domain has one, one execution]`
+- **Target selector:** one of `work-order:<id>`, `business-transaction:<id>`,
+  `workflow:<name>`, `use-case:<id>`, `detector:<id>`, `objective:<id>`, or
+  `config:<id>`, or “follow accepted phase plan”.
 
 ## Task
 
-Implement **only the selected slice**.
+Resolve the selector to exactly one accepted work order. Implement **only that unified
+work order**, across only its mapped repository legs and authorized paths. Zero or multiple
+matches stop and list the missing or ambiguous mappings. A missing repository or Jira
+project is requested from engineering after analysis, never guessed.
+
+Runtime, Collector/CI, detector, objective, and configuration legs use the same work-order
+boundary. Never deploy, apply Terraform, or arm a detector.
 
 ### If Phase 0
 
@@ -75,14 +94,19 @@ Unit-test: processor copies baggage to attributes; inject writes `traceparent` +
 ### If a workflow
 
 1. Wrap each step in a span named **exactly** as the guide.
-2. `workflow.name` and `workflow.step` from schema enums (required for APM Business Workflows).
+2. `workflow.name` and `workflow.step` from schema enums (subordinate intent within the
+   APM Business Transaction).
+   Set and propagate the registered `<org>.bt` global tag and validate the
+   `<org>.bt` / `workflow.name` pair from the contract.
 3. Span events at documented boundaries.
 4. Allowlisted attributes only; money in minor units + currency when amounts exist.
 5. On error: `recordException`; span status ERROR.
 6. Propagate `traceparent` (and baggage) on backend calls via `context.with`.
 7. Never capture card, CVV, full address, email.
 
-One commit per step if history style allows; otherwise one PR still one workflow, ≤400 lines. **Stop after 3 steps** and request review.
+Use reviewable commits within each repository leg. The unified work order, not an arbitrary
+file count, is the boundary; stop when a leg exceeds its accepted review budget and record
+the required follow-up rather than widening scope.
 
 ### If custom meters
 
@@ -93,12 +117,15 @@ Add OTel counters/histograms from the guide’s meters section. Dimensions must 
 
 Do not use unbounded ids as dimensions.
 
-## PR requirements
+## Linked PR requirements
 
-- Title: `obs: <slice> — <imperative>`
+- At most one PR per repository leg, plus the artifact-repository coordination PR.
+- Title: `obs(<work-order-id>): <target> — <imperative>`
+- Every PR links the work order, coordination PR, and sibling repository PRs.
 - List schema keys touched (must already exist in JSON)
-- How a reviewer verifies in Splunk Observability Cloud (Tag Spotlight, APM Business Workflows, metric name, Related Content)
-- Tests passing locally
+- How a reviewer verifies in Splunk Observability Cloud (Business Transaction view, Tag
+  Spotlight, `workflow.name`, metric name, Related Content)
+- Tests passing locally and one end-to-end verification covering all repository legs.
 
 Do not push with `--force`. Do not skip hooks. Do not add a second RUM vendor.
 

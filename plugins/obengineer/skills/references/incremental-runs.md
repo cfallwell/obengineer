@@ -69,7 +69,8 @@ first on a repeat run. Four subsections, each of which may be "none":
 **Findings are carried forward, never renumbered.** `F-01` is `F-01` for the life of the
 application. Each prior finding appears with its current state — `fixed` (with what verified
 it), `open` (with how long, which is the number that creates urgency), `regressed` (which is
-worse than new and must say so), or `accepted` (with who accepted the risk and when). New
+worse than new and must say so), or `risk-accepted` (with who accepted the risk, when,
+and why). Contract acceptance is the separate exact-commit acceptance record. New
 findings continue the sequence. A finding that vanishes between two documents is the worst
 available outcome: the reader cannot tell whether it was fixed or dropped.
 
@@ -89,7 +90,7 @@ These have downstream configuration built on them, so a change is a migration, n
 
 | Thing | What breaks if it changes silently |
 |---|---|
-| `workflow.name` values | Dashboards, detectors, the APM Business Workflow, every MetricSet |
+| `<org>.bt` and `workflow.name` values | APM Business Transaction rules, dashboards, detectors, and MetricSets |
 | `<org>.bt` values | Dashboard variables and filters |
 | Attribute keys | MPM rules, detector `group by`, Related Content links |
 | Finding ids | Tickets, the phased plan, the customer's own tracking |

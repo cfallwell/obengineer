@@ -43,13 +43,17 @@ Prompt: [`../../prompts/02-build-instrumentation-wiki.md`](../../prompts/02-buil
 | [`../references/cross-cutting-attributes.md`](../references/cross-cutting-attributes.md) | The five code patterns `contract/cross-cutting.md` carries. |
 | [`../references/version-currency.md`](../references/version-currency.md) | What `meta/versions.md` records and how a later run diffs it. |
 | [`../references/incremental-runs.md`](../references/incremental-runs.md) | Whether this is a first run, a repeat, or a re-baseline. |
+| [`../references/analysis-run-lifecycle.md`](../references/analysis-run-lifecycle.md) | Exact-commit acceptance and the generation PR. |
+| [`../references/implementation-work-orders.md`](../references/implementation-work-orders.md) | App-level unified work orders, repository legs, linked PRs, and Jira fallback. |
 
 ## Output
 
 ```
 wiki/apps/<app>/index.md                          # the website and its services
 wiki/apps/<app>/services/<service>/               # notes — see agent-wiki.md for the full tree
+wiki/apps/<app>/implementation/work-orders/       # unified app-level work orders
 docs/observability/attribute-schema.json
+docs/observability/analysis-<app>-<date>.acceptance.yaml
 ```
 
 Create `wiki/apps/<app>/` and `wiki/apps/<app>/services/<service>/` for each app and each
@@ -77,6 +81,10 @@ have dashboards built on them. Rules: [`../references/incremental-runs.md`](../r
 
 ### Step 2 — Lift the accepted analysis; do not re-derive it
 
+Verify the explicit acceptance record against the exact analysis commit before lifting
+anything. If the path or SHA is absent, stop and print the required `/ob-generate accept …`
+invocation from `analysis-run-lifecycle.md`.
+
 The analysis document is the source. Reuse its BT names, `workflow.name` strings, attribute
 keys, and finding ids exactly. Extend from new evidence; never rename for taste. If a prior
 `attribute-schema.json` exists, it is the naming authority and this run extends it.
@@ -88,7 +96,7 @@ keys, and finding ids exactly. Extend from new evidence; never rename for taste.
 | `business-transactions/<bt>.md` | Surface, owning artifact, feature flag, the workflows it hosts as wikilinks, evidence |
 | `workflows/<workflow>.md` | Intent, the span tree with `workflow.step` values, span events, attributes with dimension eligibility, meters, the SLI, the detectors, and the labelled join to the next flow |
 | `use-cases/<flow>.md` | The composite: narrative, workflow identity, dashboard panels, joins, and links to the notes above |
-| `findings/F-nn-<slug>.md` | The finding with `status: open \| fixed \| regressed \| accepted`, so the next run reports rather than rediscovers |
+| `findings/F-nn-<slug>.md` | The finding with `status: open \| fixed \| regressed \| risk-accepted`; risk acceptance records accepter, date, and rationale and is not contract acceptance |
 | `detectors/<detector>.md` | Condition, threshold **and its provenance**, arm state, group-by, runbook |
 | `slos/<sli>.md` | User-facing statement, good and total event queries, objective, window, error budget, burn-rate rules |
 | `contract/*.md` | Cross-cutting attributes, baggage budget with each key's named consumer, collector config, MPM lists with their arithmetic |
@@ -123,16 +131,19 @@ task. A summary in the index is a fact with two homes — link instead.
 
 ### Step 5 — Write the work orders
 
-`implementation/work-orders/<nn>-<slice>.md`, one per pull-request-sized slice, ordered so
-each is independently reviewable and independently revertible. Each names the contract
-sections it implements, the files and packages it touches, new dependencies, the CI checks it
-adds, the acceptance evidence, and what it must **not** do without a human decision.
+`wiki/apps/<app>/implementation/work-orders/<id>.md`, one unified app-level order per
+bounded target or coordinated target set. Read `implementation-map.json`; include target
+selectors, repository legs and authorized paths, dependencies, linked PR coordination,
+acceptance evidence, optional Jira projects, and copy/paste-ready issue text. A use case or
+workflow may cross several repositories, but each repository gets at most one linked PR.
+Service notes link to the app-level order.
 
 These are what [`../instrumentation-implement/SKILL.md`](../instrumentation-implement/SKILL.md)
 executes and what Appendix C of the customer document summarises. Appendix C is the plan; the
-work order is the instruction. When a Jira MCP is already connected, engineering
-may choose to generate one backlog issue per accepted work order, and only when
-they ask. The rule is
+work order is the instruction. Jira is used only when named by the human and its
+MCP is connected. Engineering may then choose to generate linked backlog issues,
+and only when they ask; otherwise copy/paste the work-order text into the chosen tool.
+The rule is
 [`../references/mcp-servers.md`](../references/mcp-servers.md). The file remains the
 instruction. Moving the issue into a sprint queues it with the developer. It does not merge code.
 

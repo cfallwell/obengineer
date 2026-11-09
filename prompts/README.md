@@ -9,9 +9,9 @@ actually ran.
 |---|---|---|---|---|
 | 0 | `/ob-intake` | [`engagement-intake`](../skills/engagement-intake/SKILL.md) | — | `engagement-inputs.yaml` |
 | 1 | `/ob-analyze` | [01](01-analyze-application.md) | Architect | **The customer document** — analysis and recommendations in one file — plus its `.docx` and `attribute-schema.json` (PR 0, docs only) |
-| 2 | `/ob-wiki` | [02](02-build-instrumentation-wiki.md) | Architect | The agent wiki under `wiki/apps/<app>/services/<service>/`, work orders, tracked versions. **No second document.** |
+| 2 | `/ob-generate` | [02](02-build-instrumentation-wiki.md) | Architect | Exact-commit acceptance, the agent wiki, app-level work orders, tracked versions. **No second document.** |
 | 3 | `/ob-implement` | [03](03-implement-instrumentation.md) | Implementer | Code PRs, one contract slice (or Phase 0) at a time |
-| 4 | `/ob-build-terraform` | [04](04-generate-observability-as-code.md) | Observability as Code | Terraform under `terraform/apps/<app>/`, plus a plan. No `apply`. |
+| 4 | `/ob-terraform` | [04](04-generate-observability-as-code.md) | Observability as Code | Terraform under `terraform/apps/<app>/`, plus a plan. No `apply`. |
 
 Do not skip 1→2. Do not run 3 or 4 against an analysis the human has not accepted.
 

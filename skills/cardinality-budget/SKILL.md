@@ -201,7 +201,10 @@ no way to see the cost, so nobody objects.
 
 - **Monitoring MetricSets** produce the metrics detectors and dashboards read. They are a bounded resource, and unlike MTS a shortage is not a bill — it is a MetricSet that cannot be created. Count the slots already used. If the contract needs more than `mms_slots_remaining`, say so with the number, order the promotions so the ones an SLI depends on come first, and put the shortfall in the exposure document. What must not happen is the TAM discovering the limit during configuration.
 - **Troubleshooting MetricSets** serve Tag Spotlight and ad-hoc grouping. Cheaper, still not free. Predict their distinct values from the enum, and set `tms_cardinality_ceiling` beside that prediction when the human observed a peak. The peak is a baseline, not a cap. This is where identity-adjacent keys go when someone needs to slice by them — the honest answer to "but I need to group by tenant" is usually a TMS, not an MMS.
-- **The workflow tag is a special case.** Exactly one span tag becomes the APM Business Workflow. Name it explicitly, say which value shape it carries, and state that the workflow name is itself a bounded enum. An unbounded workflow tag is a cardinality incident with a dashboard attached to it.
+- **The BT global tag is a special case.** `<org>.bt` becomes the APM Business Transaction
+  Global tag rule. Name its bounded value registry and the valid subordinate
+  `workflow.name` pairs. An unbounded BT or workflow value is a cardinality incident with
+  a dashboard attached to it.
 
 ### Step 4 — Push the enforcement into the pipeline
 
@@ -245,7 +248,8 @@ recommendation, and growth headroom. No entitlement supplied, no document.
 - **A dimension list with no MTS arithmetic anywhere in the document.** The list is a wish; nobody can approve it.
 - **An identity key in the dimension list.** Reject it and offer the Troubleshooting MetricSet path in the same sentence, or it comes back.
 - **`Type: string` with no bound named.** Either name the enum or move the key to attribute-only.
-- **The workflow tag is described but never named.** The TAM cannot configure a Business Workflow from a description.
+- **The BT global tag is described but never named.** The TAM cannot configure a Business
+  Transaction rule from a description.
 - **Cardinality is discussed only as a risk.** Risk language produces exceptions. Numbers produce decisions.
 - **The contract's promotions exceed `mms_slots_remaining` and the document does not mention it.** The limit will be discovered during configuration, by the person least able to renegotiate it.
 - **A promotion an SLI depends on quietly became attribute-only.** Something was cut to fit a budget nobody was asked about. Recommend it, price it, and let the customer choose.

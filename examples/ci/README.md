@@ -7,6 +7,7 @@ not a framework, and a workflow nobody read is a workflow nobody can debug.
 
 | File | Repository | Layer |
 |---|---|---|
+| [`agent-analysis.yml`](agent-analysis.yml) | artifact or memory repo | analysis — commit phases and open the docs-only analysis PR; never accept or merge |
 | [`contract-checks.yml`](contract-checks.yml) | the application repo | 1 — deterministic checks on every pull request |
 | [`branch-before-merge.yml`](branch-before-merge.yml) | the application repo | pre-merge — update the contract and one slice on the pull-request branch; never merge |
 | [`agent-instrument.yml`](agent-instrument.yml) | the application repo | 2 — the agent proposes instrumentation as a pull request |
@@ -14,6 +15,11 @@ not a framework, and a workflow nobody read is a workflow nobody can debug.
 
 Adopt in that order. Layer 1 alone is worth having; layers 2 and 3 depend on it for the
 signal that tells anyone whether they helped.
+
+For multi-repository implementation, the app-level work order is the coordination unit.
+Each repository needs credentials scoped only to its own PR; the artifact repository records
+reciprocal links. If Jira is not both named and connected, copy the work-order issue text
+into the team's chosen tracker manually.
 
 ## Before you enable anything
 

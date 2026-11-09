@@ -35,6 +35,12 @@ over explanatory documentation if behavior changes:
   wiki layout and metadata.
 - [`skills/references/ci-integration.md`](../skills/references/ci-integration.md)
   defines contract enforcement and implementation automation.
+- [`skills/references/security-assessment.md`](../skills/references/security-assessment.md)
+  defines credential/API checks, OWASP coverage, confidence, and P0 routing.
+- [`skills/references/analysis-run-lifecycle.md`](../skills/references/analysis-run-lifecycle.md)
+  defines analysis branches, commits, PRs, and exact-commit acceptance.
+- [`skills/references/implementation-work-orders.md`](../skills/references/implementation-work-orders.md)
+  defines bounded targets, repository mapping, linked PRs, and Jira fallback.
 - [`skills/observability-as-code/SKILL.md`](../skills/observability-as-code/SKILL.md)
   defines Terraform generation.
 - [`commands/`](../commands/) contains the installed command entry points.

@@ -43,7 +43,7 @@ Shape shortcuts:
 | Cheap, short-lived debug tag | **Troubleshooting MetricSet** | Rare error codes, experiment flags, replay-mode pivots |
 | Rate, value, or duration SLI | OTel **counter or histogram**; MPM index-as-dimension only for approved dimensions | Custom meter. Never use an `*.id` as a dimension |
 | A milestone inside one request | Span **event** | `span.addEvent` with allowlisted attributes |
-| End-to-end journey in APM | **APM Business Workflow** on a stable span tag, usually `workflow.name` | Emit the tag on the root and children, and tell the TAM which tag to configure |
+| End-to-end journey in APM | **APM Business Transaction** using the bounded global tag `<org>.bt`, with `workflow.name` as subordinate intent | Emit and propagate `<org>.bt`, register valid workflow pairs, and tell the TAM to configure the Global tag rule |
 | "What did this user do?" | RUM session plus **Related Content** into APM | One `traceparent` chain, `session.id`, and `enduser.id` as attribute-only |
 | "What changed at 14:02?" | Chart **event overlay** | CD posts to the Events API with `service.version` |
 
@@ -62,7 +62,9 @@ Run in order. The result becomes the **Course of action** section.
 1. **Inventory what is already landing** across all three platforms. Distinguish "SDK, test, or index is present" from "the signal is trusted."
 2. **Front end present?** Deep-scan load order. If the first RUM beacon lands after first paint, another agent patches `fetch` first, replay is always-on, or the application name is unstable — **Phase 0 for trust** before any journey spans.
 3. **Discover journeys from evidence** — user tasks, APIs, message flows, batch jobs. Rank by business impact times blast radius. Names come from the observed domain, never a template.
-4. **Design each journey for Business Workflows and Tag Spotlight** — one `workflow.name`, a bounded `workflow.step`, span events at decision points, baggage for identity that must appear on every hop.
+4. **Design each journey for Business Transactions and Tag Spotlight** — one bounded
+   `<org>.bt`, registered `workflow.name`, bounded `workflow.step`, span events at decision
+   points, and baggage for keys that must appear on every hop.
 5. **Plan identity** — which keys are global RUM attributes, which ride baggage, and which the Collector derives with OTTL so the application does not explode cardinality.
 6. **Plan meters** for the questions that need detectors: error rate, duration, value, and zero-activity silent outage. Prefer metrics with three to six bounded dimensions over promoting every span tag.
 7. **Plan Related Content** — RUM to APM via `traceparent`, APM to platform logs via `trace_id` through Log Observer Connect, APM to infrastructure via resource attributes.
@@ -79,7 +81,8 @@ Run in order. The result becomes the **Course of action** section.
 - Always-on session replay: cost plus a Core Web Vitals regression. Default to sampled and on-demand.
 - Enabling every RUM instrumentation, which causes long-task and interaction regressions and collides with tag-manager wrappers.
 - Assuming `document-load` and LCP cover client-router navigations. They do not, so later business transactions never appear as RUM views.
-- Auto-instrumented HTTP with no `workflow.name`: a service map with no Business Workflows.
+- Auto-instrumented HTTP with no `<org>.bt` or `workflow.name`: a service map with no
+  meaningful Business Transaction grouping.
 - Logs with no `trace_id`, which leaves operators reconstructing journeys in SPL — the failure mode this work exists to end.
 - A detector on a troubleshooting tag or an identity dimension: noisy, expensive, or impossible at 13 months.
 - ThousandEyes page-load used as a substitute for RUM: no session, no workflow, no baggage. ThousandEyes answers the path; RUM answers the user.

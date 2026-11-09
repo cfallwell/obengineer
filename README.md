@@ -3,8 +3,9 @@
 obengineer is a multi-host agent toolkit for designing and implementing a Splunk
 OpenTelemetry instrumentation contract. It inspects an application and its existing
 telemetry, produces a reviewable analysis and attribute schema, turns the accepted
-contract into an agent-readable wiki, and can then implement one contract slice or
-generate Terraform.
+contract into an agent-readable wiki, and can then implement bounded unified work orders
+or generate Terraform. Analysis includes exposed-credential/API checks and versioned
+OWASP Web/API coverage within the authorized boundary.
 
 It supports Cursor, Claude Code, and Codex. Generated artifacts belong in a separate
 memory or application repository; this repository remains the toolkit.
@@ -14,7 +15,7 @@ memory or application repository; this repository remains the toolkit.
 - Git
 - Python 3
 - `python-docx` for Word document rendering
-- Terraform CLI when using `/ob-build-terraform`
+- Terraform CLI when using `/ob-terraform`
 
 ```bash
 python3 -m pip install python-docx
@@ -54,13 +55,15 @@ Open the memory repository in the installed host and run:
 ```text
 /ob-intake
 /ob-analyze
-/ob-wiki
-/ob-implement workflow: <accepted-workflow-name>
-/ob-build-terraform
+/ob-generate accept docs/observability/analysis-<app>-<date>.md at <commit-sha>
+/ob-implement <target-selector>
+/ob-terraform
 ```
 
-The first three commands are sequential. A person must accept the analysis before
-`/ob-wiki`, `/ob-implement`, or `/ob-build-terraform` proceeds. After acceptance,
+The first three commands are sequential. `/ob-analyze` opens a docs-only analysis PR.
+After human review and merge, a person accepts the exact reviewed commit with
+`/ob-generate accept … at …`
+before generation, implementation, or Terraform proceeds. After acceptance,
 implementation and Terraform generation can run independently.
 
 Use `/ob-review` to grade a deliverable and `/ob-render` to rebuild and verify its

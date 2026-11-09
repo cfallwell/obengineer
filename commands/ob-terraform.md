@@ -1,5 +1,5 @@
 ---
-description: Build Terraform — one application directory, plan only, no apply
+description: Terraform — generate one application directory, plan only, no apply
 ---
 
 Run obengineer run 4 — observability as code.
@@ -8,8 +8,10 @@ Run obengineer run 4 — observability as code.
    contract for this run.
 2. Load `docs/observability/analysis-<app>-<date>.md`,
    `docs/observability/attribute-schema.json`, and
-   `docs/observability/engagement-inputs.yaml`. **Stop if the human has not accepted the
-   guide** — this run configures a contract, it does not invent one.
+   `docs/observability/engagement-inputs.yaml`, plus the exact-commit acceptance record.
+   Run `python3 "{{OBENGINEER_ROOT}}/skills/instrumentation-wiki/scripts/verify_analysis_acceptance.py" --record docs/observability/analysis-<app>-<date>.acceptance.yaml --repo .`.
+   **Stop if acceptance is absent or does not match** — this run configures a contract,
+   it does not invent one.
 3. Follow `{{OBENGINEER_ROOT}}/prompts/04-generate-observability-as-code.md`.
 4. Skills: `$observability-as-code`, `$cardinality-budget`. Use only the resource names in
    `{{OBENGINEER_ROOT}}/skills/references/splunk-terraform-providers.md`.

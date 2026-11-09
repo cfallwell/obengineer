@@ -47,6 +47,9 @@ Prompt: [`../../prompts/01-analyze-application.md`](../../prompts/01-analyze-app
 |---|---|
 | [`../references/document-template.md`](../references/document-template.md) | The canonical section order, every table's columns, and the completeness bar. Non-negotiable. |
 | [`../references/critical-findings.md`](../references/critical-findings.md) | Section 4 — severity, remediation, exposure, and the credential rule. |
+| [`../references/security-assessment.md`](../references/security-assessment.md) | Exposed credentials/APIs, OWASP coverage, confidence, and P0 routing. |
+| [`../references/analysis-run-lifecycle.md`](../references/analysis-run-lifecycle.md) | Analysis branch names, phase commits, docs-only PR, and acceptance. |
+| [`../references/implementation-work-orders.md`](../references/implementation-work-orders.md) | Target-to-repository/Jira mapping and the `<org>.bt` global-tag contract. |
 | [`../references/service-levels.md`](../references/service-levels.md) | Section 24 — indicators in the customer's voice. |
 | [`../references/cross-cutting-attributes.md`](../references/cross-cutting-attributes.md) | Section 7 and its five mandatory code subsections. |
 | [`../references/portfolio-decision-engine.md`](../references/portfolio-decision-engine.md) | Which question goes to Observability Cloud, Splunk Enterprise, or ThousandEyes. |
@@ -62,6 +65,7 @@ Prompt: [`../../prompts/01-analyze-application.md`](../../prompts/01-analyze-app
 | Markdown | `docs/observability/analysis-<app>-<date>.md` | always |
 | Word | `docs/observability/<Customer>-<App>-Analysis-<date>.docx` | always |
 | Schema | `docs/observability/attribute-schema.json` | always |
+| Implementation map | `docs/observability/implementation-map.json` | always |
 | Entitlement exposure | `docs/observability/entitlement-exposure-<app>-<date>.md` | when `entitlement` was supplied, or a `traffic_baseline` factor was supplied. A factor is supplied only when it is neither `unknown` nor an empty collection (`[]` or `{}`). `infra_integrations: []` is unsupplied |
 
 One customer document. If a run is about to produce a second one, it has recreated the
@@ -73,6 +77,7 @@ in exactly one document-control line.
 
 - **Assume nothing.** Not the industry, not a storefront, not named journeys, not the cloud, not a prior customer's taxonomy. The design runs against whatever site this engagement names. A scan, diagram, or schema from a different site is not evidence; do not cite it. Previous scans of this site are inputs; compare them with the current production scan per [`../references/incremental-runs.md`](../references/incremental-runs.md). Derive every name from this session's evidence.
 - **Never store a credential.** A found token is a finding referenced by shape and location, never by value. See [`../references/critical-findings.md`](../references/critical-findings.md).
+- **Perform the authorized security assessment.** Cover exposed credentials, exposed or insecure APIs, OWASP Top 10:2025, and OWASP API Security Top 10:2023. Every confirmed or high-confidence vulnerability is in section 4 and `P0 recommended fixes`.
 - **Mark gaps as gaps.** "Not in evidence" with a named next step is a finding, not an omission.
 - **Nothing goes under an appendix heading that the argument depends on.** Appendices are the dictionary, long code, the work-order plan, supplementary evidence, and open items.
 - **Entitlement prices the recommendation; it does not cap it.** Recommend what the application needs, cost it, and send the overage to the account team. Cut to fit only when `entitlement.fit_to_entitlement` is true, and record every cut.
@@ -124,7 +129,7 @@ current production scan before writing: changes, merges, and additions, per
 Which MCP servers must be connected before a tenant fact is labelled `measured`:
 [`../references/mcp-servers.md`](../references/mcp-servers.md). Splunk Observability
 Cloud and Splunk Enterprise are mandatory. Jira is read only when a Jira server is
-already connected.
+already connected **and** the human named Jira in `developer_tools`.
 
 ### Step 2a — Generate diagrams from a cloud environment when access exists
 
@@ -140,6 +145,15 @@ It does not replace theirs, and it does not contain a credential, account key, o
 token. If generation was requested and no inventory server is connected, record an
 open item and continue the site scan.
 
+### Step 2b — Assess security within the authorized boundary
+
+Follow [`../references/security-assessment.md`](../references/security-assessment.md).
+Inventory APIs and inspect source, bundles, runtime configuration, normal browser traffic,
+storage, telemetry, and supplied history for exposed credentials and sensitive data.
+Produce complete OWASP Web 2025 and API 2023 coverage matrices. Passive is the default;
+safe-active requests require explicit origins and limits. Never mutate, exploit, brute
+force, cross a tenant boundary, or run load.
+
 ### Step 3 — Raise the critical findings while the evidence is in hand
 
 Anything a competent engineer on this team would act on this week goes to section 4, ordered
@@ -147,20 +161,26 @@ by severity, each with observation, files and surfaces, exposure, risk, remediat
 verification. Stable ids (`F-01`) from the start, because the phased plan, the wiki note, and
 the customer's ticket all need to refer to the same finding a year later.
 
+Record severity, confidence, finding class, OWASP categories, and remediation priority.
+Every confirmed or high-confidence vulnerability is also referenced by id under
+`P0 recommended fixes` in section 5. P0 priority is distinct from observability Phase 0.
+
 Write these **before** the recommendation sections. Findings collected as a side effect of
 other work end up wherever they were found, which is how they get buried.
 
 ### Step 4 — Enumerate business transactions and workflows
 
-A **BT** is the page, bundle, app, or surface the user is in. A **workflow** is a discrete
-intent inside it. Sources, in order of reliability: route registries and chunk manifests,
+A **BT** is a bounded `<org>.bt` global tag representing the page, bundle, app, or surface
+the user is in. Splunk APM groups matching traces with the Global tag Business Transaction
+rule. A **workflow** is a discrete intent inside it and remains `workflow.name`. Sources,
+in order of reliability: route registries and chunk manifests,
 module-federation remotes, analytics event flags, payment and feature flags, UI copy and
 translations, config JSON, sequence diagrams.
 
 Section 19 is the flat BT list, section 20 the flat workflow list, section 22 the join. All
 three, because the flat lists are what expose the duplicate names and the empty BTs that a
-per-BT view hides. Do not invent a BT with no evidence, do not collapse a real BT into "view
-and click", and leave unidentified bundles in the open items rather than guessing.
+per-BT view hides. Do not invent a BT with no evidence, collapse a real BT into "view and
+click", derive the tag from a raw URL, or leave it on browser spans only.
 
 ### Step 5 — Map backends, accounts, and buses
 
@@ -278,6 +298,13 @@ nobody has said otherwise.
 
 ### Step 12 — Render, verify, and check yourself
 
+Before rendering, emit `docs/observability/implementation-map.json` per
+[`../references/implementation-work-orders.md`](../references/implementation-work-orders.md).
+Map every BT, workflow, use case, detector, objective, and configuration target to
+repository ids and optional Jira projects. Ask engineering once for unresolved repository
+ownership after analysis. Missing Jira uses the manual work-order path; it does not block
+the contract.
+
 ```bash
 python3 ../customer-doc-render/scripts/render_customer_doc.py \
     docs/observability/analysis-<app>-<date>.md \
@@ -300,6 +327,11 @@ Then run [`../deliverable-review/SKILL.md`](../deliverable-review/SKILL.md) agai
 completeness bar and fill the pre-delivery checklist at the end of Appendix E. Any `no` means
 do not ship.
 
+Finally follow [`../references/analysis-run-lifecycle.md`](../references/analysis-run-lifecycle.md):
+create the run-specific branch, include the validated intake artifact, commit evidence and
+security findings, contract/map, and verified rendering as separate phase commits, push, and
+open or update one docs-only analysis PR. Never stage unrelated changes or merge the PR.
+
 ## Warning signs
 
 - **A tidy inventory with no measurements.** No timings, no decoded payload, no status-versus-content check means the scan was shallow.
@@ -319,7 +351,8 @@ do not ship.
 ## Non-goals
 
 - Does not modify the target, log in destructively, or run load against production.
-- Does not open application pull requests. That is [`../instrumentation-implement/SKILL.md`](../instrumentation-implement/SKILL.md).
+- Opens only the docs-only analysis pull request. It does not open application-code pull
+  requests; those belong to [`../instrumentation-implement/SKILL.md`](../instrumentation-implement/SKILL.md).
 - Does not produce a second customer-facing document. The entitlement exposure document is for the account team and is not delivered to the customer as part of the review.
 - Does not build a commercial proposal or quote products. It prices resources; the account team prices deals.
 - Does not perform a formal business value assessment. Section 26 is ad-hoc, built from supplied numbers, cited public evidence, and its own measurements.

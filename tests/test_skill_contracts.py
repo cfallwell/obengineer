@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import json
 import re
+import subprocess
 from pathlib import Path
 
 import pytest
@@ -244,7 +245,7 @@ def test_terraform_reference_pins_versions_and_records_the_hard_negatives():
             "turns an unrelated init into an unplanned upgrade"
         )
 
-    for absent in ("APM MetricSets", "APM Business Workflows", "Log Observer Connect"):
+    for absent in ("APM MetricSets", "APM Business Transaction rules", "Log Observer Connect"):
         assert absent in ref, (
             f"{absent} has no Terraform resource; the reference must say so and name "
             "the manual path, or a generator will invent a resource for it"
@@ -492,7 +493,7 @@ def test_analysis_access_is_a_reference_and_rotates_on_completion():
     for field in ("token_ref", "api_key_ref", "password_ref", "login_id"):
         assert field not in intake
     assert "dummy test" in intake.lower()
-    assert "rotated when the analysis completes" in intake
+    assert "rotated by its owner when analysis completes" in intake
     assert "Never request or store a credential value" not in command
     assert "dummy test login" in command
 
@@ -530,7 +531,16 @@ def test_commands_invoke_the_run_contracts_rather_than_copying_them():
         referenced = any(prompt.name in c.read_text() for c in commands)
         assert referenced, f"{prompt.name} has no command that invokes it"
     assert "ob-intake" in stems
-    assert "ob-build-terraform" in stems
+    assert "ob-generate" in stems
+    assert "ob-terraform" in stems
+    assert "ob-wiki" not in stems
+    assert "ob-build-terraform" not in stems
+    plugin_commands = ROOT / "plugins" / "obengineer" / "commands"
+    for command in commands:
+        installed = plugin_commands / command.name
+        assert installed.is_file(), f"plugin is missing command {command.name}"
+        assert "${CLAUDE_PLUGIN_ROOT}" in installed.read_text()
+        assert "{{OBENGINEER_ROOT}}" not in installed.read_text()
 
 
 def test_installer_offers_every_host_and_installs_every_skill():
@@ -543,7 +553,119 @@ def test_installer_offers_every_host_and_installs_every_skill():
     readme = (ROOT / "README.md").read_text()
     assert "./install.sh" in readme, "the README must show how to install"
     assert "/ob-intake" in readme, "the README must show how to invoke"
-    assert "/ob-build-terraform" in readme
+    assert "/ob-generate" in readme
+    assert "/ob-terraform" in readme
+
+
+def test_security_assessment_and_p0_routing_are_contractual():
+    security = (SKILLS / "references" / "security-assessment.md").read_text()
+    template = (SKILLS / "references" / "document-template.md").read_text()
+    analyze = (SKILLS / "instrumentation-analyze" / "SKILL.md").read_text()
+    prompt = (PROMPTS / "01-analyze-application.md").read_text()
+    agent = (ROOT / "agents" / "instrumentation-architect.agent.md").read_text()
+    for text in (security, template, analyze, prompt):
+        assert "OWASP Top 10:2025" in text
+        assert "OWASP API Security Top 10:2023" in text
+    assert "OWASP Web 2025/API 2023" in agent
+    assert "exposed credentials" in security.lower()
+    assert "P0 recommended fixes" in template
+    assert "`P0` is remediation priority" in security
+    assert "observability **Phase 0**" in security
+
+
+def test_analysis_lifecycle_and_acceptance_are_explicit():
+    lifecycle = (SKILLS / "references" / "analysis-run-lifecycle.md").read_text()
+    intake = (ROOT / "commands" / "ob-intake.md").read_text()
+    generate = (ROOT / "commands" / "ob-generate.md").read_text()
+    for branch in ("initial-<app>-analysis", "ci-initiated-<app>-analysis"):
+        assert branch in lifecycle
+    assert "It does not" in lifecycle
+    assert "create or switch branches, commit, push, or open a pull request" in lifecycle
+    assert "creates no branch, commit, or PR" in intake
+    assert "/ob-generate accept" in lifecycle and "<analysis-commit-sha>" in lifecycle
+    assert "analysis-<app>-<date>.acceptance.yaml" in lifecycle
+    assert "analysis-run-lifecycle.md" in generate
+
+
+def test_bounded_targets_multi_repo_and_jira_fallback_have_one_authority():
+    authority = (SKILLS / "references" / "implementation-work-orders.md").read_text()
+    implement = (ROOT / "commands" / "ob-implement.md").read_text()
+    mcp = (SKILLS / "references" / "mcp-servers.md").read_text()
+    for kind in ("work-order", "business-transaction", "workflow", "use-case",
+                 "detector", "objective", "config"):
+        assert f"{kind}:<" in authority or f"`{kind}:<" in implement
+    assert "one pull request per repository" in authority.lower()
+    assert "named Jira" in authority
+    assert '{tool: "jira", via: "mcp"' in authority
+    assert "copy/paste-ready issue text" in authority
+    assert "Connected-but-unnamed" in mcp
+
+
+def test_developer_tool_matches_use_one_object_schema():
+    template = (ROOT / "inputs" / "engagement-inputs.template.yaml").read_text()
+    intake = (SKILLS / "engagement-intake" / "SKILL.md").read_text()
+    engagement = (SKILLS / "references" / "engagement-inputs.md").read_text()
+    mcp = (SKILLS / "references" / "mcp-servers.md").read_text()
+    for text in (template, intake, engagement, mcp):
+        assert "tool" in text and "via" in text and "key" in text
+    assert "Record the server key or the\nvariable name" not in mcp
+    assert "records a server key or an environment variable name" not in engagement
+
+
+def test_business_transactions_use_a_bounded_global_tag():
+    work_orders = (SKILLS / "references" / "implementation-work-orders.md").read_text()
+    template = (SKILLS / "references" / "document-template.md").read_text()
+    cross_cutting = (SKILLS / "references" / "cross-cutting-attributes.md").read_text()
+    for text in (work_orders, template, cross_cutting):
+        assert "<org>.bt" in text
+    assert "Global tag" in work_orders
+    assert "one `<org>.bt` value may contain several" in work_orders.lower()
+    assert "'<org>.bt'" in cross_cutting
+
+
+def test_project_path_and_retired_command_migration_are_documented():
+    makefile = (ROOT / "Makefile").read_text()
+    installer = (ROOT / "scripts" / "install.py").read_text()
+    assert "OB_PROJECT" in makefile
+    assert '"ob-generate": ("ob-wiki",)' in installer
+    assert '"ob-terraform": ("ob-build-terraform",)' in installer
+
+
+def test_reinstall_removes_only_manifest_owned_retired_commands(tmp_path):
+    subprocess.run(
+        [str(ROOT / "install.sh"), "--cursor", "--project", str(tmp_path)],
+        cwd=ROOT,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    commands = tmp_path / ".cursor" / "commands"
+    manifest_path = tmp_path / ".cursor" / ".obengineer-install.json"
+    manifest = json.loads(manifest_path.read_text())
+
+    migrations = {
+        commands / "ob-generate.md": commands / "ob-wiki.md",
+        commands / "ob-terraform.md": commands / "ob-build-terraform.md",
+    }
+    for replacement, retired in migrations.items():
+        replacement.rename(retired)
+        manifest["created"] = [
+            str(retired) if entry == str(replacement) else entry
+            for entry in manifest["created"]
+        ]
+    manifest_path.write_text(json.dumps(manifest))
+
+    subprocess.run(
+        [str(ROOT / "install.sh"), "--cursor", "--project", str(tmp_path)],
+        cwd=ROOT,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    assert not any(path.exists() for path in migrations.values())
+    assert all(path.exists() for path in migrations)
+    upgraded = json.loads(manifest_path.read_text())
+    assert all(str(path) not in upgraded["created"] for path in migrations.values())
 
 
 # --------------------------------------------------------------------------- #
@@ -1296,7 +1418,7 @@ def test_no_personal_home_paths():
 
 def test_the_portability_scan_reads_the_source(tmp_path):
     (tmp_path / "ok.md").write_text(
-        "export ENGAGEMENT=/path/to/engagement-repo\n"
+        "export OB_PROJECT=/path/to/project-repo\n"
         "obengineer at /Users/you/src/obengineer\n"
     )
     assert portability_findings(tmp_path) == []

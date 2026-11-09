@@ -4,12 +4,15 @@
 
 - Files in your workspace, to inventory the application and to read a guide it is asked to render.
 - URLs you explicitly provide for a front-end scan.
-- Any MCP server you enable in `.mcp.json`. None are enabled in the committed file. Splunk Observability Cloud and Splunk Enterprise are mandatory for you to enable with your own command. A Jira server is read only when one is already connected.
+- Any MCP server you enable in `.mcp.json`. None are enabled in the committed file.
+  Splunk Observability Cloud and Splunk Enterprise are mandatory for you to enable with
+  your own command. Jira is read only when the human named Jira and a Jira MCP is connected.
 
 ## What it writes
 
 Files under `docs/observability/` in your workspace: the analysis memo, the
-instrumentation guide, the attribute schema, and the rendered `.docx`. It writes
+attribute schema, implementation map, acceptance record, and rendered `.docx`. There is
+one customer-facing analysis, not a separate instrumentation guide. It writes
 application code only through `$instrumentation-implement`, and only against a guide
 you have accepted.
 

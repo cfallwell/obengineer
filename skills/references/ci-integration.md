@@ -5,6 +5,16 @@ registry, a dimension that was never budgeted, a service with no `service.versio
 caught two quarters later by an analysis run. The whole value of having written the contract
 down is that a machine can check it.
 
+## Analysis PRs precede the three delivery layers
+
+Intake creates no branch, commit, or PR. An analysis run follows
+[`analysis-run-lifecycle.md`](analysis-run-lifecycle.md): first analysis uses
+`initial-<app>-analysis`; later CI analyses use `ci-initiated-<app>-analysis`. It commits
+validated intake/evidence, contract plus `implementation-map.json`, and verified render as
+separate phase commits on one new branch and opens one docs-only PR. CI never accepts or
+merges that PR. The example is
+[`../../examples/ci/agent-analysis.yml`](../../examples/ci/agent-analysis.yml).
+
 Three layers, deliberately separate, because they fail for different reasons and should be
 adopted in this order:
 
@@ -49,9 +59,11 @@ reviewable and to keep it from becoming the thing everyone disables:
 **It opens a pull request. It never pushes to the default branch.** No exception. The value is
 a reviewable proposal, and a bot with merge rights is a bot nobody reads.
 
-**One work order per pull request**, from
-`wiki/apps/<app>/services/<service>/implementation/work-orders/`. A pull request that instruments four
-workflows is a pull request that gets approved without being read.
+**One unified work order per invocation**, from
+`wiki/apps/<app>/implementation/work-orders/`. A work order can cross frontend, SSR,
+GraphQL, backend, and configuration repositories. It produces at most one linked PR per
+repository plus a coordination PR in the artifact repository. Every PR names the work-order
+id and links its siblings; no agent merges any of them.
 
 **Scoped to what the contract already names.** It implements accepted design; it does not
 invent a workflow, a meter, or a dimension. If the diff needs something not in the contract,
@@ -95,7 +107,11 @@ On each update of a pull request whose paths are in scope:
 3. **Update the contract on that same branch** when the diff introduces code the contract does not yet cover. Delta mode only: the new paths, the notes they touch, and the schema keys they require. Naming still happens once, in that commit. The job does not invent a workflow the evidence does not support.
 4. **Implement one work order on that same branch**, the slice the contract update just named, inside the protected-path refusals. One slice. The commit lands on the head branch.
 5. **Push to the head branch. Do not merge.** A human merges. The job has no merge permission. If the token cannot push to the head (a fork pull request), fail the check and post the diff as a review comment. Do not open a second pull request for the same slice.
-6. **When a Jira MCP is already connected**, engineering may choose to generate one backlog issue for the accepted work order. The run does not create the issue unless engineering asks. Moving that issue into a sprint is what queues the work with the developer. The rule is [`mcp-servers.md`](mcp-servers.md). CI does not listen for the sprint transition and does not create the issue. The developer environment does. The branch job is what keeps the branch and the contract together until merge.
+6. **When Jira is named by the human and its MCP is connected**, engineering may choose
+   to generate one linked backlog issue per mapped Jira project for the accepted work order.
+   Otherwise use the wiki's copy/paste-ready work-order text and do not attempt Jira. The
+   rule is [`mcp-servers.md`](mcp-servers.md). CI does not listen for sprint transitions or
+   create issues.
 
 Layer 2 still opens a fresh pull request when a human labels work on the default line of development. This job is the other door: the developer already opened the branch, and the skills run there before merge.
 

@@ -4,15 +4,16 @@ PY ?= python3
 # lifted into its own repository without editing targets.
 #
 # This project lives in its own checkout; a customer engagement lives in its
-# own. Set ENGAGEMENT to the engagement repository and every FILE, DOCX, and
+# own. Set OB_PROJECT to the artifact/project repository and every FILE, DOCX, and
 # WIKI path is read relative to it, so the daily commands stay short:
 #
-#   export ENGAGEMENT=/path/to/engagement-repo
+#   export OB_PROJECT=/path/to/project-repo
 #   make render FILE=docs/observability/analysis-<app>-<date>.md
 #
-# An absolute path always wins, and with ENGAGEMENT unset nothing changes.
-ENGAGEMENT ?=
-at = $(if $(ENGAGEMENT),$(if $(filter /% ~%,$(1)),$(1),$(ENGAGEMENT)/$(1)),$(1))
+# An absolute path always wins, and with OB_PROJECT unset nothing changes.
+# ENGAGEMENT remains a compatibility alias for existing automation.
+OB_PROJECT ?= $(ENGAGEMENT)
+at = $(if $(OB_PROJECT),$(if $(filter /% ~%,$(1)),$(1),$(OB_PROJECT)/$(1)),$(1))
 
 .DEFAULT_GOAL := help
 
@@ -52,16 +53,16 @@ check-manifest-versions: ## Fail if the Claude and Codex plugin versions disagre
 # make render FILE=docs/observability/analysis-<app>-<date>.md [OUT=...]
 .PHONY: render
 render: ## Render a Markdown deliverable to .docx and verify the result
-	@test -n "$(FILE)" || { echo "usage: make render FILE=<path.md> [OUT=<path.docx>] [ENGAGEMENT=<repo>]"; exit 2; }
+	@test -n "$(FILE)" || { echo "usage: make render FILE=<path.md> [OUT=<path.docx>] [OB_PROJECT=<repo>]"; exit 2; }
 	@src="$(call at,$(FILE))"; out="$(call at,$(OUT))"; [[ -n "$$out" ]] || out="$${src%.md}.docx"; \
 	  $(PY) skills/customer-doc-render/scripts/render_customer_doc.py "$$src" -o "$$out" && \
 	  $(PY) skills/customer-doc-render/scripts/verify_render.py "$$src" "$$out"
 
-# make verify-wiki WIKI="wiki/apps/<app>/services/<service>" ENGAGEMENT=<repo>
+# make verify-wiki WIKI="wiki/apps/<app>/services/<service>" OB_PROJECT=<repo>
 .PHONY: verify-wiki
 verify-wiki: ## Verify an agent wiki: links, frontmatter, counts, pointers, secrets
-	@test -n "$(WIKI)" || { echo "usage: make verify-wiki WIKI=<wiki/apps/<app>/services/<service>> [ENGAGEMENT=<repo>] [REPO_ROOT=<repo>]"; exit 2; }
-	@root="$(REPO_ROOT)"; [[ -n "$$root" ]] || root="$(ENGAGEMENT)"; \
+	@test -n "$(WIKI)" || { echo "usage: make verify-wiki WIKI=<wiki/apps/<app>/services/<service>> [OB_PROJECT=<repo>] [REPO_ROOT=<repo>]"; exit 2; }
+	@root="$(REPO_ROOT)"; [[ -n "$$root" ]] || root="$(OB_PROJECT)"; \
 	  $(PY) skills/instrumentation-wiki/scripts/verify_wiki.py "$(call at,$(WIKI))" \
 	    $${root:+--repo-root "$$root"}
 

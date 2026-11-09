@@ -98,10 +98,18 @@ part of the pass:
 - **Every use-case join carries a label**: continue trace, span link, or attribute pivot. And span links appear **only** for webhooks, batch consume, DLQ redrive, schedulers, and scatter/gather.
 - **One percentile** across the whole document. Two percentiles is two definitions of slow.
 - **Every workflow name matches `standards.workflow_naming`**, and every `workflow.step` enumeration is bounded and stated.
-- **The APM Business Workflow tag is named**, once, with its value shape. A TAM cannot configure a description.
+- **The APM Business Transaction Global tag is named.** `<org>.bt`, its bounded values,
+  environment scope, and valid `workflow.name` pairs are explicit. A TAM cannot configure
+  a description.
 - **No credential.** Token shapes, `-----BEGIN`, long random strings, and anything the deny list names. This check fails the deliverable outright rather than adding a defect row.
 - **Cross-references resolve.** A document that cites a section number that does not exist was reorganised without being re-read.
 - **Critical findings are section 4, severity-ordered, and complete.** Each carries observation with evidence, files and surfaces, exposure, risk, remediation split into stop-the-bleeding and structural, and a runnable verification. A finding with no remediation is a complaint. Every finding at or above the agreed severity appears in the phase plan by id.
+- **Security coverage is complete and versioned.** Every OWASP Top 10:2025 and OWASP
+  API Security Top 10:2023 category appears in the section 4 coverage matrices with
+  evidence, result, and limitations. Exposed-credential and API checks are explicit.
+- **Vulnerability routing agrees.** Every confirmed or high-confidence vulnerability
+  carries severity, confidence, finding class, OWASP mapping, and priority in section 4
+  and appears by id in section 5 `P0 recommended fixes`. P0 is not observability Phase 0.
 - **Stable finding ids**, and on a repeat run the prior ids are all accounted for — fixed, open, regressed, or accepted. A finding that vanished between two versions is a blocking defect: the reader cannot tell whether it was fixed or dropped.
 - **No body content under an appendix heading.** The appendices are the dictionary, long code variants, the work-order plan, supplementary evidence, and open items. Anything the argument depends on sitting under one is a defect.
 - **Catalogue sections 19–25 present, contiguous, and in order**, with the flat BT list, the flat workflow list, and the join all present rather than one standing in for the others.
@@ -114,6 +122,9 @@ part of the pass:
 - **The value section does not promise speed.** Instrumentation makes slowness visible, measurable, and attributable. A section implying the application gets faster is a defect against [`../references/business-value.md`](../references/business-value.md), and it costs the technical sections their credibility.
 - **No licensing, consumption, or overage figure anywhere in the customer document.** That audience is the account team, in its own file. One document-control reference line is the whole permitted footprint.
 - **Nothing was trimmed to fit the entitlement unless it was asked for.** Cross-check the cardinality section's promotions against the catalogue: a dimension that an indicator depends on and that quietly became attribute-only is a defect, not an optimisation. Under `fit_to_entitlement` it is the reverse — every cut must be recorded.
+- **Implementation mapping is complete.** `implementation-map.json` agrees with Appendix
+  C, `<org>.bt` is the bounded propagated Global tag used for Splunk APM Business
+  Transactions, and every accepted target maps to repository legs or a named ownership ask.
 
 ### Step 4 — Grade the wiki, when the run produced one
 

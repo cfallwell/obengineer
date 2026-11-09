@@ -84,11 +84,16 @@ fails at session start, and a plugin that fails at session start gets uninstalle
 `.mcp.optional.json` documents the entries. Splunk Observability Cloud and Splunk
 Enterprise are mandatory for the operator to copy in. ThousandEyes, a local
 OpenTelemetry tools server, and a cloud inventory MCP are recommended.
-Jira is used when the host already has it. No credential values. The classification
+Jira is used only when the human named it and the host already has its MCP. No
+credential values. The classification
 lives in `skills/references/mcp-servers.md`.
 
 ## What this agentry deliberately does not do
 
 - **It does not create dashboards or detectors in a Splunk org.** The guide's portfolio mapping tells a TAM what to configure; the agentry does not reach into the customer's tenant.
-- **It does not remediate the security findings the analysis surfaces.** Exposed keys and missing CSP entries are recorded as findings with owners, not fixed in passing.
-- **It does not implement the contract.** `instrumentation-implement` writes application code, but only against a guide a human accepted, and only as ordered single-concern PRs.
+- **It does not remediate the security findings the analysis surfaces.** The authorized
+  OWASP/credential/API assessment records confidence-rated findings and P0 fixes with
+  owners; runtime remediation is a separately accepted work order.
+- **It does not implement the contract during analysis.** `instrumentation-implement`
+  writes application code only against an exact-commit accepted guide and one unified
+  bounded work order, coordinating linked PRs when repositories are separate.

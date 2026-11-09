@@ -49,7 +49,9 @@ exist fails with an error that reads like a provider bug.
 
 ### Step 1 — Read the contract, and refuse what it cannot support
 
-Load the accepted guide, `attribute-schema.json`, and `engagement-inputs.yaml`. Then build
+Load the canonical acceptance record and run `verify_analysis_acceptance.py` against its
+full commit SHA. A merged file or generic approval is not acceptance. Then load the accepted
+guide, `attribute-schema.json`, `implementation-map.json`, and `engagement-inputs.yaml`, and build
 one table before writing any HCL, because it is also the handover document:
 
 `Contract section | Artifact | Persona | Provider resource | Dimensions needed | Exists in schema? | Ship armed?`
@@ -133,7 +135,7 @@ The handover states, in this order:
 1. **What `apply` will change**, in resource counts by type and by persona.
 2. **What was imported** rather than created, and what is still `TODO`.
 3. **What was refused**, with the contract section and the missing key for each.
-4. **What has no Terraform support** and must be configured in the tenant: APM MetricSets, APM Business Workflows, RUM application settings, and the Log Observer Connect connection itself. The contract's promotion list is a TAM task and Terraform cannot take it — say so rather than leaving a gap the customer discovers during configuration.
+4. **What has no Terraform support** and must be configured in the tenant: APM MetricSets, APM Business Transaction rules, RUM application settings, and the Log Observer Connect connection itself. The contract's promotion list is a TAM task and Terraform cannot take it — say so rather than leaving a gap the customer discovers during configuration.
 5. **Which thresholds are placeholders** awaiting a baseline.
 6. **Cost implications**: Synthetics run frequency times locations, and any metric ruleset that raises MTS rather than lowering it. Consumption against entitlement is not priced here — that is the account team's document at [`../references/entitlement-exposure.md`](../references/entitlement-exposure.md), and a third home for those numbers is how the three end up disagreeing. State what this plan adds; point at that document for what it costs.
 

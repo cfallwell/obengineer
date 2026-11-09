@@ -19,7 +19,7 @@ description: >-
   information you need, or when any other skill finds the inputs file absent or
   incomplete. A token, API key, or dummy test login may be submitted as a
   reference so the scan can see authenticated surfaces. Never stores the secret.
-  Whatever was submitted is rotated when the analysis completes.
+  Whatever was submitted must be rotated by its owner when analysis completes.
 metadata:
   author: obengineer
   version: 0.1.0
@@ -88,8 +88,12 @@ Before asking, look at the MCP servers already connected in this session.
 
 - **Splunk Observability Cloud and Splunk Enterprise are mandatory.** If either is absent, the gap report says so and points at copying that entry from `plugins/obengineer/.mcp.optional.json` with the organisation's own command. Do not invent a command. Tenant facts gathered without them are `stated`, not `measured`.
 - **Memory repository `.env`.** API keys for those two servers live in `.env`, copied from `templates/memory-repo/.env.template` in the toolkit. Tell the human to fill that file. Do not read the values into the inputs file. The variable names and the analyze pass are [`existing-telemetry.md`](../references/existing-telemetry.md).
-- **Developer tools.** Ask which tools they use — examples of shape: Jira, GitHub, GitLab, Artifactory — and match the list to MCP servers already connected and to environment variable names already present. Record the server key or the variable name in `developer_tools`. Never read or store a value. Do not add a server that is not already connected. The procedure is [`mcp-servers.md`](../references/mcp-servers.md).
-- **Jira, if present.** When a Jira server is already connected, read issue keys that match `outcomes.known_pain` and record the keys. Generating backlog issues is engineering's option after the contract exists, and only when they ask. Intake does not create those issues and does not start coding. When Jira is not connected, do not add it. The rule is [`mcp-servers.md`](../references/mcp-servers.md).
+- **Developer tools.** Ask which tools they use — examples of shape: Jira, GitHub,
+  GitLab, Artifactory — and match only those names to MCP servers and environment
+  variable names already present. Record each match in `developer_tools.matched` as
+  `{tool, via: mcp|env, key}`. Never read or store a value or add a server that is not
+  already connected. The procedure is [`mcp-servers.md`](../references/mcp-servers.md).
+- **Jira, only when named and connected.** Read matching issue keys only when the human named Jira and a Jira MCP is already connected. Connected-but-unnamed and named-but-unavailable Jira are not used. Generating backlog issues is engineering's option after the contract exists, and only when they ask. Intake does not create issues or start coding. The rule is [`mcp-servers.md`](../references/mcp-servers.md).
 - **Repository hosts, if present.** When a GitHub, GitLab, or other repository MCP is already connected, match it to the named tool list. Do not choose `initial_scope` here, and do not adopt every repository it can reach. Scope authorization is the instrumentation phase.
 - **Recommend, do not require,** the other servers in [`mcp-servers.md`](../references/mcp-servers.md): local OpenTelemetry tools, ThousandEyes when an off-box hop is in scope, and a cloud inventory MCP for whatever cloud this site runs on so analyze can generate the production diagram.
 
@@ -115,7 +119,7 @@ Ask in this order, because early answers make later questions unnecessary:
 1. **Application, customer, and date.** Without the name there is no filename. Do not ask for instrumentation scope. Engineering authorizes that after the contract exists.
 2. **Developer tools.** The list they use. Examples of shape: Jira, GitHub, GitLab, Artifactory. Then match it. A miss is an open item, not a prompt for a token.
 3. **Artifacts.** Diagrams, prior contract, prior schema, earlier scans of this site, house-style `.docx`. Say explicitly that a prior schema will be *extended* and its key names reused, never renamed for taste. Previous scans of this site are compared with the current production scan.
-4. **Surfaces.** The production site scan. An empty production URL list is a gap, not a default. A test or QA URL does not fill it. Analysis access, when they have it: a token, an API key, or a dummy test login, each as a reference, never the secret. `unknown` is acceptable. Anything submitted is rotated when the analysis completes. The rule is [`engagement-inputs.md`](../references/engagement-inputs.md).
+4. **Surfaces and security authorization.** The production site scan. An empty production URL list is a gap, not a default. A test or QA URL does not fill it. Record `security_assessment.mode`; safe-active requires explicit origins, exclusions, and request limits. Analysis access, when they have it: a token, an API key, or a dummy test login, each as a reference, never the secret. `unknown` is acceptable. Anything submitted is rotated by its owner when analysis completes. The rules are [`engagement-inputs.md`](../references/engagement-inputs.md) and [`security-assessment.md`](../references/security-assessment.md).
 5. **Backends and the production cloud diagram.** Languages, deploy targets, buses, account boundaries, what terminates TLS, and whether production can be inventoried for a generated diagram.
 6. **Tenancy.** Realm, org, environments. Identifiers only.
 7. **Entitlement, then the optional traffic baseline.** The entitlement numbers in the table below, then daily sessions, hourly log volume, request rate, and infrastructure integrations. Say the accuracy notice once, not once per field. An empty integration list is unsupplied, the same as `unknown`.
@@ -229,6 +233,11 @@ should not be written twice.
 
 ## Non-goals
 
+- Intake creates no branch, commit, or pull request. Its validated artifact remains
+  uncommitted until `/ob-analyze` includes it in the analysis branch and PR described
+  by [`analysis-run-lifecycle.md`](../references/analysis-run-lifecycle.md).
+
 - Does not scan, measure, or infer anything about the application. That is `instrumentation-analyze`.
 - Does not decide dimensions or compute the prediction, only records the optional baselines and the entitlement they are compared with. The formulas live in `cardinality-budget`.
-- Does not store a credential value. A submitted token, API key, or dummy test login is a reference, and it is rotated when the analysis completes.
+- Does not store a credential value. A submitted token, API key, or dummy test login is
+  a reference, and records that its owner must rotate it when analysis completes.

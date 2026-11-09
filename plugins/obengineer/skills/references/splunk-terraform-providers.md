@@ -149,12 +149,14 @@ Four things about `signalfx_metric_ruleset` that cost a plan cycle each if guess
 Say so plainly and name the manual path:
 
 - **APM MetricSets** — Monitoring and Troubleshooting MetricSets are configured in the UI or API. The contract's promotion list is a TAM task; Terraform cannot take it.
-- **APM Business Workflows** — the span tag that becomes a Business Workflow is configured in the tenant. Name the tag in the handover.
+- **APM Business Transaction rules** — the indexed `<org>.bt` Global tag rule is configured
+  in the tenant. Name the tag, bounded values, environments, and valid workflow pairs in
+  the handover.
 - **RUM application configuration and session-replay policy** — tenant settings.
 - **Log Observer Connect** — the connection itself is console-side. What Terraform *can* express is the consumer and the plumbing: `signalfx_log_view` and `signalfx_log_timeline` take a `default_connection` naming an already-configured connection, and the platform side is `splunk_inputs_http_event_collector` plus the `trace_id` extraction below.
 
 The whole of APM is absent from this provider — searching the 9.34.0 resource map for
-metricset, business workflow, and span tag returns nothing. A read-only
+metricset, business transaction rule, and span tag returns nothing. A read-only
 `signalfx_apm_service_topology` data source exists **only in the 10.0.0 pre-release**, so it
 is not available under a `~> 9.34` pin and should not be generated.
 

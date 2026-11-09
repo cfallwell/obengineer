@@ -35,7 +35,8 @@ never fails a session.
 fail plugin startup. **Splunk Observability Cloud and Splunk Enterprise are
 mandatory:** copy those two entries from `.mcp.optional.json` and supply your
 organisation's command. ThousandEyes and the local OpenTelemetry tools server are
-recommended. A Jira MCP is used only when this host already has one. Classification:
+recommended. A Jira MCP is used only when the human named Jira and this host already
+has the connection. Classification:
 the plugin copy of `skills/references/mcp-servers.md`.
 
 **Never put a token value in either file.** Use `${VAR}` references only; both files
@@ -44,7 +45,10 @@ are committed.
 ## What it writes
 
 Under `docs/observability/` in your workspace: one customer document as Markdown, the
-`.docx` rendered from that same Markdown, and `attribute-schema.json`. Under
-`wiki/apps/<app>/services/<service>/`: the notes the agents retrieve by subject. It does not modify
-application code unless you run `$instrumentation-implement` against an analysis you
-have accepted.
+`.docx` rendered from that same Markdown, `attribute-schema.json`, and
+`implementation-map.json`. Analysis includes authorized exposed-credential/API and OWASP
+coverage and opens a docs-only PR. `/ob-generate accept <analysis> at <commit>` records
+exact-commit acceptance and builds the wiki. Under `wiki/apps/<app>/services/<service>/`
+are subject notes; app-level unified work orders live under
+`wiki/apps/<app>/implementation/work-orders/`. Application code changes only through an
+accepted bounded `$instrumentation-implement` work order.

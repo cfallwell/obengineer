@@ -25,12 +25,16 @@ ROOT = Path(__file__).resolve().parent.parent
 CANONICAL = ROOT / "skills"
 PLUGIN = ROOT / "plugins" / "obengineer"
 PLUGIN_SKILLS = PLUGIN / "skills"
+PLUGIN_COMMANDS = PLUGIN / "commands"
+COMMANDS = ROOT / "commands"
+ROOT_TOKEN = "{{OBENGINEER_ROOT}}"
+PLUGIN_ROOT_TOKEN = "${CLAUDE_PLUGIN_ROOT}"
 LINK_DIRS = (ROOT / ".cursor" / "skills", ROOT / ".agents" / "skills")
 IGNORE_NAMES = ["__pycache__", ".pytest_cache", ".DS_Store"]
 IGNORE = shutil.ignore_patterns(*IGNORE_NAMES, "*.pyc")
-# Skills link to ../../agents/ and ../../prompts/, so the bundle carries them too;
+# Skills and prompts link to agents, prompts, and the engagement input template, so the bundle carries them too;
 # an installed plugin cannot reach back into this repository.
-COMPANION_DIRS = ("agents", "prompts")
+COMPANION_DIRS = ("agents", "prompts", "inputs")
 
 
 def skill_names() -> list[str]:
@@ -96,6 +100,25 @@ def companion_problems() -> list[str]:
     return problems
 
 
+def command_problems() -> list[str]:
+    problems: list[str] = []
+    expected_names = {path.name for path in COMMANDS.glob("*.md")}
+    actual_names = (
+        {path.name for path in PLUGIN_COMMANDS.glob("*.md")}
+        if PLUGIN_COMMANDS.exists() else set()
+    )
+    for name in sorted(expected_names):
+        source = (COMMANDS / name).read_text().replace(ROOT_TOKEN, PLUGIN_ROOT_TOKEN)
+        target = PLUGIN_COMMANDS / name
+        if not target.is_file():
+            problems.append(f"missing from plugin: commands/{name}")
+        elif target.read_text() != source:
+            problems.append(f"differs: commands/{name}")
+    for name in sorted(actual_names - expected_names):
+        problems.append(f"only in plugin: commands/{name}")
+    return problems
+
+
 def sync(names: list[str]) -> None:
     PLUGIN_SKILLS.mkdir(parents=True, exist_ok=True)
     wanted = set(names + shared_dirs())
@@ -114,6 +137,14 @@ def sync(names: list[str]) -> None:
             shutil.rmtree(dst)
         shutil.copytree(ROOT / name, dst, ignore=IGNORE)
         print(f"  synced {name}/ (companion)")
+    if PLUGIN_COMMANDS.exists():
+        shutil.rmtree(PLUGIN_COMMANDS)
+    PLUGIN_COMMANDS.mkdir(parents=True)
+    for source in sorted(COMMANDS.glob("*.md")):
+        (PLUGIN_COMMANDS / source.name).write_text(
+            source.read_text().replace(ROOT_TOKEN, PLUGIN_ROOT_TOKEN)
+        )
+    print("  synced commands/ (plugin root resolved)")
 
 
 def refresh_links(names: list[str]) -> None:
@@ -140,7 +171,7 @@ def main(argv=None) -> int:
         sys.exit("no skills found under skills/")
 
     if args.check:
-        problems = diff_report(names) + companion_problems()
+        problems = diff_report(names) + companion_problems() + command_problems()
         if problems:
             print(f"FAIL — plugin skills drifted ({len(problems)}):")
             for p in problems:

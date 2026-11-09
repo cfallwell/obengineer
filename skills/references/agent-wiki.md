@@ -20,6 +20,8 @@ wiki/
   apps/
     <app>/
       index.md                    # this website and the services it uses, as wikilinks
+      implementation/
+        work-orders/<id>.md       # unified work orders; may span services/repositories
       services/
         <service>/
           index.md                # map of content for this service — the note an agent loads for the service
@@ -34,7 +36,7 @@ wiki/
             buses.md                  # one section per bus: topics, accounts crossed, inject/extract state
             third-parties.md          # every third party, its purpose, and its telemetry consequence
           findings/
-            F-01-<slug>.md            # one note per finding, with status: open | fixed | regressed | accepted
+            F-01-<slug>.md            # one note per finding, with status: open | fixed | regressed | risk-accepted
           contract/
             cross-cutting.md          # the attribute set and the five code patterns
             baggage.md                # the budget, the allowlist, and each key's named consumer
@@ -59,8 +61,7 @@ wiki/
             asks.md                   # the inputs that would make the value case quantitative
             entitlement-exposure.md   # when entitlement or a supplied baseline exists; absent when neither does
           implementation/
-            work-orders/<nn>-<slice>.md   # what the implementer agent will do, one note per PR-sized slice
-            enforcement.md            # the CI checks that keep the contract true
+            enforcement.md            # service-local CI checks that keep the contract true
           as-code/
             inventory.md              # what exists in the tenant, what Terraform owns, what was imported
             refusals.md               # what could not be generated and the missing key for each
@@ -83,6 +84,12 @@ uses it. It is not moved to a single global folder that neither app owns.
 **The application directory name is the `<app>` identifier used everywhere else**: in
 the document filename and in the `<org>.bt` prefix. The service directory name is the
 `<service>` identifier used for that backend. One string each, so a grep finds everything.
+
+**Work orders are app-level because end-to-end work crosses services.** A unified order
+under `wiki/apps/<app>/implementation/work-orders/` may contain frontend, SSR, GraphQL,
+backend, Collector, and configuration repository legs. Every service note links to the
+same order. The schema, selectors, linked-PR rules, and Jira/manual fallback live in
+[`implementation-work-orders.md`](implementation-work-orders.md).
 
 ## A note earns its file
 
@@ -196,7 +203,10 @@ from a changelog.
 The wiki is what makes learning across engagements possible, because it is the only place
 where a prediction and its outcome sit next to each other:
 
-- **`meta/decisions.md`** records what was proposed and what the human accepted. The diff between them is preference data — the highest-value signal the project generates, and it is otherwise thrown away at the end of every session.
+- **`meta/decisions.md`** links the exact-commit analysis acceptance record and records
+  subsequent accepted/rejected decisions. Contract acceptance is not finding
+  `status: risk-accepted`; the latter requires accepter, date, and rationale. The diff
+  between proposals and decisions is preference data that is otherwise lost.
 - **`findings/`** with a `status` field turns findings into an outcome series: how many were fixed, how long they stayed open, which classes recur across customers. A finding class that recurs points at a reference that failed to prevent it.
 - **`detectors/`** with threshold provenance shows which placeholder thresholds were replaced and by how much, which is the only honest measure of whether the invented numbers were any good.
 - **`run-log.md`** gives the denominator for all of it.
