@@ -23,7 +23,7 @@ checked when a later run touches it, diffed into an upgrade path the agents act 
 
 ## Where it is recorded
 
-`wiki/<Customer>/<app>/meta/versions.md`, as a table with a **provenance** column, because
+`wiki/apps/<app>/services/<service>/meta/versions.md`, as a table with a **provenance** column, because
 "how do you know" is the question that matters when a number turns out to be wrong:
 
 ```markdown

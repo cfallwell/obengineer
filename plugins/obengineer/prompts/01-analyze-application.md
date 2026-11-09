@@ -59,7 +59,7 @@ inputs file; what that section decides is
 
 ## First: is this a first run or a delta?
 
-Check for `wiki/<Customer>/<app>/index.md`.
+Check for `wiki/apps/<app>/services/<service>/index.md`.
 
 - **Absent** — first run. Full analysis.
 - **Present with entries in `meta/run-log.md`** — **delta run**. Read `meta/versions.md`, `meta/decisions.md`, the accepted BT and workflow names, and the finding frontmatter *before* scanning. Reuse every accepted name and every finding id. Section 3 gains `### Changes since v<N-1>`, and the document reports what changed rather than reproducing itself. Rules: [`../skills/references/incremental-runs.md`](../skills/references/incremental-runs.md).

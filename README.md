@@ -66,14 +66,14 @@ customer engagement is a separate repository, and the deliverables land there:
 obengineer/                         # this project — clone it anywhere
 <engagement-repo>/                  # one repository per engagement, anywhere
     ├── docs/observability/         # the customer document and its .docx
-    ├── wiki/<Customer>/<app>/      # the agent wiki: working memory for later runs
+    ├── wiki/apps/<app>/services/<service>/      # the agent wiki: working memory for later runs
     ├── AGENTS.md · CLAUDE.md       # host pointers into that wiki
     └── terraform/                  # what observability-as-code emits
 ```
 
 The split is the point. A toolkit that lives inside one customer's repository gets
 customer-specific edits, and the next engagement either forks it or inherits them.
-Paths in the skills — `docs/observability/…`, `wiki/<Customer>/<app>/…` — are always
+Paths in the skills — `docs/observability/…`, `wiki/apps/<app>/services/<service>/…` — are always
 relative to the **engagement** repository, never to this one.
 
 ## Install
@@ -141,7 +141,7 @@ contract has exactly one copy and it is the copy under review.
 |---|---|---|
 | `/obengineer-intake` | Asks for the inputs no scan can measure, in one round | `engagement-inputs.yaml` |
 | `/obengineer-analyze` | Deep-scans the front end, maps the backends from diagrams, raises the findings, and writes the full recommendation set | `analysis-<app>-<date>.md`, a customer `.docx`, `attribute-schema.json` |
-| `/obengineer-wiki` | Turns the accepted analysis into the notes the agents retrieve by subject | `wiki/<Customer>/<app>/`, work orders, tracked versions |
+| `/obengineer-wiki` | Turns the accepted analysis into the notes the agents retrieve by subject | `wiki/apps/<app>/services/<service>/`, work orders, tracked versions |
 | `/obengineer-implement` | Lands one contract slice with the CI check that keeps it enforced | A single-concern PR |
 | `/obengineer-as-code` | Generates Terraform for the contract at three persona levels | A `terraform/` tree and a plan |
 | `/obengineer-review` | Grades a deliverable against the completeness bar before a human sees it | A pass, or numbered defects with lines |
@@ -208,7 +208,7 @@ Four runs, each with a run contract and an agent definition:
 | Run | Prompt | Output |
 |---|---|---|
 | Analyze | [`prompts/01-analyze-application.md`](prompts/01-analyze-application.md) | **The customer document** — architecture observed, critical findings, the full recommendation set, and the business value realization it closes on — plus its `.docx`, `attribute-schema.json`, and, when entitlement or a supplied traffic baseline exists, the account team's entitlement exposure document |
-| Wiki | [`prompts/02-build-instrumentation-wiki.md`](prompts/02-build-instrumentation-wiki.md) | `wiki/<Customer>/<app>/` — one note per BT, workflow, use case, finding, detector, and objective, plus work orders, the value workings, and tracked versions |
+| Wiki | [`prompts/02-build-instrumentation-wiki.md`](prompts/02-build-instrumentation-wiki.md) | `wiki/apps/<app>/services/<service>/` — one note per BT, workflow, use case, finding, detector, and objective, plus work orders, the value workings, and tracked versions |
 | Implement | [`prompts/03-implement-instrumentation.md`](prompts/03-implement-instrumentation.md) | Small reviewable PRs, one contract slice each |
 | Configure | [`prompts/04-generate-observability-as-code.md`](prompts/04-generate-observability-as-code.md) | A `terraform/` tree and a plan — executive, SRE, and engineer modules |
 
@@ -225,7 +225,7 @@ metrics, the BT-to-workflow join, detectors with thresholds, indicators and obje
 customer's voice, then the composite use cases — and closes on **Business Value Realization**,
 built from the customer's own numbers, the cited public record, and measured performance.
 
-The lower layer is a **wiki**, one note per subject under `wiki/<Customer>/<app>/`, with
+The lower layer is a **wiki**, one note per subject under `wiki/apps/<app>/services/<service>/`, with
 frontmatter and wikilinks that Obsidian and the Cursor, Claude, and Codex memory features can
 read. It is what makes a periodic run a delta rather than a rewrite, and what makes a CI
 pipeline possible at all. See
@@ -317,7 +317,7 @@ and `<Customer>` are placeholders.
 ```bash
 export ENGAGEMENT=/path/to/engagement-repo
 make render FILE=docs/observability/analysis-<app>-<date>.md
-make verify-wiki WIKI="wiki/<Customer>/<app>"
+make verify-wiki WIKI="wiki/apps/<app>/services/<service>"
 ```
 
 - **`make render`** rebuilds the customer `.docx` from the Markdown analysis and

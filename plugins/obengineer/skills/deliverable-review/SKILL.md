@@ -121,7 +121,7 @@ The wiki fails differently from the document, so it needs its own pass rather th
 one. Start with the mechanical half, which is a script rather than a reading:
 
 ```bash
-python3 ../instrumentation-wiki/scripts/verify_wiki.py "wiki/<Customer>/<app>"
+python3 ../instrumentation-wiki/scripts/verify_wiki.py "wiki/apps/<app>/services/<service>"
 ```
 
 It settles required notes, frontmatter fields and their allowed values, link resolution and

@@ -4,7 +4,7 @@ Repo instructions for coding and reviewing agents working on this agentry. Keep
 changes small, evidence-based, and aligned with the existing structure. This
 repository is the home of the instrumentation architecture agents, skills, and
 plugins. It belongs to no engagement: the deliverables it produces land in the
-engagement's own repository, under `docs/observability/` and `wiki/<Customer>/<app>/`
+engagement's own repository, under `docs/observability/` and `wiki/apps/<app>/services/<service>/`
 there. Paths in the skills are relative to that repository, not to this one.
 
 ## Project Map
@@ -96,7 +96,7 @@ There is exactly **one** customer-facing document. A second one existed —
 directions: it duplicated the analysis so the two disagreed, no customer read it, and no
 agent could load it without spending its whole context on material irrelevant to the task
 in hand. The lower layer is now a wiki of one note per subject under
-`wiki/<Customer>/<app>/`; see `skills/references/agent-wiki.md`. If a change would
+`wiki/apps/<app>/services/<service>/`; see `skills/references/agent-wiki.md`. If a change would
 reintroduce a second document, it is the wrong change.
 
 ## Two placements that are load-bearing

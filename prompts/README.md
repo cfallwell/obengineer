@@ -9,7 +9,7 @@ actually ran.
 |---|---|---|---|---|
 | 0 | `/obengineer-intake` | [`engagement-intake`](../skills/engagement-intake/SKILL.md) | — | `engagement-inputs.yaml` |
 | 1 | `/obengineer-analyze` | [01](01-analyze-application.md) | Architect | **The customer document** — analysis and recommendations in one file — plus its `.docx` and `attribute-schema.json` (PR 0, docs only) |
-| 2 | `/obengineer-wiki` | [02](02-build-instrumentation-wiki.md) | Architect | The agent wiki under `wiki/<Customer>/<app>/`, work orders, tracked versions. **No second document.** |
+| 2 | `/obengineer-wiki` | [02](02-build-instrumentation-wiki.md) | Architect | The agent wiki under `wiki/apps/<app>/services/<service>/`, work orders, tracked versions. **No second document.** |
 | 3 | `/obengineer-implement` | [03](03-implement-instrumentation.md) | Implementer | Code PRs, one contract slice (or Phase 0) at a time |
 | 4 | `/obengineer-as-code` | [04](04-generate-observability-as-code.md) | Observability as Code | Terraform for three persona levels, plus a plan. No `apply`. |
 

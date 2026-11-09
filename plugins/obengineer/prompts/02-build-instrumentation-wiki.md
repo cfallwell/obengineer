@@ -4,7 +4,7 @@
 **Skills:** `instrumentation-wiki`, `baggage-propagation`, `cardinality-budget`  
 **Inputs:** `docs/observability/engagement-inputs.yaml` + the accepted Prompt 01 analysis document  
 **Depends on:** the Prompt 01 analysis, accepted by the human.  
-**Output:** PR 0 — documentation only. The wiki under `wiki/<Customer>/<app>/`, `attribute-schema.json`, and the host memory pointers.
+**Output:** PR 0 — documentation only. The wiki under `wiki/apps/<app>/services/<service>/`, `attribute-schema.json`, and the host memory pointers.
 
 **Invoke it, do not paste it.** `/obengineer-wiki` reads this file in place. Inputs come
 from `engagement-inputs.yaml`, so nothing is re-attached and nothing is re-typed; the
@@ -38,7 +38,7 @@ and MetricSet built on it.
 
 | Field | Used for |
 |---|---|
-| `engagement.customer`, `.application` | The wiki path — `wiki/<Customer>/<app>/`. Customer first, then application, because tenancy and entitlement are customer-level facts that must not be duplicated per app |
+| `engagement.application` and the backend services the analysis names | The wiki path — `wiki/apps/<app>/services/<service>/`. Create one directory per app and per service that app uses. A shared service is recorded under each app and linked |
 | `artifacts.prior_contract`, `.prior_schema` | The naming authority when one exists |
 | `backends.languages`, `.buses` | Which language ports and bus notes must exist |
 | `entitlement.*` | The arithmetic behind `contract/mpm.md`, and — only when supplied — `business/entitlement-exposure.md` |
@@ -47,7 +47,7 @@ and MetricSet built on it.
 
 ## First: is this a first run or a delta?
 
-If `wiki/<Customer>/<app>/index.md` already exists with entries in `meta/run-log.md`, read
+If `wiki/apps/<app>/services/<service>/index.md` already exists with entries in `meta/run-log.md`, read
 `meta/`, the accepted note names, and the finding frontmatter **before** writing. Update notes
 in place; refresh `updated` and `run` only on the notes this run actually reconsidered.
 Bumping every note tells the next delta that everything changed, which is the same as telling
@@ -55,7 +55,7 @@ it nothing. Rules: [`../skills/references/incremental-runs.md`](../skills/refere
 
 ## Task
 
-1. **The tree**, exactly as `agent-wiki.md` specifies: `meta/`, `architecture/`, `findings/`, `contract/`, `business-transactions/`, `workflows/`, `use-cases/`, `metrics/`, `detectors/`, `slos/`, `business/`, `implementation/`, `as-code/`.
+1. **The tree**, exactly as `agent-wiki.md` specifies, at `wiki/apps/<app>/services/<service>/` for each app and each backend service that app uses: `meta/`, `architecture/`, `findings/`, `contract/`, `business-transactions/`, `workflows/`, `use-cases/`, `metrics/`, `detectors/`, `slos/`, `business/`, `implementation/`, `as-code/`. The run creates `wiki/apps/<app>/` and each service directory. A human does not create them first. A shared service is recorded under each app and linked with `[[apps/<other-app>/services/<service>/index]]`.
 
 2. **`index.md` as a map of content, not a summary.** The one note an agent may load unconditionally, so it stays short: the application in a paragraph, counts, the current run version, and a table of entry points by task. A summary in the index is a fact with two homes.
 

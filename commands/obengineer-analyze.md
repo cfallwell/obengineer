@@ -10,7 +10,7 @@ Run obengineer run 1 — analyze.
    is absent or incomplete, run the intake first
    (`{{OBENGINEER_ROOT}}/skills/engagement-intake/SKILL.md`) — do not proceed on guesses,
    and do not re-ask for anything the file already answers.
-3. Check for `wiki/<Customer>/<app>/index.md`. If it exists with entries in
+3. Check for `wiki/apps/<app>/services/<service>/index.md`. If it exists with entries in
    `meta/run-log.md`, this is a **delta run**: read `meta/` and the accepted names before
    scanning, reuse every accepted name and finding id, and report change rather than
    reproducing the previous document.

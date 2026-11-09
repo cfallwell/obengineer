@@ -81,7 +81,7 @@ in exactly one document-control line.
 
 ### Step 1 — Establish the run type
 
-Does `wiki/<Customer>/<app>/index.md` exist? If it does with run-log entries, this is a
+Does `wiki/apps/<app>/services/<service>/index.md` exist? If it does with run-log entries, this is a
 **delta**: read `meta/versions.md`, `meta/decisions.md`, the accepted BT and workflow names,
 and the finding frontmatter *before* scanning. Section 3 then carries
 `### Changes since v<N-1>` and the document reports change rather than reproducing itself.
