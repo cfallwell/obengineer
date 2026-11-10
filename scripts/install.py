@@ -427,6 +427,7 @@ def install_project_gitignore(
         if not dry_run:
             atomic_write(destination, source.read_text())
             manifest["gitignore"] = {
+                "created": True,
                 "created_lines": source.read_text().splitlines(),
                 "appended_lines": [],
             }
@@ -444,9 +445,12 @@ def install_project_gitignore(
             existing_text + separator + "\n".join(missing) + "\n",
         )
         manifest["gitignore"] = {
+            "created": bool(gitignore.get("created", False)),
             "created_lines": list(gitignore.get("created_lines", [])),
             "appended_lines": [*tracked, *(
-                line for line in missing if line not in tracked
+                line for line in missing
+                if line not in tracked
+                and line not in gitignore.get("created_lines", [])
             )],
         }
     return [action]
@@ -472,6 +476,7 @@ def install_project_scaffold(scope_root: Path, dry_run: bool) -> list[str]:
             and ownership.get("sha256") == file_digest(destination)
         ):
             working_manifest["gitignore"] = {
+                "created": True,
                 "created_lines": destination.read_text().splitlines(),
                 "appended_lines": [],
             }
@@ -562,6 +567,7 @@ def uninstall_project_scaffold(scope_root: Path, dry_run: bool) -> list[str]:
             and ownership.get("sha256") == file_digest(gitignore_path)
         ):
             gitignore = {
+                "created": True,
                 "created_lines": gitignore_path.read_text().splitlines(),
                 "appended_lines": [],
             }
@@ -580,10 +586,16 @@ def uninstall_project_scaffold(scope_root: Path, dry_run: bool) -> list[str]:
             )
             if not dry_run:
                 atomic_write(gitignore_path, "\n".join(remaining) + "\n")
-        else:
+        elif gitignore.get("created") is True:
             actions.append(f"remove installer-created {gitignore_path}")
             if not dry_run:
                 gitignore_path.unlink()
+        else:
+            actions.append(
+                f"remove only installer-added ignores from {gitignore_path}"
+            )
+            if not dry_run:
+                atomic_write(gitignore_path, "")
 
     for relative, ownership in sorted(manifest["created"].items()):
         path = _owned_scaffold_path(scope_root, relative)

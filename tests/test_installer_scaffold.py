@@ -56,6 +56,7 @@ def test_project_install_creates_missing_scaffold_and_tracks_ownership(tmp_path)
         "artifacts/README.md",
     }
     assert manifest["schema_version"] == 2
+    assert manifest["gitignore"]["created"] is True
     assert ".obengineer/" in manifest["gitignore"]["created_lines"]
     for relative, ownership in manifest["created"].items():
         digest = hashlib.sha256((tmp_path / relative).read_bytes()).hexdigest()
@@ -176,6 +177,20 @@ def test_gitignore_uninstall_removes_only_tracked_lines(tmp_path):
     gitignore.write_text(gitignore.read_text() + "later-user-line/\n")
     run_install(tmp_path, "--cursor", "--uninstall")
     assert gitignore.read_text() == "user-cache/\n.env\nlater-user-line/\n"
+
+
+def test_uninstall_preserves_preexisting_empty_gitignore(tmp_path):
+    gitignore = tmp_path / ".gitignore"
+    gitignore.touch()
+    run_install(tmp_path, "--cursor")
+    manifest = json.loads(
+        (tmp_path / ".obengineer/scaffold-manifest.json").read_text()
+    )
+    assert manifest["gitignore"]["created"] is False
+
+    run_install(tmp_path, "--cursor", "--uninstall")
+    assert gitignore.is_file()
+    assert gitignore.read_text() == ""
 
 
 def test_failed_reinstall_rolls_back_all_host_paths(tmp_path, monkeypatch):
