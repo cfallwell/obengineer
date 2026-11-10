@@ -3,13 +3,13 @@
   "owner": {
     "name": "Splunk Observability Practice"
   },
-  "description": "obengineer bundles instrumentation architecture workflows — target analysis, the full instrumentation contract, and customer-review document rendering — for Claude Code.",
+  "description": "obengineer provides guided, versioned instrumentation analysis, linked strategy, work orders, implementation, and verification for Claude Code.",
   "plugins": [
     {
       "name": "obengineer",
       "displayName": "obengineer",
       "source": "./plugins/obengineer",
-      "description": "Analyze a target, write the instrumentation contract, and render it for customer architecture review."
+      "description": "Analyze a target into a linked strategy and complete work-order queue, then implement and verify it."
     }
   ]
 }

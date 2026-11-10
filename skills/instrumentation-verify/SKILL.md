@@ -17,7 +17,7 @@ metadata:
 
 ## Preconditions
 
-1. Verify the exact-commit acceptance record.
+1. Resolve the accepted version and verify its content-bound acceptance record.
 2. Validate `verification-plan.json`, `provenance-ledger.json`, and optional
    human-approved `verification-exclusions.json`.
 3. Load only the read integrations named by eligible criteria.

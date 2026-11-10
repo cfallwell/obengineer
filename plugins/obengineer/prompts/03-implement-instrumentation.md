@@ -2,9 +2,9 @@
 
 **Agent:** [`../agents/instrumentation-implementer.agent.md`](../agents/instrumentation-implementer.agent.md)  
 **Skills:** `instrumentation-implement`  
-**Inputs:** accepted guide, schema, implementation map, wiki work order, and engagement inputs
-**Depends on:** canonical exact-commit acceptance record, verified analysis artifacts,
-schema, implementation map, and accepted work order.
+**Inputs:** accepted analysis version, schema, implementation map, Ready wiki work order, and engagement inputs
+**Depends on:** canonical content-bound acceptance record, verified analysis artifacts,
+schema, implementation map, and Ready work order.
 **Output:** one linked PR per repository leg plus a coordination PR. No deploys. No secrets.
 
 Run **once per unified work order**. Accept any bounded target selector defined in
@@ -19,7 +19,7 @@ place. If omitted, the accepted phase plan selects the next work order.
 ## System reminder
 
 Follow `instrumentation-implementer.agent.md`. Before any edit run
-`python3 <obengineer-root>/skills/instrumentation-wiki/scripts/verify_analysis_acceptance.py --record docs/observability/analysis-<app>-<date>.acceptance.yaml --repo .`.
+`python3 <obengineer-root>/skills/instrumentation-wiki/scripts/verify_analysis_acceptance.py --record docs/observability/analysis/<app>/V<N>/acceptance.yaml --repo .`.
 Read the guide, schema, map, and accepted work order.
 Do not invent attributes. Do not enable always-on session replay unless accepted. Do not
 call `SplunkRum.init` from an MFE. Use the work order's accepted review budget. Tests stay
@@ -36,11 +36,11 @@ PII deny list is enforced. If you see tokens in the repo, stop and report. Do no
 
 ## Inputs
 
-- Analysis document: `docs/observability/analysis-<app>-<date>.md`
-- Wiki work orders: `wiki/apps/<app>/implementation/work-orders/`
+- Analysis version: `docs/observability/analysis/<app>/V<N>/`
+- Wiki work orders: `wiki/apps/<app>/versions/V<N>/implementation/work-orders/`
 - Schema: `docs/observability/attribute-schema.json`
 - Map: `docs/observability/implementation-map.json`
-- Acceptance: `docs/observability/analysis-<app>-<date>.acceptance.yaml`
+- Acceptance: `docs/observability/analysis/<app>/V<N>/acceptance.yaml`
 - Engagement inputs: `docs/observability/engagement-inputs.yaml` — `backends.languages` and
   `.deploy_targets` for which SDK, `constraints.who_deploys_front_end` and
   `.who_deploys_collector` for whether this slice is deployable at all, and
@@ -55,7 +55,7 @@ PII deny list is enforced. If you see tokens in the repo, stop and report. Do no
 
 ## Task
 
-Resolve the selector to exactly one accepted work order. Implement **only that unified
+Resolve the selector to exactly one Ready work order in the accepted version. Implement **only that unified
 work order**, across only its mapped repository legs and authorized paths. Zero or multiple
 matches stop and list the missing or ambiguous mappings. A missing repository or Jira
 project is requested from engineering after analysis, never guessed.

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Prove an agent wiki is retrievable, resolvable, and safe to load into context.
 
-    python3 verify_wiki.py "wiki/apps/<app>/services/<service>"
+    python3 verify_wiki.py "wiki/apps/<app>/versions/V<N>/services/<service>"
 
 The document has verify_render.py; without an equivalent the wiki's rules are
 enforced by whoever remembers them. Checks, all mechanical:
@@ -63,11 +63,15 @@ REQUIRED = [
 VALUE_LABELS = ("stated", "measured", "public", "derived")
 
 NOTE_TYPES = {"index", "reference", "bt", "workflow", "use-case", "finding",
-              "detector", "sli", "work-order"}
-NOTE_STATUS = {"proposed", "designed", "implemented", "verified", "retired"}
+              "metric", "detector", "sli", "work-order"}
+NOTE_STATUS = {
+    "proposed", "ready", "blocked", "designed", "implemented", "verified",
+    "retained", "changed", "superseded", "retired",
+}
 FINDING_STATUS = {"open", "fixed", "regressed", "risk-accepted"}
 WORK_ORDER_STATUS = {
-    "proposed", "accepted", "in-progress", "blocked", "implemented", "verified", "retired"
+    "proposed", "ready", "in-progress", "blocked", "retained", "changed",
+    "superseded", "implemented", "verified", "retired",
 }
 
 # index.md count rows, and the directory each is counted from. A count that
@@ -82,7 +86,7 @@ COUNTED_ALIASES = {"objectives": "slos", "objectives, all `proposed`": "slos"}
 
 # The retrieval discipline the host pointers exist to carry.
 POINTER_RULES = [
-    ("the retrieval rule", re.compile(r"do not load the whole wiki", re.I)),
+    ("the retrieval rule", re.compile(r"do not load (?:every version or )?the whole wiki", re.I)),
     ("the same-commit update rule", re.compile(r"same commit", re.I)),
 ]
 
@@ -163,8 +167,18 @@ def acceptance_verifier():
 
 def check(app: Path, repo_root: Path, index_max_lines: int) -> list[str]:
     failures: list[str] = []
-    app_root = app.parents[1]  # wiki/apps/<app>/services/<service> -> wiki/apps/<app>
-    app_work_orders = list((app_root / "implementation" / "work-orders").glob("*.md"))
+    # wiki/apps/<app>/versions/V<N>/services/<service>
+    if app.parent.name != "services" or not re.fullmatch(r"V[1-9][0-9]*", app.parents[1].name):
+        return [
+            "service path must be wiki/apps/<app>/versions/V<N>/services/<service>"
+        ]
+    version_root = app.parents[1]
+    versions_root = app.parents[2]
+    app_root = app.parents[3]
+    version = version_root.name
+    app_work_orders = list(
+        (version_root / "implementation" / "work-orders").glob("*.md")
+    )
     notes = sorted(set(app.rglob("*.md")) | set(app_work_orders))
     rel = {
         p: str(p.relative_to(repo_root)) if p.is_relative_to(repo_root) else str(p)
@@ -175,66 +189,38 @@ def check(app: Path, repo_root: Path, index_max_lines: int) -> list[str]:
     for required in REQUIRED:
         if not (app / required).is_file():
             failures.append(f"missing required note: {required}")
+    if not (version_root / "implementation" / "work-orders" / "index.md").is_file():
+        failures.append("missing work-order queue index")
 
-    acceptance_name = re.compile(
-        rf"analysis-{re.escape(app_root.name)}-\d{{4}}-\d{{2}}-\d{{2}}"
-        r"\.acceptance\.yaml$"
+    acceptance_path = (
+        repo_root / "docs" / "observability" / "analysis" / app_root.name /
+        version / "acceptance.yaml"
     )
-    acceptances = sorted(
-        path for path in (repo_root / "docs" / "observability").glob(
-            "analysis-*.acceptance.yaml"
+    # Proposed analysis versions must pass before acceptance. When an acceptance
+    # record exists, verify its content digest and version binding.
+    if acceptance_path.is_file():
+        module_path = Path(__file__).with_name("verify_analysis_acceptance.py")
+        spec = importlib.util.spec_from_file_location(
+            "verify_analysis_acceptance_record", module_path
         )
-        if acceptance_name.fullmatch(path.name)
-    )
-    if not acceptances:
-        failures.append("missing exact-commit analysis acceptance record")
-    else:
-        acceptance_path = acceptances[-1]
-        acceptance = acceptance_path.read_text()
-        accepted = {
-            match.group(1): match.group(2).strip()
-            for match in re.finditer(
-                r"^([a-z_]+):\s*([^#\n]+?)\s*$", acceptance, re.M
-            )
-        }
-        required_fields = (
-            "status", "analysis", "analysis_commit", "analysis_pr",
-            "accepted_by", "accepted_at", "provenance_seal_digest",
+        module = importlib.util.module_from_spec(spec)
+        sys.modules[spec.name] = module
+        spec.loader.exec_module(module)
+        accepted, acceptance_failures = module.parse_record(acceptance_path)
+        failures.extend(
+            f"acceptance record: {failure}" for failure in acceptance_failures
         )
-        for field in required_fields:
-            if not accepted.get(field):
-                failures.append(
-                    f"acceptance record {acceptance_path.name} is missing {field}"
+        if not acceptance_failures:
+            failures.extend(
+                f"acceptance record: {failure}"
+                for failure in module.verify(
+                    repo_root,
+                    Path(accepted["analysis"]),
+                    accepted["version"],
+                    accepted["analysis_content_digest"],
+                    accepted["analysis_content_commit"],
                 )
-        if accepted.get("status") != "accepted":
-            failures.append(
-                f"acceptance record {acceptance_path.name} status is not accepted"
             )
-        accepted_analysis = re.compile(
-            rf"docs/observability/analysis-{re.escape(app_root.name)}-"
-            r"\d{4}-\d{2}-\d{2}\.md$"
-        )
-        if not accepted_analysis.fullmatch(accepted.get("analysis", "")):
-            failures.append(
-                f"acceptance record {acceptance_path.name} targets another application"
-            )
-        if accepted.get("analysis") and accepted.get("analysis_commit"):
-            for failure in acceptance_verifier()(
-                repo_root, Path(accepted["analysis"]), accepted["analysis_commit"]
-            ):
-                failures.append(f"acceptance record {acceptance_path.name}: {failure}")
-        ledger_path = repo_root / "docs" / "observability" / "provenance-ledger.json"
-        if ledger_path.is_file() and accepted.get("provenance_seal_digest"):
-            try:
-                actual = json.loads(ledger_path.read_text()).get(
-                    "seals", {}
-                ).get("analysis", {}).get("digest")
-            except (json.JSONDecodeError, AttributeError):
-                actual = None
-            if actual != accepted["provenance_seal_digest"]:
-                failures.append(
-                    f"acceptance record {acceptance_path.name}: provenance seal mismatch"
-                )
 
     # ---- frontmatter -----------------------------------------------------
     fields: dict[Path, dict[str, str]] = {}
@@ -244,9 +230,13 @@ def check(app: Path, repo_root: Path, index_max_lines: int) -> list[str]:
             failures.append(f"{rel[p]}: no YAML frontmatter")
             continue
         fields[p] = fm
-        for key in ("title", "type", "status", "updated"):
+        for key in ("title", "type", "status", "updated", "version"):
             if not fm.get(key):
                 failures.append(f"{rel[p]}: frontmatter has no {key}")
+        if fm.get("version") and fm["version"] != version:
+            failures.append(
+                f"{rel[p]}: version {fm['version']!r} does not match {version}"
+            )
         kind = fm.get("type", "")
         if kind and kind not in NOTE_TYPES:
             failures.append(f"{rel[p]}: type {kind!r} is not one of {sorted(NOTE_TYPES)}")
@@ -262,14 +252,23 @@ def check(app: Path, repo_root: Path, index_max_lines: int) -> list[str]:
         updated = fm.get("updated", "")
         if updated and not re.fullmatch(r"\d{4}-\d{2}-\d{2}", updated):
             failures.append(f"{rel[p]}: updated {updated!r} is not an ISO date")
+        if "[Analysis](" not in body(p.read_text()):
+            failures.append(f"{rel[p]}: no Analysis breadcrumb")
 
     # ---- unified work orders ---------------------------------------------
     for p in app_work_orders:
+        if p.name == "index.md":
+            continue
         content = body(p.read_text()).lower()
         for heading in (
+            "## findings",
+            "## use cases",
+            "## workflows and business transactions",
             "## target selectors",
             "## repository legs",
+            "## dependencies",
             "## acceptance evidence",
+            "## verification criteria",
             "## coordination",
         ):
             if heading not in content:
@@ -358,11 +357,14 @@ def check(app: Path, repo_root: Path, index_max_lines: int) -> list[str]:
             if not claimed:
                 continue
             counted_root = (
-                app_root / "implementation" / "work-orders"
+                version_root / "implementation" / "work-orders"
                 if directory == "implementation/work-orders"
                 else app / directory
             )
-            actual = len(list(counted_root.glob("*.md"))) if counted_root.is_dir() else 0
+            actual = (
+                len([path for path in counted_root.glob("*.md") if path.name != "index.md"])
+                if counted_root.is_dir() else 0
+            )
             if int(claimed.group()) != actual:
                 failures.append(
                     f"index.md claims {claimed.group()} for {label!r}; "
@@ -428,7 +430,9 @@ def check(app: Path, repo_root: Path, index_max_lines: int) -> list[str]:
 
     # ---- secrets ---------------------------------------------------------
     security_files = list(app.rglob("*"))
-    security_files += list((app_root / "implementation" / "work-orders").glob("*.md"))
+    security_files += list(
+        (version_root / "implementation" / "work-orders").glob("*.md")
+    )
     for p in sorted(set(security_files)):
         if not p.is_file() or p.suffix not in (".md", ".json", ".yaml", ".yml"):
             continue
@@ -447,7 +451,10 @@ def check(app: Path, repo_root: Path, index_max_lines: int) -> list[str]:
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("app", type=Path, help="wiki/apps/<app>/services/<service>")
+    ap.add_argument(
+        "app", type=Path,
+        help="wiki/apps/<app>/versions/V<N>/services/<service>",
+    )
     ap.add_argument("--repo-root", type=Path,
                     help="where the host pointers live (default: the wiki's parent repo)")
     ap.add_argument("--index-max-lines", type=int, default=200)

@@ -1,26 +1,21 @@
 # obengineer
 
-obengineer is a multi-host agent toolkit for designing and implementing a Splunk
-OpenTelemetry instrumentation contract. It inspects an application and its existing
-telemetry, produces a reviewable analysis and attribute schema, turns the accepted
-contract into an agent-readable wiki, and can then implement bounded unified work
-orders to make code observable. obengineer will also generate Splunk Terraform
-artifacts to build the use cases into Splunk Observability Cloud in the form of
-Dashboards, Custom Monitoring Metric Sets, Custom Workflows, Business Transactions
-and Detectors and other artifacts. Analysis includes exposed-credential/API checks
-and versioned OWASP Web/API coverage within the authorized boundary.
+obengineer analyzes a production application and publishes a versioned, linked
+instrumentation strategy for Splunk Observability Cloud and OpenTelemetry. The result
+opens in the agent host's native side panel: architecture, findings, recommended path,
+use cases, workflows, business transactions, shared signal contracts, operations, and the
+complete proposed work-order queue.
 
-It supports Cursor, Claude Code, and Codex. Generated artifacts belong in a separate
-memory or application repository; this repository remains the toolkit.
+Generated artifacts belong in a separate memory or application repository. This
+repository remains the toolkit.
 
 ## Requirements
 
 - Git
 - Python 3.10+
-- `python-docx` for Word document rendering
-- `markdown-it-py==4.2.0` for CommonMark parsing
-- `PyYAML==6.0.3` for engagement-input validation and migration
-- Terraform CLI when using `/ob-terraform`
+- `python-docx` and `markdown-it-py==4.2.0` only when rendering the optional Word summary
+- `PyYAML==6.0.3` for input validation
+- Terraform CLI for `/ob-terraform`
 
 ```bash
 python3 -m pip install python-docx markdown-it-py==4.2.0 PyYAML==6.0.3
@@ -28,64 +23,83 @@ python3 -m pip install python-docx markdown-it-py==4.2.0 PyYAML==6.0.3
 
 ## Install
 
-Clone the toolkit:
-
 ```bash
 git clone https://github.com/cfallwell/obengineer.git
 cd obengineer
-```
-
-Create or clone the repository that will hold the engagement artifacts, then install
-obengineer into it:
-
-```bash
 mkdir -p /path/to/memory-repo
 git -C /path/to/memory-repo init
-
 ./install.sh --cursor --project /path/to/memory-repo
 ```
 
-Use `--claude`, `--codex`, or `--all` instead of `--cursor` for other hosts. Restart
-the host after installation. Run `./install.sh --help` for all installer options.
+Use `--claude`, `--codex`, or `--all` for other hosts. Restart the host after
+installation.
 
-For tenant inventory, copy `templates/memory-repo/.env.template` and
-`templates/memory-repo/.gitignore` into the memory repository, create `.env` from the
-template, and enable the required MCP servers using environment-variable references.
-Never commit `.env` or place credential values in MCP configuration.
+Optional read-only Splunk API access is configured interactively without printing
+credentials:
+
+```bash
+cd /path/to/memory-repo
+/path/to/obengineer/scripts/setup-splunk-access.sh
+```
+
+obengineer also uses relevant MCP tools already connected to the host. MCP supplements
+direct APIs; it is not the only tenant data source.
 
 ## Use
 
-Open the memory repository in the installed host and run:
+Open the artifact repository and run:
 
 ```text
-/ob-intake
-/ob-analyze
-/ob-generate accept docs/observability/analysis-<app>-<date>.md at <commit-sha>
-/ob-implement <target-selector>
+/ob-start
+```
+
+The guided start asks for the minimum, then offers numbered optional inputs. Reply with,
+for example, `yes 1 3 4`, or `no`. Missing optional answers do not block analysis.
+
+At any time:
+
+```text
+/ob-add-inputs
+/ob-edit-inputs
+```
+
+Each addition or edit automatically creates the next immutable `[V<N>]` analysis and one
+review PR. The PR contains the linked Markdown site, schema, ledger, verification plan,
+versioned wiki, and every proposed work order.
+
+When review is complete, reply `yes` to accept the version and merge the PR. The agent
+resolves commits and content digests internally; no SHA or named accepter is required.
+Eligible work orders become Ready.
+
+Continue with:
+
+```text
+/ob-implement work-order:<id>
 /ob-terraform
 /ob-verify
 ```
 
-The first three commands are sequential. `/ob-analyze` opens a docs-only analysis PR.
-After human review and merge, a person accepts the exact reviewed commit with
-`/ob-generate accept … at …`
-before generation, implementation, or Terraform proceeds. After acceptance,
-implementation and Terraform generation can run independently.
-After deployment and the human-run Terraform apply, `/ob-verify` checks outcomes without
-mutating the tenant and routes unmet criteria to remediation.
+Terraform is plan-only and a human applies it. Verification is read-only.
 
-Use `/ob-review` to grade a deliverable and `/ob-render` to rebuild and verify its
-Word rendering.
+## Analysis experience
+
+- No browser or localhost server.
+- One host-native documentation link in chat; detail stays in the side panel.
+- `[V1] [V2] [V3]` selects immutable versions.
+- Breadcrumbs return every detail page to the analysis index.
+- The landing page represents the full strategy and links all detail.
+- Use cases lead to workflows, business transactions, signal contracts, and work orders.
+- Topics absent from evidence have no empty pages; suggestions share one reference page.
+- Word is optional and, when requested, is a summary under 20 pages.
 
 ## Documentation
 
 - [Documentation index](docs/README.md)
-- [Installation and upgrades](docs/installation.md)
-- [End-to-end usage and command reference](docs/usage.md)
-- [Configuration and behavior controls](docs/configuration.md)
-- [How obengineer operates](docs/how-it-works.md)
+- [Installation](docs/installation.md)
+- [Configuration](docs/configuration.md)
+- [End-to-end usage](docs/usage.md)
+- [How it works](docs/how-it-works.md)
 - [Design rationale](docs/design.md)
-- [Contributing](CONTRIBUTING.md)
 
 ## Development
 
@@ -95,8 +109,7 @@ make test
 make check
 ```
 
-Canonical skills live in `skills/`. Do not edit generated copies under
-`plugins/obengineer/skills/`; use `make sync-plugin-skills`.
+Canonical skills live in `skills/`. Run `make sync-plugin-skills` after changing them.
 
 ## License
 

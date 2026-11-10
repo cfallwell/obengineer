@@ -6,7 +6,7 @@ deploys, or remediates.
 
 ## Accepted inputs
 
-- exact-commit acceptance record and verified artifacts;
+- content-bound acceptance record for the selected version and verified artifacts;
 - `verification-plan.json`;
 - `verification-exclusions.json` when a human has approved exclusions;
 - `provenance-ledger.json`;

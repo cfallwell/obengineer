@@ -2,10 +2,8 @@
 """SessionStart hook: report whether this plugin's prerequisites are available.
 
 Read-only and non-fatal by design. It installs nothing, contacts nothing outside
-localhost, and always exits 0 — a session must never fail to start because a
-document renderer is missing. It prints one short status block so the agent knows
-up front whether it can render a customer .docx or must ask the user to install
-the renderer dependencies.
+localhost, and always exits 0. PyYAML supports guided inputs; Word rendering is
+optional and its missing packages are reported as an optional capability.
 """
 
 from __future__ import annotations
@@ -23,26 +21,33 @@ PLUGIN_ROOT = Path(
 )
 
 
-def check_renderer() -> tuple[bool, str]:
+def check_runtime() -> tuple[bool, str]:
     try:
-        import docx  # noqa: F401
-        import markdown_it
         import yaml
     except ImportError:
-        return False, (
-            "renderer dependency missing — run: "
-            "pip install python-docx markdown-it-py==4.2.0 PyYAML==6.0.3"
-        )
-    if markdown_it.__version__ != "4.2.0":
-        return False, (
-            f"markdown-it-py {markdown_it.__version__} found; "
-            "run: pip install markdown-it-py==4.2.0"
-        )
+        return False, "PyYAML missing — run: pip install PyYAML==6.0.3"
     if yaml.__version__ != "6.0.3":
         return False, (
             f"PyYAML {yaml.__version__} found; run: pip install PyYAML==6.0.3"
         )
-    return True, "python-docx, markdown-it-py 4.2.0, and PyYAML 6.0.3 available"
+    return True, "PyYAML 6.0.3 available"
+
+
+def check_optional_word() -> tuple[bool, str]:
+    try:
+        import docx  # noqa: F401
+        import markdown_it
+    except ImportError:
+        return True, (
+            "optional Word rendering unavailable — run when needed: "
+            "pip install python-docx markdown-it-py==4.2.0 PyYAML==6.0.3"
+        )
+    if markdown_it.__version__ != "4.2.0":
+        return True, (
+            f"optional Word rendering has markdown-it-py {markdown_it.__version__}; "
+            "run: pip install markdown-it-py==4.2.0"
+        )
+    return True, "optional Word rendering available"
 
 
 def check_skills() -> tuple[bool, str]:
@@ -82,7 +87,8 @@ def main() -> int:
     ok = True
     for label, (passed, detail) in {
         "skills": check_skills(),
-        "renderer": check_renderer(),
+        "runtime": check_runtime(),
+        "word": check_optional_word(),
         "mcp": check_local_mcp(),
     }.items():
         print(f"  {'ok  ' if passed else 'warn'} {label}: {detail}")

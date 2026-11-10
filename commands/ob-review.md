@@ -1,20 +1,18 @@
 ---
-description: Review — grade a deliverable against the completeness bar
+description: Review — grade a versioned analysis site and matching wiki
 ---
 
-Review a deliverable.
+Review the named analysis version, defaulting to the latest.
 
-Read `{{OBENGINEER_ROOT}}/skills/deliverable-review/SKILL.md` and follow it. The rubric is
-`{{OBENGINEER_ROOT}}/skills/references/document-template.md` — its section list, completeness
-bar, and pre-delivery checklist. If this skill and the rubric disagree, the rubric wins.
+Read `{{OBENGINEER_ROOT}}/skills/deliverable-review/SKILL.md` and follow it.
+The authorities are `analysis-site.md`, `agent-wiki.md`, and their linked contracts.
 
-Grade the file named below, defaulting to the analysis document under `docs/observability/`.
-Use `docs/observability/engagement-inputs.yaml` to decide which conditional sections apply.
-Validate `docs/observability/provenance-ledger.json`; evidence and outcome issue fields
-must cite ledger IDs and remain anonymized.
+Grade the landing page and every reachable page, then the matching versioned wiki and
+work-order queue. Validate the provenance ledger, schema, implementation map,
+verification plan, breadcrumbs, relative links, version isolation, reverse work-order
+links, and credential safety.
 
-Report every defect with the rubric row, the file, the line, and the smallest fix. Do not
-stop at the first one, and **do not rewrite the document** — grading and authoring stay
-separate, or there is no independent check.
+Report every defect with rule, file, line, consequence, and smallest repair. Do not
+rewrite the analysis; grading remains independent.
 
 $ARGUMENTS

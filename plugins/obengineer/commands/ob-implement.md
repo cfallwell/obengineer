@@ -1,32 +1,29 @@
 ---
-description: Implement — execute one bounded accepted work order across its repositories
+description: Implement — execute one Ready work order from the accepted analysis version
 ---
 
-Run obengineer run 3 — implement one bounded target.
+Run one bounded implementation work order.
 
-1. Adopt `${CLAUDE_PLUGIN_ROOT}/agents/instrumentation-implementer.agent.md` as your
-   operating contract for this run.
-2. Load `docs/observability/analysis-<app>-<date>.md` and
-   `docs/observability/attribute-schema.json`,
-   `docs/observability/implementation-map.json`, and the acceptance record. **Stop if the human has not accepted the
-   guide.** This run implements a contract; it does not invent one.
-   Before editing, run:
-   `python3 "${CLAUDE_PLUGIN_ROOT}/skills/instrumentation-wiki/scripts/verify_analysis_acceptance.py" --record docs/observability/analysis-<app>-<date>.acceptance.yaml --repo .`.
-   Load only provenance-ledger IDs cited by the selected work order, append proof
-   records, and never alter sealed analysis entries.
-3. Follow `${CLAUDE_PLUGIN_ROOT}/prompts/03-implement-instrumentation.md`.
-4. Use the `$instrumentation-implement` skill.
+1. Adopt `${CLAUDE_PLUGIN_ROOT}/agents/instrumentation-implementer.agent.md`.
+2. Resolve the accepted version from `wiki/apps/<app>/index.md`, then verify its
+   `acceptance.yaml` with:
+   `python3 "${CLAUDE_PLUGIN_ROOT}/skills/instrumentation-wiki/scripts/verify_analysis_acceptance.py" --record <acceptance-path> --repo .`.
+3. Load only the selected version's analysis intent, schema, implementation map,
+   relevant object notes, and work order. Never load every version or the whole wiki.
+4. Follow `${CLAUDE_PLUGIN_ROOT}/prompts/03-implement-instrumentation.md` and use
+   `$instrumentation-implement`.
 
 Accept one selector: `work-order:<id>`, `business-transaction:<id>`,
 `workflow:<name>`, `use-case:<id>`, `detector:<id>`, `objective:<id>`, or
-`config:<id>`. Resolve it to exactly one accepted app-level work order using
-`${CLAUDE_PLUGIN_ROOT}/skills/references/implementation-work-orders.md`.
+`config:<id>`. Resolve it to exactly one Ready work order. Proposed, Blocked, Superseded,
+or older-version orders cannot run.
 
-One invocation executes one unified work order. It may open one linked PR per mapped
-repository plus a coordination PR, and every PR names the work-order id and sibling links.
-Stop at the accepted repository/path boundaries.
+One invocation executes one work order. It may open one linked PR per mapped repository
+plus a coordination PR. Stop at authorized repository/path boundaries. Never widen the
+accepted schema or commit a credential.
 
-Never commit a token value. Never widen the attribute set beyond the schema — if the
-contract is wrong, say so and stop rather than improving it in passing.
+After PR review and deployment proof, update the touched wiki notes and work-order status
+in the same change. Return to the work-order queue and state which dependency has become
+Ready.
 
 $ARGUMENTS

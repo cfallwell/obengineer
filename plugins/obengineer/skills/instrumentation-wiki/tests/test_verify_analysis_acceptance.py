@@ -1,30 +1,23 @@
 from __future__ import annotations
 
-import importlib.util
 import hashlib
+import importlib.util
 import json
 import subprocess
 import sys
 from pathlib import Path
 
 SCRIPTS = Path(__file__).resolve().parent.parent / "scripts"
+spec = importlib.util.spec_from_file_location(
+    "verify_analysis_acceptance",
+    SCRIPTS / "verify_analysis_acceptance.py",
+)
+verify_acceptance = importlib.util.module_from_spec(spec)
+sys.modules[spec.name] = verify_acceptance
+spec.loader.exec_module(verify_acceptance)
 
 
-def _load():
-    spec = importlib.util.spec_from_file_location(
-        "verify_analysis_acceptance",
-        SCRIPTS / "verify_analysis_acceptance.py",
-    )
-    module = importlib.util.module_from_spec(spec)
-    sys.modules[spec.name] = module
-    spec.loader.exec_module(module)
-    return module
-
-
-verify_acceptance = _load()
-
-
-def run(repo: Path, *args: str) -> str:
+def git(repo: Path, *args: str) -> str:
     return subprocess.run(
         ["git", "-C", str(repo), *args],
         check=True,
@@ -33,14 +26,20 @@ def run(repo: Path, *args: str) -> str:
     ).stdout.strip()
 
 
-def accepted_repo(tmp_path: Path) -> tuple[Path, Path, str]:
-    run(tmp_path, "init", "-q")
-    run(tmp_path, "config", "user.email", "test@example.invalid")
-    run(tmp_path, "config", "user.name", "Test")
+def accepted_repo(tmp_path: Path) -> tuple[Path, Path, Path, str, str]:
+    git(tmp_path, "init", "-q")
+    git(tmp_path, "config", "user.email", "test@example.invalid")
+    git(tmp_path, "config", "user.name", "Test")
     docs = tmp_path / "docs" / "observability"
-    docs.mkdir(parents=True)
-    analysis = docs / "analysis-app-2026-01-01.md"
-    analysis.write_text("# Analysis\n")
+    version = docs / "analysis" / "app" / "V1"
+    version.mkdir(parents=True)
+    analysis = version / "index.md"
+    analysis.write_text("[V1]\n\n# Analysis\n")
+    wiki = tmp_path / "wiki" / "apps" / "app" / "versions" / "V1"
+    work_orders = wiki / "implementation" / "work-orders"
+    work_orders.mkdir(parents=True)
+    (wiki / "index.md").write_text("# Wiki V1\n")
+    (work_orders / "WO-001.md").write_text("# Ready work\n")
     (docs / "attribute-schema.json").write_text("{}\n")
     (docs / "implementation-map.json").write_text(json.dumps({
         "schema_version": 1,
@@ -57,7 +56,7 @@ def accepted_repo(tmp_path: Path) -> tuple[Path, Path, str]:
             "evidence": ["SRC-account-route"],
         }],
     }))
-    empty_digest = hashlib.sha256(b"[]").hexdigest()
+    seal = hashlib.sha256(b"[]").hexdigest()
     (docs / "provenance-ledger.json").write_text(json.dumps({
         "schema_version": 1,
         "engagement": {"application": "app"},
@@ -66,13 +65,13 @@ def accepted_repo(tmp_path: Path) -> tuple[Path, Path, str]:
         "sources": [{"id": "SRC-account-route"}],
         "facts": [], "runs": [], "checks": [], "artifacts": [],
         "decisions": [], "unresolved": [],
-        "seals": {"analysis": {"ids": [], "digest": empty_digest}},
+        "seals": {"analysis": {"ids": [], "digest": seal}},
     }))
     (docs / "verification-plan.json").write_text(json.dumps({
         "schema_version": 1,
         "criteria": [{
             "id": "VC-001",
-            "source_section": 17,
+            "source_section": 1,
             "system": "repository",
             "query": {"kind": "contract-check", "reference": "SRC-account-route"},
             "expected": {"operator": "equals", "value": True},
@@ -85,81 +84,63 @@ def accepted_repo(tmp_path: Path) -> tuple[Path, Path, str]:
             },
         }],
     }))
-    run(tmp_path, "add", "docs")
-    run(tmp_path, "commit", "-qm", "analysis")
-    return tmp_path, analysis, run(tmp_path, "rev-parse", "HEAD")
-
-
-def test_exact_commit_artifacts_pass(tmp_path):
-    repo, analysis, commit = accepted_repo(tmp_path)
-    assert verify_acceptance.verify(repo, analysis, commit) == []
-
-
-def test_changed_artifact_fails(tmp_path):
-    repo, analysis, commit = accepted_repo(tmp_path)
-    analysis.write_text("# Changed\n")
-    failures = verify_acceptance.verify(repo, analysis, commit)
-    assert failures == [
-        "artifact differs from accepted commit: "
-        "docs/observability/analysis-app-2026-01-01.md"
-    ]
-
-
-def test_short_sha_is_rejected(tmp_path):
-    repo, analysis, commit = accepted_repo(tmp_path)
-    assert verify_acceptance.verify(repo, analysis, commit[:12]) == [
-        "analysis commit must be a full 40-character lowercase SHA"
-    ]
-
-
-def test_acceptance_record_cli_is_supported(tmp_path):
-    repo, analysis, commit = accepted_repo(tmp_path)
-    record = repo / "docs" / "observability" / (
-        "analysis-app-2026-01-01.acceptance.yaml"
-    )
+    git(tmp_path, "add", ".")
+    git(tmp_path, "commit", "-qm", "analysis")
+    commit = git(tmp_path, "rev-parse", "HEAD")
+    paths, failures = verify_acceptance.artifact_paths(tmp_path, analysis, "V1")
+    assert failures == []
+    digest = verify_acceptance.content_digest(tmp_path, paths)
+    record = version / "acceptance.yaml"
     record.write_text(
         "status: accepted\n"
-        "analysis: docs/observability/analysis-app-2026-01-01.md\n"
-        f"analysis_commit: {commit}\n"
+        "version: V1\n"
+        "analysis: docs/observability/analysis/app/V1/index.md\n"
+        f"analysis_content_commit: {commit}\n"
+        f"analysis_content_digest: {digest}\n"
         "analysis_pr: https://example.invalid/pr/1\n"
-        "accepted_by: reviewer\n"
+        "accepted_via: explicit-human-confirmation\n"
         "accepted_at: 2026-01-01T00:00:00Z\n"
         "qualifications: []\n"
         "rejected_decisions: []\n"
-        f"provenance_seal_digest: {json.loads((repo / 'docs/observability/provenance-ledger.json').read_text())['seals']['analysis']['digest']}\n"
+        f"provenance_seal_digest: {seal}\n"
     )
+    return tmp_path, analysis, record, commit, digest
+
+
+def test_content_bound_artifacts_pass(tmp_path):
+    repo, analysis, _, commit, digest = accepted_repo(tmp_path)
+    assert verify_acceptance.verify(repo, analysis, "V1", digest, commit) == []
+
+
+def test_changed_artifact_fails(tmp_path):
+    repo, analysis, _, commit, digest = accepted_repo(tmp_path)
+    analysis.write_text("# Changed\n")
+    assert any(
+        "accepted content digest differs" in failure
+        for failure in verify_acceptance.verify(repo, analysis, "V1", digest, commit)
+    )
+
+
+def test_acceptance_record_cli_is_supported(tmp_path):
+    repo, _, record, _, _ = accepted_repo(tmp_path)
     assert verify_acceptance.main([
-        "--record", str(record), "--repo", str(repo)
+        "--record", str(record), "--repo", str(repo),
     ]) == 0
 
 
-def test_incomplete_acceptance_record_is_rejected(tmp_path):
+def test_record_requires_digest_and_no_person_name(tmp_path):
     record = tmp_path / "acceptance.yaml"
-    record.write_text(
-        "status: accepted\n"
-        "analysis: docs/observability/analysis-app-2026-01-01.md\n"
-        f"analysis_commit: {'a' * 40}\n"
-    )
-    _, _, failures = verify_acceptance.read_record(record)
-    for field in (
-        "analysis_pr", "accepted_by", "accepted_at", "qualifications",
-        "rejected_decisions", "provenance_seal_digest",
-    ):
-        assert f"acceptance record has no {field}" in failures
+    record.write_text("status: accepted\nversion: V1\n")
+    _, failures = verify_acceptance.parse_record(record)
+    assert "acceptance record has no analysis_content_digest" in failures
+    assert not any("accepted_by" in failure for failure in failures)
 
 
 def test_acceptance_timestamp_must_be_rfc3339(tmp_path):
-    record = tmp_path / "acceptance.yaml"
-    record.write_text(
-        "status: accepted\n"
-        "analysis: docs/observability/analysis-app-2026-01-01.md\n"
-        f"analysis_commit: {'a' * 40}\n"
-        "analysis_pr: 1\n"
-        "accepted_by: reviewer\n"
-        "accepted_at: yesterday\n"
-        "qualifications: []\n"
-        "rejected_decisions: []\n"
-        f"provenance_seal_digest: {'b' * 64}\n"
-    )
-    _, _, failures = verify_acceptance.read_record(record)
-    assert "acceptance record accepted_at must be RFC3339" in failures
+    _, _, record, _, _ = accepted_repo(tmp_path)
+    record.write_text(record.read_text().replace(
+        "accepted_at: 2026-01-01T00:00:00Z",
+        "accepted_at: yesterday",
+    ))
+    _, failures = verify_acceptance.parse_record(record)
+    assert "accepted_at must be RFC3339" in failures

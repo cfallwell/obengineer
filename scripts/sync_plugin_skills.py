@@ -34,7 +34,8 @@ IGNORE_NAMES = ["__pycache__", ".pytest_cache", ".DS_Store"]
 IGNORE = shutil.ignore_patterns(*IGNORE_NAMES, "*.pyc")
 # Skills and prompts link to agents, prompts, and the engagement input template, so the bundle carries them too;
 # an installed plugin cannot reach back into this repository.
-COMPANION_DIRS = ("agents", "prompts", "inputs")
+COMPANION_DIRS = ("agents", "prompts", "inputs", "templates")
+COMPANION_SCRIPTS = ("setup-splunk-access.sh",)
 
 
 def skill_names() -> list[str]:
@@ -97,6 +98,12 @@ def companion_problems() -> list[str]:
                 continue
             if f.is_file() and not (src / f.relative_to(dst)).exists():
                 problems.append(f"only in plugin: {name}/{f.relative_to(dst)}")
+    for name in COMPANION_SCRIPTS:
+        src, dst = ROOT / "scripts" / name, PLUGIN / "scripts" / name
+        if not dst.is_file():
+            problems.append(f"missing from plugin: scripts/{name}")
+        elif not filecmp.cmp(src, dst, shallow=False):
+            problems.append(f"differs: scripts/{name}")
     return problems
 
 
@@ -137,6 +144,10 @@ def sync(names: list[str]) -> None:
             shutil.rmtree(dst)
         shutil.copytree(ROOT / name, dst, ignore=IGNORE)
         print(f"  synced {name}/ (companion)")
+    (PLUGIN / "scripts").mkdir(parents=True, exist_ok=True)
+    for name in COMPANION_SCRIPTS:
+        shutil.copy2(ROOT / "scripts" / name, PLUGIN / "scripts" / name)
+        print(f"  synced scripts/{name} (companion)")
     if PLUGIN_COMMANDS.exists():
         shutil.rmtree(PLUGIN_COMMANDS)
     PLUGIN_COMMANDS.mkdir(parents=True)

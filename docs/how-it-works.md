@@ -1,358 +1,114 @@
 # How obengineer operates
 
-obengineer is not a conventional application with one long-running process. It is a
-versioned set of agent commands, operating contracts, skills, references, validators,
-and renderers. The host model performs the investigation and authoring; repository
-files constrain what it reads, what it may change, what it must produce, and how the
-result is verified.
+obengineer is a versioned set of agent contracts, skills, references, validators, and
+renderers. The host model investigates and authors; repository files constrain evidence,
+outputs, changes, and verification.
 
-## Runtime model
-
-An invocation follows this path:
+## Runtime
 
 ```text
-host command
-  → command entry point under commands/
-  → agent definition and run contract
-  → task-specific skills
-  → canonical references and engagement inputs
-  → workspace artifacts
-  → deterministic validators
+/ob-start
+  → guided inputs
+  → parallel evidence collection
+  → linked analysis V<N>
+  → versioned wiki and all work orders
+  → deterministic validation
+  → one review PR
+  → explicit yes: content-bound acceptance and merge
+  → Ready work-order implementation / Terraform plan / read-only verification
 ```
 
-For example, `/ob-analyze` does not contain the analysis procedure itself. It:
-
-1. loads the instrumentation architect agent definition;
-2. requires `docs/observability/engagement-inputs.yaml`;
-3. determines whether this is a first or delta run;
-4. delegates to `prompts/01-analyze-application.md`;
-5. invokes analysis, baggage, cardinality, rendering, and review skills; and
-6. requires named output files and a successful render verification.
-
-This indirection keeps a short command stable while deeper behavior remains reviewable
-in dedicated source files.
-
-## Repository components
-
-| Path | Role |
-|---|---|
-| `commands/` | User-facing slash-command entry points. |
-| `agents/` | Always-on operating doctrine and boundaries for architect, implementer, and Terraform roles. |
-| `prompts/` | Ordered run contracts for analysis, wiki creation, implementation, and Terraform generation. |
-| `skills/` | Canonical task procedures and supporting scripts. |
-| `skills/references/` | Shared specifications used by several skills. |
-| `inputs/` | Complete engagement input schema. |
-| `scripts/install.py` | Host installer and manifest-based removal. |
-| `plugins/obengineer/` | Self-contained distribution bundle for plugin hosts. |
-| `.cursor/skills/`, `.agents/skills/` | Generated links to canonical skills for repository-local host discovery. |
-| `tests/` and skill `tests/` | Contract, packaging, renderer, and wiki verification tests. |
-
-`skills/` is the source for skill behavior. The plugin copies exist because an installed
-bundle cannot assume the original repository remains reachable. Maintainers update
-canonical skills and run `make sync-plugin-skills`; hand-editing plugin copies creates
-drift and is rejected by `make check`.
+`/ob-add-inputs` and `/ob-edit-inputs` repeat the same run as the next immutable version.
 
-## How installation wires a host
-
-The installer selects one or more host layouts. For each host it:
-
-1. enumerates every `skills/*/SKILL.md` directory and shared reference directory;
-2. symlinks those directories into the selected host by default, or copies them with
-   `--copy`;
-3. copies every `commands/*.md` file into the host command directory;
-4. replaces `{{OBENGINEER_ROOT}}` in each command with the absolute toolkit path; and
-5. writes `.obengineer-install.json` with every created path.
-
-Commands are copied, even in symlink mode, because they contain the resolved root. Skills
-are linked by default so canonical edits are immediately visible. Uninstall reads only
-the manifest and removes only paths it recorded.
-
-The Claude Code plugin is different: it carries agents, prompts, skills, hooks, and MCP
-metadata as a self-contained bundle. Its generated copies are kept synchronized with
-the same canonical sources.
-
-## Authorities and conflict resolution
-
-obengineer follows “one authority per fact.” Important examples:
-
-| Fact | Authority |
-|---|---|
-| Engagement input fields | `inputs/engagement-inputs.template.yaml` |
-| Analysis section order and completeness | `skills/references/document-template.md` |
-| Wiki tree, frontmatter, and host pointers | `skills/references/agent-wiki.md` |
-| Cross-cutting attribute patterns | `skills/references/cross-cutting-attributes.md` |
-| Baggage key and byte budgets | `skills/references/baggage-budget.md` |
-| Platform selection behavior | `skills/references/portfolio-decision-engine.md` |
-| Terraform resource names | `skills/references/splunk-terraform-providers.md` |
-| Word layout | `skills/customer-doc-render/references/document-format.json` |
-
-Agent files route to these references instead of restating them. Tests guard important
-requirements such as the mandatory cross-cutting section and exact document-section
-authority.
-
-Explanatory pages in `docs/` describe the workflow but do not supersede these contracts.
-
-## Evidence model
-
-obengineer separates facts into four classes:
-
-- **measured** — observed from source, a production scan, or a tenant query;
-- **stated** — supplied by a human or engagement input;
-- **public** — cited public evidence from the configured research window; and
-- **derived** — arithmetic shown from measured, stated, or public inputs.
-
-Measured evidence wins when it conflicts with a stated description. The conflict is
-recorded because stale customer documentation is itself useful evidence. Unknown facts
-remain unknown; the system does not fill them with industry benchmarks or examples from
-another engagement.
-
-Examples in canonical references describe shape with placeholders such as `<app>` and
-`<service>`. They are not proposed taxonomy.
-
-## State and memory
-
-obengineer stores state in the artifact repository rather than in a chat session:
-
-- `engagement-inputs.yaml` stores human-supplied facts once;
-- `provenance-ledger.json` is the only machine authority for evidence, run state,
-  context loads, checks, artifacts, decisions, and unresolved items;
-- the analysis is the accepted customer contract;
-- `attribute-schema.json` is the machine-readable attribute and dimension contract;
-- the wiki stores one subject per note for targeted retrieval;
-- work orders define implementation slices;
-- `meta/versions.md` records component versions and provenance;
-- `meta/run-log.md` records each analysis run;
-- `meta/decisions.md` records accepted and rejected decisions; and
-- host pointer files tell future agents to load the index and only relevant notes.
+## Evidence
 
-Wiki run logs, evidence notes, and document control are human projections of the ledger,
-not independent machine authorities.
+Facts are:
 
-This design makes completed runs inspectable and diffable. Acceptance is explicit and
-commit-bound: `/ob-generate accept <analysis-path> at <analysis-commit-sha>` verifies the
-reviewed artifacts and writes the acceptance record before generating the wiki.
+- **measured** from source, production, direct APIs, or connected tools;
+- **stated** by the human;
+- **public** from permitted cited research; or
+- **derived** with visible arithmetic.
 
-## Analysis operation
+Measured evidence wins over stated descriptions. Splunk APIs and MCP integrations are
+complementary. A missing MCP server does not disable direct API inventory. A missing
+optional answer does not block analysis.
 
-### 1. Establish inputs and run type
+Independent sources run with maximum safe sub-agent parallelism. Naming and schema
+reconciliation remain serial so concurrent workers do not create competing taxonomies.
 
-Analysis first validates engagement inputs. It then checks for an existing service wiki:
+## Versioned review surface
 
-- no wiki means a first full analysis;
-- a wiki with run-log entries means a delta;
-- a rewritten application requires an explicitly declared re-baseline and archival of
-  the old wiki.
+Each run creates:
 
-On a delta, accepted names, finding IDs, prior decisions, and version history are loaded
-before scanning. Reading them afterward would let the new scan invent names that already
-have code and dashboards attached.
+```text
+docs/observability/analysis/<app>/V<N>/
+wiki/apps/<app>/versions/V<N>/
+```
 
-### 2. Collect evidence
+The analysis landing page represents the full strategy and links every detail:
+architecture, findings, strategy, implementation path, work orders, use cases, workflows,
+business transactions, shared contracts, operations, and reference.
 
-The run combines:
+Versions use `[V1] [V2] [V3]`. Every page carries a breadcrumb to Analysis and its parent.
+Older versions are immutable and link only their matching wiki snapshot.
 
-- static application source and configuration;
-- the current production front end;
-- supplied architecture diagrams and narratives;
-- backend, gateway, cloud, and message-bus boundaries;
-- existing Observability Cloud and Enterprise data;
-- optional ThousandEyes and cloud inventory;
-- customer-stated constraints and business context; and
-- permitted public evidence.
+Navigation is host-native. No server, browser, localhost URL, or high port exists.
 
-Within `security_assessment.mode`, the run also inventories APIs and assesses exposed
-credentials/sensitive data, OWASP Top 10:2025, and OWASP API Security Top 10:2023.
-Confirmed or high-confidence vulnerabilities route to Critical Findings and P0 fixes.
+## Wiki and work orders
 
-Production front-end analysis considers load order, provider initialization, competing
-RUM/EUM agents, routing, CSP, consent, browser-to-backend continuity, and whether HTTP
-success pages contain valid content. Tenant inventory is bounded by configured MCP
-servers and approved Enterprise indexes.
+Analysis creates the wiki and complete work-order queue before review. The landing page
+summarizes the queue and links canonical wiki files.
 
-An unavailable source becomes “Not in evidence” with the information needed to resolve
-it. It is not silently converted into a claim.
-
-### 3. Build the contract
-
-The analysis turns evidence into:
+Before acceptance:
 
-- observed architecture and critical findings;
-- bounded `<org>.bt` global-tag business transactions and subordinate workflow names;
-- cross-cutting attributes and their propagation paths;
-- span trees, events, metrics, and Collector transformations;
-- dimension eligibility with cardinality arithmetic;
-- dashboard variables, data links, detectors, SLIs, SLOs, and error budgets;
-- composite use cases and labeled joins;
-- phased implementation work; and
-- a business value section tied to mechanisms specified in the contract.
-
-Critical findings appear early because buried security or operability findings are not
-actionable. Catalogue sections remain contiguous so the wiki can lift them without
-reinterpreting the design.
-
-### 4. Price without silently constraining
+- dependency-free orders are Proposed;
+- dependent orders are Blocked.
 
-Entitlement and traffic baselines feed a separate exposure calculation. By default this
-prices the design for the account team but does not reduce the recommendation.
-`fit_to_entitlement: true` changes that behavior only when explicitly requested, and
-every cut must name the observability question it makes unanswerable.
+After explicit acceptance:
 
-Licensing and overage figures stay out of the customer analysis. Keeping audiences
-separate prevents a technical design review from becoming a licensing negotiation and
-prevents the same number from acquiring multiple authorities.
+- eligible orders are Ready;
+- the accepted version becomes the only executable queue.
 
-### 5. Render and grade
+Every object links its work orders. Every work order links its findings, use cases,
+workflows, transactions, shared contracts, repository legs, dependencies, evidence, and
+verification.
 
-Markdown is the analysis source. The renderer converts it into Word using the recorded
-format specification, creates bookmarks and internal links, and starts each top-level
-section on a new page.
+## Review and acceptance
 
-The verifier compares source and output structure and scans for credential-shaped data.
-The independent reviewer then checks semantic completeness against the canonical rubric.
-Successful rendering proves format consistency, not human acceptance.
+One analysis PR contains inputs, linked Markdown, schema, implementation map, ledger,
+verification plan, wiki, and work orders. When ready, the agent asks the human to review
+the PR. Ready-for-review comments are processed as additional commits.
 
-Analysis then creates `initial-<app>-analysis` or `ci-initiated-<app>-analysis`,
-commits each analysis phase, and opens one docs-only PR containing
-the validated intake artifact. Intake itself performs no git operation.
+The human replies `yes` to accept and merge. The agent:
 
-## Acceptance and wiki operation
+1. marks eligible work orders Ready;
+2. computes a deterministic digest over the accepted artifacts;
+3. writes the acceptance record;
+4. commits and pushes it; and
+5. merges using the repository strategy.
 
-Human acceptance is a hard boundary. Before it, obengineer may analyze and revise
-documentation. After it, accepted names, mappings, and schema decisions become dependencies.
-The analysis PR is reviewed and merged first; the exact analysis path and commit SHA are
-then recorded. File presence, rendering, merge alone, or a generic approval does not
-satisfy the gate.
+No manual SHA or named accepter is required. The digest survives squash and rebase.
+Changing accepted content requires a new version.
 
-The wiki run lifts rather than redesigns the accepted contract. It creates:
+## Handoff
 
-- a short index used as the retrieval entry point;
-- subject notes for transactions, workflows, findings, detectors, objectives, and use
-  cases;
-- contract notes for propagation, Collector behavior, and dimension budgeting;
-- business workings and source provenance;
-- ordered implementation work orders; and
-- run metadata and host pointers.
+After merge the chat contains one host-native analysis link, then concise next steps. It
+does not reproduce the analysis.
 
-The wiki is not a second customer document. Agents load only notes relevant to the current
-slice, reducing context use and the chance of unrelated changes.
+After acceptance the handoff gives:
 
-`verify_wiki.py` checks a minimal required-path set and selected frontmatter fields, plus
-links, recognized counts, pointer rules, limited provenance, and credential-shaped
-values. The canonical wiki reference defines the fuller structure and metadata. Human
-review still checks those unenforced requirements, semantic duplication, stale statuses,
-and whether notes accurately reflect code.
-
-## Implementation operation
+- the first Ready work order;
+- the exact `/ob-implement work-order:<id>` command;
+- PR review and deployment sequence;
+- `/ob-terraform` with human apply; and
+- `/ob-verify` after deployment and apply.
 
-Implementation consumes one accepted unified work order. A bounded selector may name a
-work order, BT, workflow, use case, detector, objective, or config target. The order may
-span repositories and produce one linked PR per repository plus a coordination PR. It
-reads:
+## Safety
 
-- the analysis for intent;
-- `attribute-schema.json` for allowed keys and dimensions;
-- the relevant workflow and contract notes;
-- the work order for boundaries and acceptance evidence; and
-- `implementation-map.json` and `initial_scope` for repository and path authorization.
-
-It stops when required design is missing. This is intentional: inventing an attribute in
-code would make the accepted document, schema, wiki, dashboards, and code disagree.
-
-Changes are ordered by dependency and trust. Shared helpers and single initialization
-precede journeys; identity and propagation precede meters; signal production precedes
-alerting. One unified work order and at most one PR per repository keeps review and
-rollback bounded while preserving end-to-end coordination.
-
-Splunk APM Business Transactions are grouped by the bounded propagated global tag
-`<org>.bt`; `workflow.name` remains subordinate intent, and registered pairs are enforced.
-Jira is used only when named and connected. Otherwise work orders provide manual
-copy/paste-ready issue text for the team's chosen system.
-
-Deterministic checks eventually enforce the contract on every application change. Model
-assistance may propose instrumentation, but schema agreement, initialization count,
-workflow validity, baggage allowlists, and deny-list checks do not require a model.
-
-## Terraform operation
-
-Terraform generation reads the same accepted contract and schema but writes tenant
-configuration rather than application telemetry.
-
-Before writing HCL, it maps each contract item to a persona, provider resource, required
-dimensions, and initial arm state. Missing dimension eligibility becomes a refusal rather
-than an empty chart. Identified tenant resources become imports; when inventory is
-unavailable, import IDs remain `TODO` and the handoff warns about duplication risk.
-
-Three providers cover different product surfaces. Generated code is organized by
-application, persona, and environment so a plan has a bounded blast radius. The run
-formats, validates, and plans where possible, then hands off explicit imports, gaps,
-placeholders, unsupported items, and costs.
-
-It never applies. Configuration follows verified telemetry, and detectors start disabled
-until their signals have been observed for the agreed window.
-
-## Verification operation
-
-After deployment and human apply, `/ob-verify` executes accepted `VC-*` criteria using
-read-only tenant access. Results are `met`, `unmet`, or `unmeasurable`. Every unmet result
-notifies the human with exact remediation and recheck steps.
-
-Only a human can approve a criterion as unremediable. Approved exclusions remain in the
-human report and provenance ledger but are absent from machine result rows and denominators.
-Verification never remediates. It routes work to implementation, a new Terraform plan, a
-contract amendment, or a named owner.
-
-Outcome metrics publish numerator, denominator, and measurement coverage. Sanitized reusable
-defects are previewed and created/updated in the public project through existing authenticated
-GitHub access; absent authentication triggers a web-login handoff.
-
-## Repeat-run behavior
-
-Delta mode preserves external dependencies:
-
-- workflow values and attribute keys are not renamed for style;
-- finding IDs retain history;
-- removed services are retired rather than deleted without explanation;
-- drift between contract, code, and tenant is explicit;
-- additions create new catalogue entries and work orders; and
-- only reconsidered notes receive updated metadata.
-
-A change to an accepted identifier is treated as a migration. The run must state old and
-new values, affected code and configuration, cutover order, and verification.
-
-## Safety boundaries
-
-obengineer is constrained to:
-
-- read-only analysis of production surfaces and tenant inventory;
-- no storage or output of credential values;
-- no application changes before acceptance and explicit scope authorization;
-- one implementation slice per reviewable change;
-- no widening of the accepted attribute schema during implementation;
-- no automatic remediation of unrelated security findings;
-- no duplicate customer document;
-- no tenant mutation during analysis;
-- no `terraform apply`; and
-- no enabled detectors before signal validation.
-
-Temporary authenticated scan access uses references to a dummy account or secret.
-obengineer records `rotate_on_completion`, but the credential owner must perform the
-rotation after analysis; this repository has no credential-provider integration that can
-rotate it. Generated artifacts and validators scan for credential shapes, but operators
-must also remove sensitive values from source captures before a run.
-
-## Deterministic and model-driven parts
-
-The distinction matters:
-
-| Model-driven | Tool-executed checks |
-|---|---|
-| Evidence interpretation, architecture mapping, workflow discovery, recommendation writing | Installer path planning and manifests |
-| Source and production-surface analysis | Plugin synchronization and manifest checks |
-| Mapping findings to remediation | Contract tests |
-| Choosing bounded attributes from evidence | Wiki structural verification |
-| Producing application changes within a work order | Markdown-to-Word rendering and structural verification |
-| Mapping accepted requirements into Terraform | Terraform format, static validation, and provider-schema checks. `plan` is an external-state-dependent verification result, not a deterministic check |
-
-The model-driven parts can vary with available evidence. Canonical contracts, stable
-state, acceptance gates, and deterministic verification provide the control surface that
-keeps those variations reviewable.
+- Production analysis is read-only.
+- Secrets stay in `.env` or a secret store and never enter artifacts.
+- Application changes require a Ready work order and authorized paths.
+- Implementation opens review PRs and does not silently widen the schema.
+- Terraform plans and never applies.
+- Verification reads and routes remediation; it does not fix the tenant.
+- Word is optional, generated, and under 20 pages.

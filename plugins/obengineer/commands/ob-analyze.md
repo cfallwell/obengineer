@@ -1,55 +1,52 @@
 ---
-description: Analyze — scan the application and write the customer analysis document
+description: Analyze — publish a versioned linked analysis with its wiki and work orders
 ---
 
-Run obengineer run 1 — analyze.
+Run an obengineer analysis version. `/ob-start`, `/ob-add-inputs`, and
+`/ob-edit-inputs` normally dispatch here; direct invocation reruns current inputs.
 
-1. Adopt `${CLAUDE_PLUGIN_ROOT}/agents/instrumentation-architect.agent.md` as your operating
-   contract for this run. It is the authority on what must be produced.
-2. Load the engagement inputs from `docs/observability/engagement-inputs.yaml`. If the file
-   is absent or incomplete, run the intake first
-   (`${CLAUDE_PLUGIN_ROOT}/skills/engagement-intake/SKILL.md`) — do not proceed on guesses,
-   and do not re-ask for anything the file already answers.
-3. Check for `wiki/apps/<app>/services/<service>/index.md`. If it exists with entries in
-   `meta/run-log.md`, this is a **delta run**: read `meta/` and the accepted names before
-   scanning, reuse every accepted name and finding id, and report change rather than
-   reproducing the previous document.
-   Rules: `${CLAUDE_PLUGIN_ROOT}/skills/references/incremental-runs.md`.
-4. Follow `${CLAUDE_PLUGIN_ROOT}/prompts/01-analyze-application.md`. That file is the run
-   contract; read it rather than waiting for it to be pasted.
-5. Skills: `$instrumentation-analyze`, `$baggage-propagation`, `$cardinality-budget`,
-   `$customer-doc-render`, then `$deliverable-review` before you report.
-6. Follow `${CLAUDE_PLUGIN_ROOT}/skills/references/security-assessment.md` for exposed
-   credentials, insecure/exposed APIs, OWASP coverage, confidence, and P0 routing.
-7. Follow `${CLAUDE_PLUGIN_ROOT}/skills/references/analysis-run-lifecycle.md`: include the
-   intake artifact, create the analysis branch, commit each phase, push, and open one
-   docs-only PR.
-8. Follow `provenance-ledger.md`, `context-loading.md`, and `verification-run.md`;
-   validate the ledger and read-only verification plan before review.
+1. Adopt `${CLAUDE_PLUGIN_ROOT}/agents/instrumentation-architect.agent.md`.
+2. Load `docs/observability/engagement-inputs.yaml`. If absent, follow
+   `${CLAUDE_PLUGIN_ROOT}/commands/ob-start.md`. Missing optional answers never block
+   analysis; put useful gaps on the intake-recommendations page.
+3. Determine the next immutable `V<N>`. Read accepted names and finding ids from the
+   latest version before scanning. Reuse them and report changes under
+   `${CLAUDE_PLUGIN_ROOT}/skills/references/incremental-runs.md`.
+4. Follow `${CLAUDE_PLUGIN_ROOT}/prompts/01-analyze-application.md`.
+5. During the same run, follow
+   `${CLAUDE_PLUGIN_ROOT}/prompts/02-build-instrumentation-wiki.md` to create the
+   versioned wiki and every proposed work order.
+6. Use `$instrumentation-analyze`, `$instrumentation-wiki`,
+   `$baggage-propagation`, `$cardinality-budget`, and `$deliverable-review`.
+   Use `$customer-doc-render` only when the human requested the optional short Word
+   summary.
+7. Follow `${CLAUDE_PLUGIN_ROOT}/skills/references/analysis-run-lifecycle.md`: include
+   inputs, the analysis site, wiki, and work orders in one PR and process review
+   comments.
+8. Validate the provenance ledger and read-only verification plan.
 
-This is the **only customer-facing document**. Section order is owned by
-`${CLAUDE_PLUGIN_ROOT}/skills/references/document-template.md`; read it first.
+The review surface is owned by
+`${CLAUDE_PLUGIN_ROOT}/skills/references/analysis-site.md`: linked Markdown opened in
+the host's native side panel. Never start a web server, open a browser, or emit a
+localhost URL.
 
-Not complete until all six artifacts exist and the render verifier exits 0:
+Required outputs:
 
-- `docs/observability/analysis-<app>-<date>.md`
-- `docs/observability/<Customer>-<App>-Analysis-<date>.docx`, rendered from that Markdown
+- `docs/observability/analysis/<app>/V<N>/index.md` and every linked page
 - `docs/observability/attribute-schema.json`
 - `docs/observability/implementation-map.json`
 - `docs/observability/provenance-ledger.json`
 - `docs/observability/verification-plan.json`
+- `wiki/apps/<app>/versions/V<N>/` with subject notes and every work order
+- conditional entitlement exposure and optional short `.docx`.
 
-Plus a seventh, when entitlement or a supplied traffic baseline exists:
-`docs/observability/entitlement-exposure-<app>-<date>.md` for the account team,
-markdown only, never rendered. Spec:
-`${CLAUDE_PLUGIN_ROOT}/skills/references/entitlement-exposure.md`.
+Open one analysis PR. When it becomes ready for review, read its comments and commit
+the requested corrections. Ask the human to review the linked PR and whether to accept
+and merge it. An explicit `yes` authorizes the acceptance commit and merge; resolve the
+accepted commit internally and never ask for a SHA or a person's name.
 
-The prompt and references own the invariants: Critical Findings and OWASP coverage in
-section 4; confirmed/high-confidence vulnerabilities in section 5 P0 fixes; contiguous
-catalogue; mandatory cross-cutting code; provenance-labelled Business Value Realization;
-and entitlement pricing without silent design cuts.
-
-Docs-only analysis PR. Do not modify application source, merge the PR, display ingest
-tokens, or produce a second customer-facing document.
+After merge, provide only the host-native documentation link followed by concise next
+steps. After acceptance, name the Ready work order and the exact
+`/ob-implement work-order:<id>` command. Do not paste the analysis into chat.
 
 $ARGUMENTS

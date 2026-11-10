@@ -111,7 +111,10 @@ explicitness beats cleverness in inherited code.
 - **Every resource carries a comment naming its contract section.** Six months on, this is how someone decides whether a panel is still wanted. It is the cheapest documentation available and the first thing omitted.
 - **Dashboard `variable` blocks come only from the dimension-eligible list.** One per key, so filtering is interactive rather than a code change.
 - **Release markers go in `selected_event_overlay`, not `event_overlay`.** The latter only *suggests* the overlay in the UI, so nobody ever turns it on.
-- **Detectors get `disabled = true`** until the signal has been clean for the agreed window, plus a runbook URL and an owning team via `authorized_writer_teams`. Map severity to real response: if everything is `Critical`, severity carries no information.
+- **Detectors get `disabled = true`** until the signal has been clean for the agreed
+  window, plus a runbook URL and existing tenant notification routing. Do not collect a
+  named owner. Map severity to real response: if everything is `Critical`, severity
+  carries no information.
 - **Every critical workflow gets a silent-outage detector** — absence of expected traffic, which threshold-on-error-rate alerting structurally cannot see. This is the detector most often missing and most often needed.
 - **Thresholds with no baseline are labelled as placeholders in a comment.** A number invented in a text editor and presented as tuned is the fastest way to lose an on-call team.
 - **`signalfx_metric_ruleset` is where the cardinality budget is actually enforced.** Aggregate away dimensions the estate emits but nobody queries; drop what is never read. It recovers headroom without a code change, which usually makes it the cheapest item in the plan.

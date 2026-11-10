@@ -1,8 +1,8 @@
 {
   "name": "obengineer",
   "displayName": "obengineer",
-  "version": "0.1.0",
-  "description": "Instrumentation architecture workflows for Claude Code: analyze a target, write the one customer document, lay the wiki the agents retrieve from, and configure the tenant as Terraform.",
+  "version": "0.2.0",
+  "description": "Guided, versioned instrumentation analysis for Claude Code: linked side-panel strategy, wiki, work orders, implementation, Terraform planning, and verification.",
   "author": {
     "name": "Splunk Observability Practice"
   },

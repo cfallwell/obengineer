@@ -66,6 +66,13 @@ verify-wiki: ## Verify an agent wiki: links, frontmatter, counts, pointers, secr
 	  $(PY) skills/instrumentation-wiki/scripts/verify_wiki.py "$(call at,$(WIKI))" \
 	    $${root:+--repo-root "$$root"}
 
+.PHONY: verify-analysis
+verify-analysis: ## Verify one linked analysis version without a browser/server
+	@test -n "$(VERSION)" || { echo "usage: make verify-analysis VERSION=docs/observability/analysis/<app>/V<N> [OB_PROJECT=<repo>]"; exit 2; }
+	@root="$(OB_PROJECT)"; [[ -n "$$root" ]] || root="."; \
+	  $(PY) skills/instrumentation-analyze/scripts/verify_analysis_site.py \
+	    "$(call at,$(VERSION))" --repo-root "$$root"
+
 .PHONY: verify
 verify: ## Verify an existing .docx against its Markdown source
 	@test -n "$(FILE)" -a -n "$(DOCX)" || { echo "usage: make verify FILE=<path.md> DOCX=<path.docx>"; exit 2; }

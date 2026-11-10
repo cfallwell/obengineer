@@ -1,134 +1,92 @@
 # Prompt 01 — Analyze the application
 
 **Agent:** [`../agents/instrumentation-architect.agent.md`](../agents/instrumentation-architect.agent.md)  
-**Skills:** `engagement-intake`, `instrumentation-analyze`, `baggage-propagation`, `cardinality-budget`, `customer-doc-render`, `deliverable-review`  
-**Inputs:** `docs/observability/engagement-inputs.yaml`  
-**Human:** TAM + customer architect. Docs-only analysis PR. No application code changes.
+**Skills:** `instrumentation-analyze`, `instrumentation-wiki`,
+`baggage-propagation`, `cardinality-budget`, `deliverable-review`
+**Input:** `docs/observability/engagement-inputs.yaml`
+**Output:** one immutable analysis version and its wiki in one reviewed PR
 
-**Invoke it, do not paste it.** `/ob-analyze` reads this file in place, so
-there is one copy of the run contract and it is the copy under review. If your host
-has no commands installed, run [`../install.sh`](../install.sh) or tell the agent to
-read this file.
+## Contract
 
----
+Follow the architect agent and
+[`../skills/instrumentation-analyze/SKILL.md`](../skills/instrumentation-analyze/SKILL.md).
+The review surface is
+[`../skills/references/analysis-site.md`](../skills/references/analysis-site.md), not the
+legacy monolithic template.
+Use `../templates/analysis-site/index.md` and `detail.md` as the approved layout. Do not
+replace the compact index with expanded detail sections.
 
-## System reminder
+If inputs do not exist, invoke `/ob-start`. Missing optional inputs do not block analysis
+and do not require the human to type `unknown`.
 
-Follow `instrumentation-architect.agent.md`. You are analyzing and will open the
-docs-only analysis PR defined by `analysis-run-lifecycle.md`, never an application-code
-PR. Auto-instrumentation is a bootstrap, never a complete design. **"Analysis" does not mean inventory-only** — this document carries the full contract: the business-transaction and workflow catalogue, custom metrics, detectors with thresholds, SLIs and SLOs, composite use cases, and the enablement code with token placeholders.
+## Evidence collection
 
-**This is the only customer-facing document.** There is no separate instrumentation-recommendations deliverable; the lower-layer, per-note detail the coding agents work from is built by Prompt 02 as a wiki, not as a second document.
+Use maximum safe parallelism for independent sources:
 
-Choose the course of action from **how Splunk Observability Cloud, Splunk Enterprise, and Cisco ThousandEyes work** (RUM, APM, Infrastructure, Log Observer Connect, Synthetics, MetricSets, APM Business Transactions, Related Content, Events API, MPM, Enterprise indexes/`trace_id`, ThousandEyes path tests) plus the evidence in this session. Do not assume an industry, a storefront, named journeys, a cloud, or a prior customer document. The design runs against any site this engagement names. A scan, diagram, or taxonomy from a different site is not evidence. Previous scans of this site are inputs; compare them with the current production scan by the procedure in `incremental-runs`. The live production site scan is required unless the inputs record `no browser` with a reason. Test and QA environments are not the scan. Discover journeys from this site's diagrams and production scan. When a cloud inventory MCP is already connected, generate the production diagram by the procedure in `instrumentation-analyze`. Assign each question to one platform: journeys/code → Observability Cloud; durable logs/audit → Enterprise; internet/CDN/SaaS path → ThousandEyes.
+- production browser behavior;
+- source, configuration, dependencies, and diagrams;
+- direct Observability Cloud API endpoints;
+- direct Splunk Platform API endpoints across approved indexes;
+- relevant connected MCP tools;
+- cloud and messaging inventory;
+- authorized security checks; and
+- public evidence when permitted.
 
-Do not search the workspace for unrelated documents. If an existing schema or wiki is present for this customer and application, extend that taxonomy.
+MCP servers supplement direct APIs. They are not the only tenant source. Record source
+provenance and reconcile facts after parallel collection.
 
-**The Word artifact opens the way a review expects:** a simple title page, then the Table of Contents on its own page, then one section per page. Declare the title page in a `<!-- title-page ... -->` block (subtitle, tagline, author, audience, date, version, header) and put nothing else above the first `##`. Application identifier, environment scanned, realm, percentile standard, in-scope languages and buses, evidence basis, recorded tool versions, and token handling go in **`### Document control and evidence basis`** at the end of Purpose and Scope. Markdown `##` renders as Word `Heading 1` and starts a new page; `###` becomes `Heading 2`. The renderer rejects prose above the first section heading and refuses to save a document whose sections would not break, so run `verify_render.py` and expect exit 0. **Cross-references are clickable:** write `Appendix E`, `section 4`, and `sections 5 and 6` plainly and the renderer links them; write a reference that names a section as an anchor link on its slug — `[Business Transactions](#business-transactions)` — and leave the same words plain where they mean the Splunk feature rather than the heading. A reference that resolves to nothing fails the render. Layout spec: `skills/customer-doc-render/references/document-format.md`.
+The live production scan is required unless inputs explain why no browser applies. Test
+and QA are not substitutes. A different site's scan or taxonomy is not evidence.
 
-## Inputs
+## Design
 
-Everything the human supplies lives in **one file**, not in this prompt:
-`docs/observability/engagement-inputs.yaml`, from
-[`../inputs/engagement-inputs.template.yaml`](../inputs/engagement-inputs.template.yaml).
+Produce the full instrumentation strategy:
 
-Load it first. If it is absent or incomplete, run `$engagement-intake` and ask for the
-gaps in **one** message. Do not re-ask for anything the file already answers, and do
-not ask for anything this scan can measure — composition, router, load order, competing
-agents, CSP, and consent gating are all evidence, and asking about them converts
-evidence into opinion.
+- architecture, languages, frameworks, runtimes, third parties, and current telemetry;
+- actionable findings;
+- dependency-ordered implementation path;
+- use cases first, then workflows, then business transactions;
+- attributes, metrics, propagation, attribution, collector, and logs where applicable;
+- dashboards, detectors with thresholds, objectives with error budgets, and verification;
+- Cross-Cutting Attributes and Baggage Propagation with its applicable provider,
+  allowlisted `SpanProcessor.onStart`, identity, backend, and bus patterns; and
+- every proposed work order and repository leg.
 
-The fields this run depends on:
+Do not create empty product chapters. Put plausible future additions on one Suggested
+additions page. Put useful missing human facts on Intake recommendations.
 
-| Field | Used for |
-|---|---|
-| `engagement.application`, `.customer`, `.scope`, `.date` | Filenames, headings, and the wiki path |
-| `artifacts.diagrams`, `.narrative` | The diagram-driven backend map |
-| `artifacts.prior_contract`, `.prior_schema` | An existing taxonomy to **extend**, never rename for taste |
-| `surfaces.*` | Whether there is a front-end deep scan, and whether authenticated journeys are reachable |
-| `security_assessment.*` | Passive, safe-active, or opted-out security screening and its authorized boundary |
-| `backends.languages`, `.buses`, `.cloud_accounts`, `.gateway` | Which SDK and bus subsections must exist |
-| `tenancy.o11y_realm`, `.environments` | Whether exit criteria can be phrased as queries |
-| `entitlement.*` | **Pricing, not a ceiling.** What the recommendation will consume, written up for the account team in a separate document. It does not shrink the recommendation unless `fit_to_entitlement` is true |
-| `constraints.*` | What is vetoed regardless of technical merit |
-| `standards.percentile` | One percentile, in every chart and detector |
-| `outcomes.*` | Ranking when several journeys are equally instrumentable |
-| `business_context.*` | Section 26, Business Value Realization: the quoted commentary, the current MTTx, incident volume, triage and tooling cost, revenue exposure |
-| `public_evidence.*` | Whether to read the last twelve months of outage coverage, complaints, and field performance, and which brand terms to search |
+Security follows `security-assessment.md`; confirmed or high-confidence findings link
+their remediation work orders. Never display a credential value.
 
-Never request or display an ingest token. Analysis access is recorded in the
-inputs file; what that section decides is
-[`../skills/references/engagement-inputs.md`](../skills/references/engagement-inputs.md).
-Splunk API values are not a second scheme. They live in the memory repository `.env`.
+## Artifacts
 
-**Existing telemetry is required.** Before the portfolio footprint is written,
-the analyze run uses the `splunk-observability` and `splunk-platform` MCP servers
-and the Splunk API endpoints (Observability and Enterprise). The procedure is
-[`../skills/references/existing-telemetry.md`](../skills/references/existing-telemetry.md).
+Create:
 
-## First: is this a first run or a delta?
+```text
+docs/observability/analysis/<app>/V<N>/
+docs/observability/attribute-schema.json
+docs/observability/implementation-map.json
+docs/observability/provenance-ledger.json
+docs/observability/verification-plan.json
+wiki/apps/<app>/versions/V<N>/
+```
 
-Check for `wiki/apps/<app>/services/<service>/index.md`.
+Run Prompt 02 inside this run. The version's landing page links every detail page and its
+matching wiki/work-order snapshot. Word is optional; when requested it is a summary under
+20 pages.
 
-- **Absent** — first run. Full analysis.
-- **Present with entries in `meta/run-log.md`** — **delta run**. Read `meta/versions.md`, `meta/decisions.md`, the accepted BT and workflow names, and the finding frontmatter *before* scanning. Reuse every accepted name and every finding id. Section 3 gains `### Changes since v<N-1>`, and the document reports what changed rather than reproducing itself. Rules: [`../skills/references/incremental-runs.md`](../skills/references/incremental-runs.md).
-- **Present but the application has been rebuilt** — declare a **re-baseline** explicitly, archive the old wiki, and say in the document why the baseline was reset.
+## Review and handoff
 
-## Task
+Validate links, breadcrumbs, schema, map, ledger, verification plan, wiki, work-order
+dependencies, reverse links, and credential scanning. Open one analysis PR.
 
-If URLs were provided, **deep-scan** the front end (HTML, script order, competing agents,
-bundle placement of RUM, CSP, 404 shells, consent, third-party pixels, exposed credentials,
-and anything reachable that should not be). Inventory APIs and assess the authorized source
-and runtime surfaces against OWASP Top 10:2025 and OWASP API Security Top 10:2023 using
-[`../skills/references/security-assessment.md`](../skills/references/security-assessment.md).
-Combine with a **diagram-driven** backend map.
+When ready for review, ask the human to review the linked PR. Process review comments and
+commit corrections. Ask:
 
-Produce `docs/observability/analysis-<app>-<date>.md` and the `.docx` rendered from it, with **every section** from [`../skills/references/document-template.md`](../skills/references/document-template.md) in that order. That table is the only section list; do not restate it here and do not reorder it. If evidence is missing, keep the heading and write **Not in evidence** plus the evidence that would settle it.
+> Do you accept V<N> and want me to merge this PR?
 
-Eight things this run gets wrong if it is not deliberate about them:
+Only explicit `yes` writes acceptance, makes eligible work orders Ready, and authorizes
+merge. Resolve commits and digests internally; never ask for a SHA or a person's name.
 
-1. **Critical Findings is section 4** — immediately after the architecture it was found
-   in, with complete OWASP coverage matrices and findings ordered by severity. Each finding
-   has confidence, class, OWASP mapping, priority, evidence, files/surfaces, exposure, risk,
-   stop-the-bleeding and structural remediation, and verification. Every confirmed or
-   high-confidence vulnerability is referenced in `P0 recommended fixes` in section 5.
-   P0 is not observability Phase 0. A credential is recorded by shape and location, never
-   by value. Specs: [`../skills/references/critical-findings.md`](../skills/references/critical-findings.md)
-   and [`../skills/references/security-assessment.md`](../skills/references/security-assessment.md).
-2. **Nothing in the body sits under an appendix heading.** Appendices are the attribute dictionary, long code variants, the agent work-order plan, supplementary evidence, and open items — five topic-scoped appendices, not a container for the analysis.
-3. **The catalogue is sections 19–25, contiguous and in this order**: Business Transactions (flat), Workflows (flat), Custom Metrics, BT-Aligned Workflows (the join), Detectors and Thresholds, Service Level Indicators and Objectives, Composite Use Cases. Each is defined in terms of the one before it.
-4. **Every detector has a threshold** that is a measured baseline, a customer-agreed target traced to an SLO, or a labelled placeholder with the query that will replace it. There is no fourth option.
-5. **Every SLI is written in the customer's voice first**, its query second, with good/total events, objective, window, error budget, and burn-rate alerting. Spec: [`../skills/references/service-levels.md`](../skills/references/service-levels.md).
-6. **Every `Use Case:` opens with `Narrative`** — plain language, no attribute or span names, who the user is and what the business loses when it fails. Then identity, attributes, span events, metrics, SLI, dashboard, detectors, and the join labelled **continue trace** | **span link** | **attribute pivot**.
-7. **Business Value Realization is section 26**, the last body section before the appendices, and it is written from three things only: the customer's `business_context`, the last twelve months of the **public record** (outage coverage, their own status history, complaints, field performance — each entry cited with URL, publication, and date), and the performance this run **measured**. Every figure carries a `stated` / `measured` / `public` / `derived` label, every claim names a workflow, indicator, or detector that exists in this document, and **no business number is ever inferred from an industry benchmark**. With no business inputs the section is still written — short, honest, coefficients named and unfilled. Spec: [`../skills/references/business-value.md`](../skills/references/business-value.md).
-8. **Entitlement prices the recommendation; it does not cap it.** Recommend what the application needs. When entitlement numbers were supplied, or a traffic baseline factor was supplied, also write `docs/observability/entitlement-exposure-<app>-<date>.md` for the **account team** — position today, what this adds with the arithmetic per row, the projected overage, the options, and a recommendation — and reference it from the customer document in exactly one document-control line, with no licensing or overage numbers in that document at all. A factor is supplied only when it is neither `unknown` nor an empty collection. When neither entitlement nor a supplied baseline exists, there is no exposure document and no assumed limit. A baseline with no entitlement is an expectation range, not an overage. Spec: [`../skills/references/entitlement-exposure.md`](../skills/references/entitlement-exposure.md). The trace-rate formula is in `cardinality-budget`; do not multiply requests per minute by spans per trace.
-
-**Cross-Cutting Attributes and Baggage Propagation is mandatory** and is the section most often dropped. Keep all five subsection headings. Load and emit code only for components in evidence; otherwise write **Not in evidence**, the enabling condition, and evidence needed. Never load every browser, identity, language, or bus variant speculatively. Context rules: [`../skills/references/context-loading.md`](../skills/references/context-loading.md).
-
-Also required, and easy to drop because they are not sections: record the tool, SDK, semconv, collector, and provider **versions** this document was designed against in `### Document control and evidence basis`, and call out any breaking change since the last run. Spec: [`../skills/references/version-currency.md`](../skills/references/version-currency.md).
-
-Emit `docs/observability/implementation-map.json` and map every BT, workflow, use case,
-detector, objective, and configuration target to repository legs and optional Jira projects.
-Use `<org>.bt` as the bounded propagated global tag configured by the Splunk APM Business
-Transaction Global tag rule; `workflow.name` remains subordinate intent. Ask engineering
-once after analysis for unresolved repository/Jira ownership. Spec:
-[`../skills/references/implementation-work-orders.md`](../skills/references/implementation-work-orders.md).
-
-Emit `docs/observability/provenance-ledger.json` as the only machine evidence/run-state
-authority. Record context predicates and loaded references, then emit
-`docs/observability/verification-plan.json` with stable, actionable `VC-*` criteria.
-Validate both before review. Authorities:
-[`../skills/references/provenance-ledger.md`](../skills/references/provenance-ledger.md),
-[`../skills/references/context-loading.md`](../skills/references/context-loading.md), and
-[`../skills/references/verification-run.md`](../skills/references/verification-run.md).
-
-## Acceptance
-
-A reader who stops after six pages leaves knowing the architecture and every finding worth acting on this week. A staff engineer can implement Phase 0 and the first workflow without asking what a `workflow.step` value is, how baggage is stamped, or whether a join continues the trace. A TAM can configure MetricSets and Business Transaction rules from the portfolio mapping. An executive reading only section 26 sees their own words, cited public evidence, measured numbers, and no benchmark. Every row of the pre-delivery checklist in Appendix E is `yes`, and `verify_render.py` exits 0.
-
-Follow [`../skills/references/analysis-run-lifecycle.md`](../skills/references/analysis-run-lifecycle.md):
-include the intake artifact, create `initial-<app>-analysis` for the first run or
-`ci-initiated-<app>-analysis` for later CI runs, commit each analysis phase, push, and open
-one docs-only PR. Do not modify application source, merge the PR, or produce a second
-customer-facing document. The entitlement exposure document is for the account team, is
-markdown only, and is not part of the customer review.
+After merge, return one host-native documentation link and concise next steps. Never start
+a web server, open a browser, return localhost, or paste the analysis into chat.
