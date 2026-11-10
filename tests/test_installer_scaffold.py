@@ -1,12 +1,21 @@
 from __future__ import annotations
 
 import hashlib
+import importlib.util
 import json
 import subprocess
+import sys
 from pathlib import Path
+
+import pytest
 
 ROOT = Path(__file__).resolve().parent.parent
 INSTALL = ROOT / "install.sh"
+INSTALL_SCRIPT = ROOT / "scripts/install.py"
+spec = importlib.util.spec_from_file_location("obengineer_installer", INSTALL_SCRIPT)
+installer = importlib.util.module_from_spec(spec)
+sys.modules[spec.name] = installer
+spec.loader.exec_module(installer)
 
 
 def run_install(project: Path, *args: str) -> subprocess.CompletedProcess[str]:
@@ -14,6 +23,16 @@ def run_install(project: Path, *args: str) -> subprocess.CompletedProcess[str]:
         [str(INSTALL), *args, "--project", str(project)],
         cwd=ROOT,
         check=True,
+        capture_output=True,
+        text=True,
+    )
+
+
+def try_install(project: Path, *args: str) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(
+        [str(INSTALL), *args, "--project", str(project)],
+        cwd=ROOT,
+        check=False,
         capture_output=True,
         text=True,
     )
@@ -33,10 +52,11 @@ def test_project_install_creates_missing_scaffold_and_tracks_ownership(tmp_path)
         (tmp_path / ".obengineer/scaffold-manifest.json").read_text()
     )
     assert set(manifest["created"]) == {
-        ".gitignore",
         ".env.template",
         "artifacts/README.md",
     }
+    assert manifest["schema_version"] == 2
+    assert ".obengineer/" in manifest["gitignore"]["created_lines"]
     for relative, ownership in manifest["created"].items():
         digest = hashlib.sha256((tmp_path / relative).read_bytes()).hexdigest()
         assert ownership["sha256"] == digest
@@ -94,3 +114,92 @@ def test_project_install_dry_run_does_not_create_scaffold(tmp_path):
     assert "would create missing" in result.stdout
     assert not (tmp_path / ".gitignore").exists()
     assert not (tmp_path / ".obengineer").exists()
+
+
+def test_existing_host_command_or_skill_collision_refuses_without_partial_install(
+    tmp_path,
+):
+    command = tmp_path / ".cursor/commands/ob-start.md"
+    command.parent.mkdir(parents=True)
+    command.write_text("my command\n")
+
+    result = try_install(tmp_path, "--cursor")
+    assert result.returncode == 1
+    assert "REFUSE" in result.stdout
+    assert "not installer-owned" in result.stdout
+    assert command.read_text() == "my command\n"
+    assert not (tmp_path / ".cursor/skills/engagement-intake").exists()
+    assert not (tmp_path / ".env.template").exists()
+
+    command.unlink()
+    skill = tmp_path / ".cursor/skills/engagement-intake"
+    skill.mkdir(parents=True)
+    (skill / "SKILL.md").write_text("my skill\n")
+    result = try_install(tmp_path, "--cursor")
+    assert result.returncode == 1
+    assert skill.joinpath("SKILL.md").read_text() == "my skill\n"
+
+
+def test_reinstall_is_digest_checked_and_modified_command_survives_uninstall(tmp_path):
+    run_install(tmp_path, "--cursor")
+    manifest_path = tmp_path / ".cursor/.obengineer-install.json"
+    first_manifest = json.loads(manifest_path.read_text())
+    assert first_manifest["schema_version"] == 2
+    command = tmp_path / ".cursor/commands/ob-start.md"
+
+    run_install(tmp_path, "--cursor")
+    assert json.loads(manifest_path.read_text())["owned"] == first_manifest["owned"]
+
+    command.write_text("user-modified command\n")
+    result = try_install(tmp_path, "--cursor")
+    assert result.returncode == 1
+    assert "modified after installation" in result.stdout
+    assert command.read_text() == "user-modified command\n"
+
+    run_install(tmp_path, "--cursor", "--uninstall")
+    assert command.read_text() == "user-modified command\n"
+    assert not (tmp_path / ".cursor/skills/engagement-intake").exists()
+
+
+def test_gitignore_uninstall_removes_only_tracked_lines(tmp_path):
+    gitignore = tmp_path / ".gitignore"
+    gitignore.write_text("user-cache/\n.env\n")
+    run_install(tmp_path, "--cursor")
+    manifest = json.loads(
+        (tmp_path / ".obengineer/scaffold-manifest.json").read_text()
+    )
+    assert ".env" not in manifest["gitignore"]["appended_lines"]
+    assert ".obengineer/" in manifest["gitignore"]["appended_lines"]
+
+    run_install(tmp_path, "--cursor")
+    assert gitignore.read_text().count(".obengineer/") == 1
+    gitignore.write_text(gitignore.read_text() + "later-user-line/\n")
+    run_install(tmp_path, "--cursor", "--uninstall")
+    assert gitignore.read_text() == "user-cache/\n.env\nlater-user-line/\n"
+
+
+def test_failed_reinstall_rolls_back_all_host_paths(tmp_path, monkeypatch):
+    run_install(tmp_path, "--cursor")
+    base = tmp_path / ".cursor"
+    manifest_before = (base / installer.MANIFEST_NAME).read_bytes()
+    command = base / "commands/ob-start.md"
+    command_before = command.read_bytes()
+    original_write = installer.Planner.write
+    calls = 0
+
+    def fail_second_write(self, destination, text):
+        nonlocal calls
+        calls += 1
+        if calls == 2:
+            raise OSError("simulated write failure")
+        return original_write(self, destination, text)
+
+    monkeypatch.setattr(installer.Planner, "write", fail_second_write)
+    planner = installer.Planner(False)
+    with pytest.raises(OSError, match="simulated"):
+        installer.install_host(
+            installer.HOSTS["cursor"], tmp_path, True, False, planner
+        )
+
+    assert command.read_bytes() == command_before
+    assert (base / installer.MANIFEST_NAME).read_bytes() == manifest_before

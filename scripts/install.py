@@ -16,8 +16,9 @@ Commands are always written as files, because each one carries this bundle's res
 path. They are what makes the guided flow invokable — `/ob-start` instead of pasting
 a prompt into the chat.
 
-Every install writes a manifest next to what it created, so `--uninstall` removes what
-this script put there and nothing else.
+Every install writes digested ownership records next to what it created. Reinstall
+refuses unowned or modified collisions, and `--uninstall` removes only unchanged
+installer-owned paths.
 
 A memory repository keeps its API keys in `.env`. The guided setup script creates or
 updates that file without printing a credential:
@@ -181,27 +182,189 @@ class Planner:
             shutil.rmtree(dst) if dst.is_dir() and not dst.is_symlink() else dst.unlink()
 
 
-def install_host(host: Host, scope_root: Path, project: bool, copy: bool,
-                 planner: Planner) -> None:
+class InstallConflict(RuntimeError):
+    """A target exists but cannot be proven to be installer-owned and unchanged."""
+
+
+def _host_relative(base: Path, path: Path) -> str:
+    return path.relative_to(base).as_posix()
+
+
+def _tree_digest(path: Path) -> str:
+    digest = hashlib.sha256()
+    for child in sorted(path.rglob("*"), key=lambda candidate: candidate.as_posix()):
+        relative = child.relative_to(path).as_posix().encode()
+        if child.is_symlink():
+            digest.update(b"L\0" + relative + b"\0" + os.readlink(child).encode())
+        elif child.is_file():
+            digest.update(b"F\0" + relative + b"\0" + child.read_bytes())
+        elif child.is_dir():
+            digest.update(b"D\0" + relative)
+    return digest.hexdigest()
+
+
+def path_ownership(path: Path) -> dict:
+    if path.is_symlink():
+        return {"kind": "symlink", "target": os.readlink(path)}
+    if path.is_file():
+        return {"kind": "file", "sha256": file_digest(path)}
+    if path.is_dir():
+        return {"kind": "directory", "sha256": _tree_digest(path)}
+    raise ValueError(f"cannot record unsupported installed path {path}")
+
+
+def ownership_matches(path: Path, ownership: object) -> bool:
+    if not isinstance(ownership, dict):
+        return False
+    try:
+        return path_ownership(path) == ownership
+    except (OSError, ValueError):
+        return False
+
+
+def desired_host_targets(
+    host: Host, scope_root: Path, project: bool
+) -> list[Path]:
     skills_dir = host.skills_dir(scope_root, project)
     commands_dir = host.commands_dir(scope_root, project)
-    previous = read_manifest(host.base(scope_root, project) / MANIFEST_NAME)
-    previously_created = set(previous.get("created", []))
+    return [
+        *(skills_dir / name for name in skill_names() + shared_reference_dirs()),
+        *(commands_dir / command.name for command in command_files()),
+    ]
 
+
+def host_owned_entries(manifest: dict) -> dict[str, dict] | None:
+    if not manifest:
+        return {}
+    owned = manifest.get("owned")
+    if manifest.get("schema_version") != 2 or not isinstance(owned, dict):
+        return None
+    if any(not isinstance(relative, str) for relative in owned):
+        return None
+    return owned
+
+
+def host_install_conflicts(
+    host: Host, scope_root: Path, project: bool
+) -> list[str]:
+    base = host.base(scope_root, project)
+    manifest = read_manifest(base / MANIFEST_NAME)
+    owned = host_owned_entries(manifest)
+    conflicts: list[str] = []
+    for path in desired_host_targets(host, scope_root, project):
+        if not (path.exists() or path.is_symlink()):
+            continue
+        relative = _host_relative(base, path)
+        if owned is None:
+            conflicts.append(
+                f"{path} is covered only by a legacy manifest without digests"
+            )
+        elif relative not in owned:
+            conflicts.append(f"{path} already exists and is not installer-owned")
+        elif not ownership_matches(path, owned[relative]):
+            conflicts.append(f"{path} was modified after installation")
+    return conflicts
+
+
+def _remove_path(path: Path) -> None:
+    if path.is_dir() and not path.is_symlink():
+        shutil.rmtree(path)
+    elif path.exists() or path.is_symlink():
+        path.unlink()
+
+
+def install_host(
+    host: Host,
+    scope_root: Path,
+    project: bool,
+    copy: bool,
+    planner: Planner,
+) -> None:
+    skills_dir = host.skills_dir(scope_root, project)
+    commands_dir = host.commands_dir(scope_root, project)
+    base = host.base(scope_root, project)
+    manifest_path = base / MANIFEST_NAME
+    previous = read_manifest(manifest_path)
+    previously_owned = host_owned_entries(previous)
+    conflicts = host_install_conflicts(host, scope_root, project)
+    if conflicts:
+        raise InstallConflict("; ".join(conflicts))
+    assert previously_owned is not None
+
+    retired_paths: list[Path] = []
     for replacement, retired_stems in LEGACY_COMMAND_STEMS.items():
         if not (COMMANDS / f"{replacement}.md").is_file():
             continue
         for retired in retired_stems:
             retired_path = commands_dir / f"{retired}.md"
-            if str(retired_path) in previously_created:
-                planner.remove(retired_path)
+            relative = _host_relative(base, retired_path)
+            ownership = previously_owned.get(relative)
+            if ownership and ownership_matches(retired_path, ownership):
+                retired_paths.append(retired_path)
+            elif ownership and (retired_path.exists() or retired_path.is_symlink()):
+                planner.note(f"preserve modified retired command {retired_path}")
 
-    for name in skill_names() + shared_reference_dirs():
-        planner.link_or_copy(CANONICAL_SKILLS / name, skills_dir / name, copy)
+    targets = desired_host_targets(host, scope_root, project)
+    if planner.dry_run:
+        for retired_path in retired_paths:
+            planner.remove(retired_path)
+        for name in skill_names() + shared_reference_dirs():
+            planner.link_or_copy(CANONICAL_SKILLS / name, skills_dir / name, copy)
+        for command in command_files():
+            planner.write(
+                commands_dir / command.name,
+                command.read_text().replace(ROOT_TOKEN, str(ROOT)),
+            )
+        return
 
-    for command in command_files():
-        planner.write(commands_dir / command.name,
-                      command.read_text().replace(ROOT_TOKEN, str(ROOT)))
+    base.parent.mkdir(parents=True, exist_ok=True)
+    staging = Path(tempfile.mkdtemp(prefix=".obengineer-install-", dir=base.parent))
+    backups: list[tuple[Path, Path]] = []
+    try:
+        for index, path in enumerate([*targets, *retired_paths]):
+            if path.exists() or path.is_symlink():
+                backup = staging / str(index)
+                backup.parent.mkdir(parents=True, exist_ok=True)
+                shutil.move(str(path), str(backup))
+                backups.append((path, backup))
+
+        for retired_path in retired_paths:
+            planner.remove(retired_path)
+        for name in skill_names() + shared_reference_dirs():
+            planner.link_or_copy(CANONICAL_SKILLS / name, skills_dir / name, copy)
+        for command in command_files():
+            planner.write(
+                commands_dir / command.name,
+                command.read_text().replace(ROOT_TOKEN, str(ROOT)),
+            )
+
+        owned = {
+            _host_relative(base, path): path_ownership(path)
+            for path in targets
+        }
+        atomic_write(
+            manifest_path,
+            json.dumps(
+                {
+                    "schema_version": 2,
+                    "source": str(ROOT),
+                    "scope": "project" if project else "user",
+                    "owned": dict(sorted(owned.items())),
+                },
+                indent=2,
+                sort_keys=True,
+            )
+            + "\n",
+        )
+    except BaseException:
+        for path in targets:
+            _remove_path(path)
+        for path, backup in reversed(backups):
+            path.parent.mkdir(parents=True, exist_ok=True)
+            shutil.move(str(backup), str(path))
+        raise
+    finally:
+        shutil.rmtree(staging, ignore_errors=True)
 
 
 def read_manifest(path: Path) -> dict:
@@ -234,10 +397,12 @@ def read_scaffold_manifest(path: Path) -> dict:
         manifest = json.loads(path.read_text())
     except (OSError, json.JSONDecodeError) as exc:
         raise ValueError(f"invalid project scaffold manifest {path}: {exc}") from exc
-    if (
-        not isinstance(manifest, dict)
-        or manifest.get("schema_version") != 1
-        or not isinstance(manifest.get("created"), dict)
+    if not isinstance(manifest, dict) or manifest.get("schema_version") not in (1, 2):
+        raise ValueError(f"invalid project scaffold manifest {path}")
+    if not isinstance(manifest.get("created"), dict):
+        raise ValueError(f"invalid project scaffold manifest {path}")
+    if manifest.get("schema_version") == 2 and not isinstance(
+        manifest.get("gitignore"), dict
     ):
         raise ValueError(f"invalid project scaffold manifest {path}")
     return manifest
@@ -246,7 +411,7 @@ def read_scaffold_manifest(path: Path) -> dict:
 def install_project_gitignore(
     scope_root: Path,
     dry_run: bool,
-    created: dict,
+    manifest: dict,
 ) -> list[str]:
     source = ROOT / "templates/memory-repo/.gitignore"
     destination = scope_root / ".gitignore"
@@ -255,11 +420,16 @@ def install_project_gitignore(
         for line in source.read_text().splitlines()
         if line and not line.startswith("#")
     ]
+    gitignore = dict(manifest.get("gitignore", {}))
+    tracked = list(gitignore.get("appended_lines", []))
     if not destination.exists():
         action = f"create missing {destination}"
         if not dry_run:
             atomic_write(destination, source.read_text())
-            created[".gitignore"] = {"sha256": file_digest(destination)}
+            manifest["gitignore"] = {
+                "created_lines": source.read_text().splitlines(),
+                "appended_lines": [],
+            }
         return [action]
     existing_text = destination.read_text()
     existing = set(existing_text.splitlines())
@@ -273,6 +443,12 @@ def install_project_gitignore(
             destination,
             existing_text + separator + "\n".join(missing) + "\n",
         )
+        manifest["gitignore"] = {
+            "created_lines": list(gitignore.get("created_lines", [])),
+            "appended_lines": [*tracked, *(
+                line for line in missing if line not in tracked
+            )],
+        }
     return [action]
 
 
@@ -281,7 +457,25 @@ def install_project_scaffold(scope_root: Path, dry_run: bool) -> list[str]:
     manifest_path = scope_root / SCAFFOLD_MANIFEST
     manifest = read_scaffold_manifest(manifest_path)
     created = dict(manifest.get("created", {}))
-    actions = install_project_gitignore(scope_root, dry_run, created)
+    working_manifest = {
+        "schema_version": 2,
+        "source": str(ROOT),
+        "created": created,
+        "gitignore": dict(manifest.get("gitignore", {})),
+    }
+    if manifest.get("schema_version") == 1 and ".gitignore" in created:
+        ownership = created.pop(".gitignore")
+        destination = scope_root / ".gitignore"
+        if (
+            destination.is_file()
+            and isinstance(ownership, dict)
+            and ownership.get("sha256") == file_digest(destination)
+        ):
+            working_manifest["gitignore"] = {
+                "created_lines": destination.read_text().splitlines(),
+                "appended_lines": [],
+            }
+    actions = install_project_gitignore(scope_root, dry_run, working_manifest)
 
     for source_rel, destination_rel in SCAFFOLD_FILES:
         source = ROOT / source_rel
@@ -312,14 +506,17 @@ def install_project_scaffold(scope_root: Path, dry_run: bool) -> list[str]:
             raise
         created[str(destination_rel)] = {"sha256": file_digest(destination)}
 
-    if not dry_run and (created or manifest):
+    if not dry_run and (
+        created or working_manifest["gitignore"] or manifest
+    ):
         atomic_write(
             manifest_path,
             json.dumps(
                 {
-                    "schema_version": 1,
+                    "schema_version": 2,
                     "source": str(ROOT),
                     "created": created,
+                    "gitignore": working_manifest["gitignore"],
                 },
                 indent=2,
                 sort_keys=True,
@@ -340,6 +537,13 @@ def _owned_scaffold_path(scope_root: Path, relative: str) -> Path | None:
     return resolved
 
 
+def _owned_host_path(base: Path, relative: str) -> Path | None:
+    candidate = Path(relative)
+    if candidate.is_absolute() or ".." in candidate.parts or candidate == Path("."):
+        return None
+    return base / candidate
+
+
 def uninstall_project_scaffold(scope_root: Path, dry_run: bool) -> list[str]:
     """Remove only unchanged files proven to be installer-created; never directories."""
     manifest_path = scope_root / SCAFFOLD_MANIFEST
@@ -347,6 +551,39 @@ def uninstall_project_scaffold(scope_root: Path, dry_run: bool) -> list[str]:
     actions: list[str] = []
     if not manifest:
         return actions
+
+    gitignore_path = scope_root / ".gitignore"
+    gitignore = manifest.get("gitignore", {})
+    if manifest.get("schema_version") == 1 and ".gitignore" in manifest["created"]:
+        ownership = manifest["created"].pop(".gitignore")
+        if (
+            gitignore_path.is_file()
+            and isinstance(ownership, dict)
+            and ownership.get("sha256") == file_digest(gitignore_path)
+        ):
+            gitignore = {
+                "created_lines": gitignore_path.read_text().splitlines(),
+                "appended_lines": [],
+            }
+    tracked_lines = [
+        *gitignore.get("created_lines", []),
+        *gitignore.get("appended_lines", []),
+    ] if isinstance(gitignore, dict) else []
+    if gitignore_path.is_file() and tracked_lines:
+        remaining = gitignore_path.read_text().splitlines()
+        for line in tracked_lines:
+            if line in remaining:
+                remaining.remove(line)
+        if remaining:
+            actions.append(
+                f"remove only installer-added ignores from {gitignore_path}"
+            )
+            if not dry_run:
+                atomic_write(gitignore_path, "\n".join(remaining) + "\n")
+        else:
+            actions.append(f"remove installer-created {gitignore_path}")
+            if not dry_run:
+                gitignore_path.unlink()
 
     for relative, ownership in sorted(manifest["created"].items()):
         path = _owned_scaffold_path(scope_root, relative)
@@ -368,19 +605,6 @@ def uninstall_project_scaffold(scope_root: Path, dry_run: bool) -> list[str]:
     return actions
 
 
-def write_manifest(host: Host, scope_root: Path, project: bool, created: list[str],
-                   dry_run: bool) -> None:
-    if dry_run:
-        return
-    path = host.base(scope_root, project) / MANIFEST_NAME
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps({
-        "source": str(ROOT),
-        "scope": "project" if project else "user",
-        "created": sorted(created),
-    }, indent=2) + "\n")
-
-
 def uninstall_host(host: Host, scope_root: Path, project: bool, dry_run: bool) -> int:
     base = host.base(scope_root, project)
     manifest_path = base / MANIFEST_NAME
@@ -388,24 +612,39 @@ def uninstall_host(host: Host, scope_root: Path, project: bool, dry_run: bool) -
     if not manifest:
         print(f"  {host.label}: nothing installed by obengineer at {base}")
         return 0
+    owned = host_owned_entries(manifest)
+    if owned is None:
+        print(
+            f"  {host.label}: REFUSE legacy or invalid manifest without digests; "
+            "no host files were removed"
+        )
+        return -1
 
     removed = 0
-    for entry in manifest.get("created", []):
-        path = Path(entry)
+    for relative, ownership in sorted(owned.items()):
+        path = _owned_host_path(base, relative)
+        if path is None:
+            print(f"  preserve unsafe host manifest entry {relative}")
+            continue
         if not (path.is_symlink() or path.exists()):
+            continue
+        if not ownership_matches(path, ownership):
+            print(f"  preserve modified installer-owned path {path}")
             continue
         print(f"  remove {path}")
         removed += 1
         if dry_run:
             continue
-        if path.is_dir() and not path.is_symlink():
-            shutil.rmtree(path)
-        else:
-            path.unlink()
+        _remove_path(path)
     if not dry_run:
         manifest_path.unlink(missing_ok=True)
         # Leave the host directory itself; other tools live there too.
-        for parent in {Path(e).parent for e in manifest.get("created", [])}:
+        parents = {
+            (base / relative).parent
+            for relative in owned
+            if _owned_host_path(base, relative) is not None
+        }
+        for parent in sorted(parents, key=lambda item: len(item.parts), reverse=True):
             if parent.is_dir() and not any(parent.iterdir()):
                 parent.rmdir()
     print(f"  {host.label}: removed {removed} item(s)")
@@ -474,8 +713,11 @@ def main(argv=None) -> int:
 
     if args.uninstall:
         print(f"Uninstalling from {scope_root}:")
+        failed = False
         for host in selected:
-            uninstall_host(host, scope_root, project, args.dry_run)
+            failed = uninstall_host(
+                host, scope_root, project, args.dry_run
+            ) < 0 or failed
         if project:
             selected_keys = {host.key for host in selected}
             remaining = [
@@ -488,12 +730,25 @@ def main(argv=None) -> int:
             else:
                 for action in uninstall_project_scaffold(scope_root, args.dry_run):
                     print(f"  {action}")
-        return 0
+        return 1 if failed else 0
 
     names = skill_names()
     print(f"Installing {len(names)} skills and {len(command_files())} commands "
           f"from {ROOT}")
     print(f"scope: {'project' if project else 'user'} {scope_root}\n")
+
+    conflicts = {
+        host.label: host_install_conflicts(host, scope_root, project)
+        for host in selected
+    }
+    conflicts = {label: rows for label, rows in conflicts.items() if rows}
+    if conflicts:
+        print("REFUSE — installation would overwrite unowned or modified host files:")
+        for label, rows in conflicts.items():
+            for row in rows:
+                print(f"  {label}: {row}")
+        print("Resolve or back up the reported paths, then rerun the installer.")
+        return 1
 
     if project:
         print("  Project scaffold")
@@ -509,7 +764,6 @@ def main(argv=None) -> int:
         if args.dry_run:
             for line in planner.log:
                 print(f"      would {line}")
-        write_manifest(host, scope_root, project, planner.created, args.dry_run)
         for note in host.notes:
             print(f"    {note}")
 
