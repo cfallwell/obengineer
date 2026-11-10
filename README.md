@@ -32,7 +32,8 @@ git -C /path/to/memory-repo init
 ```
 
 Use `--claude`, `--codex`, or `--all` for other hosts. Restart the host after
-installation.
+installation. A project install creates only missing `.gitignore`, `.env.template`, and
+`artifacts/README.md`; it never overwrites existing root content.
 
 Optional read-only Splunk API access is configured interactively without printing
 credentials:
@@ -53,8 +54,11 @@ Open the artifact repository and run:
 /ob-start
 ```
 
-The guided start asks for the minimum, then offers numbered optional inputs. Reply with,
-for example, `yes 1 3 4`, or `no`. Missing optional answers do not block analysis.
+Before any discovery, the guided start immediately asks for the application, an explicit
+production URL or no-browser reason, and what hurts. It then offers numbered optional
+inputs. Reply with, for example, `yes 1 3 4`; after those answers it shows `[x]`, `[ ]`,
+and `[-]` status and asks again. Only explicit `no` authorizes analysis. Missing optional
+answers do not block analysis.
 
 At any time:
 

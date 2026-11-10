@@ -27,10 +27,12 @@ updates that file without printing a credential:
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 import shutil
 import sys
+import tempfile
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -38,6 +40,15 @@ ROOT = Path(__file__).resolve().parent.parent
 CANONICAL_SKILLS = ROOT / "skills"
 COMMANDS = ROOT / "commands"
 MANIFEST_NAME = ".obengineer-install.json"
+SCAFFOLD_MANIFEST = Path(".obengineer/scaffold-manifest.json")
+SCAFFOLD_FILES = (
+    (Path("templates/memory-repo/.gitignore"), Path(".gitignore")),
+    (Path("templates/memory-repo/.env.template"), Path(".env.template")),
+    (
+        Path("templates/memory-repo/artifacts/README.md"),
+        Path("artifacts/README.md"),
+    ),
+)
 ROOT_TOKEN = "{{OBENGINEER_ROOT}}"
 COMMAND_ORDER = (
     "ob-start", "ob-add-inputs", "ob-edit-inputs", "ob-analyze",
@@ -201,6 +212,130 @@ def read_manifest(path: Path) -> dict:
         return {}
 
 
+def file_digest(path: Path) -> str:
+    return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def atomic_write(path: Path, text: str) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with tempfile.NamedTemporaryFile(
+        "w", dir=path.parent, delete=False, encoding="utf-8"
+    ) as handle:
+        handle.write(text)
+        handle.flush()
+        os.fsync(handle.fileno())
+        temporary = Path(handle.name)
+    os.replace(temporary, path)
+
+
+def read_scaffold_manifest(path: Path) -> dict:
+    if not path.exists():
+        return {}
+    try:
+        manifest = json.loads(path.read_text())
+    except (OSError, json.JSONDecodeError) as exc:
+        raise ValueError(f"invalid project scaffold manifest {path}: {exc}") from exc
+    if (
+        not isinstance(manifest, dict)
+        or manifest.get("schema_version") != 1
+        or not isinstance(manifest.get("created"), dict)
+    ):
+        raise ValueError(f"invalid project scaffold manifest {path}")
+    return manifest
+
+
+def install_project_scaffold(scope_root: Path, dry_run: bool) -> list[str]:
+    """Create only missing project-root files and record only files we created."""
+    manifest_path = scope_root / SCAFFOLD_MANIFEST
+    manifest = read_scaffold_manifest(manifest_path)
+    created = dict(manifest.get("created", {}))
+    actions: list[str] = []
+
+    for source_rel, destination_rel in SCAFFOLD_FILES:
+        source = ROOT / source_rel
+        destination = scope_root / destination_rel
+        if destination.exists() or destination.is_symlink():
+            actions.append(f"preserve existing {destination}")
+            continue
+        actions.append(f"create missing {destination}")
+        if dry_run:
+            continue
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        try:
+            descriptor = os.open(
+                destination,
+                os.O_WRONLY | os.O_CREAT | os.O_EXCL,
+                0o644,
+            )
+        except FileExistsError:
+            actions[-1] = f"preserve concurrently-created {destination}"
+            continue
+        try:
+            with os.fdopen(descriptor, "wb") as handle:
+                handle.write(source.read_bytes())
+                handle.flush()
+                os.fsync(handle.fileno())
+        except BaseException:
+            destination.unlink(missing_ok=True)
+            raise
+        created[str(destination_rel)] = {"sha256": file_digest(destination)}
+
+    if not dry_run and (created or manifest):
+        atomic_write(
+            manifest_path,
+            json.dumps(
+                {
+                    "schema_version": 1,
+                    "source": str(ROOT),
+                    "created": created,
+                },
+                indent=2,
+                sort_keys=True,
+            )
+            + "\n",
+        )
+    return actions
+
+
+def _owned_scaffold_path(scope_root: Path, relative: str) -> Path | None:
+    candidate = Path(relative)
+    if candidate.is_absolute() or ".." in candidate.parts:
+        return None
+    resolved_root = scope_root.resolve()
+    resolved = (scope_root / candidate).resolve()
+    if resolved == resolved_root or resolved_root not in resolved.parents:
+        return None
+    return resolved
+
+
+def uninstall_project_scaffold(scope_root: Path, dry_run: bool) -> list[str]:
+    """Remove only unchanged files proven to be installer-created; never directories."""
+    manifest_path = scope_root / SCAFFOLD_MANIFEST
+    manifest = read_scaffold_manifest(manifest_path)
+    actions: list[str] = []
+    if not manifest:
+        return actions
+
+    for relative, ownership in sorted(manifest["created"].items()):
+        path = _owned_scaffold_path(scope_root, relative)
+        expected = ownership.get("sha256") if isinstance(ownership, dict) else None
+        if path is None or not isinstance(expected, str):
+            actions.append(f"preserve unsafe or invalid scaffold entry {relative}")
+            continue
+        if not path.exists():
+            continue
+        if not path.is_file() or path.is_symlink() or file_digest(path) != expected:
+            actions.append(f"preserve user-modified scaffold {path}")
+            continue
+        actions.append(f"remove unchanged installer scaffold {path}")
+        if not dry_run:
+            path.unlink()
+
+    if not dry_run:
+        manifest_path.unlink(missing_ok=True)
+    return actions
+
+
 def write_manifest(host: Host, scope_root: Path, project: bool, created: list[str],
                    dry_run: bool) -> None:
     if dry_run:
@@ -248,6 +383,17 @@ def uninstall_host(host: Host, scope_root: Path, project: bool, dry_run: bool) -
 def show_status(scope_root: Path, project: bool) -> None:
     print(f"obengineer at {ROOT}")
     print(f"scope: {'project ' + str(scope_root) if project else 'user ' + str(scope_root)}\n")
+    if project:
+        try:
+            scaffold = read_scaffold_manifest(scope_root / SCAFFOLD_MANIFEST)
+            state = (
+                f"{len(scaffold.get('created', {}))} installer-owned file(s)"
+                if scaffold
+                else "not installed"
+            )
+        except ValueError as exc:
+            state = str(exc)
+        print(f"  Project scaffold {state}")
     for host in HOSTS.values():
         base = host.base(scope_root, project)
         manifest = read_manifest(base / MANIFEST_NAME)
@@ -298,12 +444,29 @@ def main(argv=None) -> int:
         print(f"Uninstalling from {scope_root}:")
         for host in selected:
             uninstall_host(host, scope_root, project, args.dry_run)
+        if project:
+            selected_keys = {host.key for host in selected}
+            remaining = [
+                host for host in HOSTS.values()
+                if host.key not in selected_keys
+                and (host.base(scope_root, True) / MANIFEST_NAME).is_file()
+            ]
+            if remaining:
+                print("  preserve project scaffold: other obengineer hosts remain")
+            else:
+                for action in uninstall_project_scaffold(scope_root, args.dry_run):
+                    print(f"  {action}")
         return 0
 
     names = skill_names()
     print(f"Installing {len(names)} skills and {len(command_files())} commands "
           f"from {ROOT}")
     print(f"scope: {'project' if project else 'user'} {scope_root}\n")
+
+    if project:
+        print("  Project scaffold")
+        for action in install_project_scaffold(scope_root, args.dry_run):
+            print(f"    {'would ' if args.dry_run else ''}{action}")
 
     for host in selected:
         planner = Planner(args.dry_run)

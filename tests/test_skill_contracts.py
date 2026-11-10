@@ -90,6 +90,67 @@ def test_input_prompt_uses_number_selection_and_no_required_unknown():
         assert "named owner" in text or "names of engineers" in text
 
 
+def test_start_asks_required_question_before_any_discovery_and_gates_analysis():
+    command = (COMMANDS / "ob-start.md").read_text()
+    prompt = (PROMPTS / "00-manage-analysis-inputs.md").read_text()
+    analyze = (COMMANDS / "ob-analyze.md").read_text()
+    assert command.index("manage_run_context.py") < command.index(
+        "prompts/00-manage-analysis-inputs.md"
+    )
+    assert command.index("Before reading source") < command.index(
+        "discover measurable optional facts"
+    )
+    for text in (command, prompt):
+        assert "explicit production URL" in text
+        assert "no browser: <reason>" in text
+        assert "what hurts" in text.lower()
+        assert "yes 1 3" in text
+        assert "never starts analysis" in text
+        assert "exact `no`" in text
+        for marker in ("[x]", "[ ]", "[-]"):
+            assert marker in text
+    assert "analysis_authorized: true" in analyze
+    assert "last_event: review-no" in analyze
+
+
+def test_intake_runtime_and_schemas_are_packaged():
+    skill = SKILLS / "engagement-intake"
+    for relative in (
+        "scripts/prefill_engagement_inputs.py",
+        "scripts/manage_run_context.py",
+        "schemas/env-prefill.schema.json",
+        "schemas/run-context.schema.json",
+    ):
+        path = skill / relative
+        assert path.is_file()
+        mirror = PLUGIN / "skills" / "engagement-intake" / relative
+        assert mirror.is_file()
+        assert mirror.read_bytes() == path.read_bytes()
+    run_schema = json.loads((skill / "schemas/run-context.schema.json").read_text())
+    assert run_schema["properties"]["state"]["enum"] == [
+        "new", "required", "optional-review", "optional-answers"
+    ]
+
+
+def test_environment_template_starts_with_safe_onboarding_fields():
+    template = (ROOT / "templates/memory-repo/.env.template").read_text()
+    assert template.startswith(
+        "PRODUCTION_URL=\nTEST_LOGIN_ID=\nPASSWORD_REF=\n"
+    )
+    assignments = [
+        line.split("=", 1)[0]
+        for line in template.splitlines()
+        if line and not line.startswith("#") and "=" in line
+    ]
+    assert assignments[:3] == [
+        "PRODUCTION_URL", "TEST_LOGIN_ID", "PASSWORD_REF"
+    ]
+    assert "RAW_PASSWORD" not in template
+    assert "ARTIFACTS_DIR=artifacts" in template
+    assert "${SPLUNK_ACCESS_TOKEN}" in template
+    assert "${SPLUNK_TOKEN}" in template
+
+
 def test_setup_script_is_secret_safe_and_guided():
     script = (ROOT / "scripts" / "setup-splunk-access.sh").read_text()
     assert "read -r -s" in script
