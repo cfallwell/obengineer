@@ -24,7 +24,9 @@ three copies.
 - Never request a secret in chat. When access is useful, point to
   `<obengineer-root>/scripts/setup-splunk-access.sh`; display secret-backed values only
   as `configured`.
-- Number the currently applicable choices. The reply grammar is `yes` followed by
+- Keep each applicable choice's canonical number from the 1–10 list below; filtered
+  lists may therefore have gaps. Never renumber a filtered list by display position.
+  The reply grammar is `yes` followed by
   space-separated numbers, for example `yes 1 3 4 6 7`, or `no`.
 - After `yes`, prompt once for each selected item in ascending order. A blank skips it.
 - On every start, add, and edit turn, update `.obengineer/run-context.json` with
@@ -94,7 +96,9 @@ prior analysis authorization, retains completed items, and makes previously skip
 available again.
 
 Use the same question and reply grammar, but list only useful items that remain absent.
-Do not renumber against an old run; number the current list from one.
+Preserve the canonical 1–10 numbers when filtering the current list. For example, if
+only security authorization and percentile remain, display `2` and `9` and pass
+`offered: [2, 9]` to the state machine.
 After selected answers, show the checked list and ask again. Only an exact `no`
 authorizes the next analysis version; `yes` never does.
 
@@ -108,7 +112,10 @@ List set, human-editable values with redacted current values. Ask:
 > These inputs are already set. Would you like to edit them?
 
 For every selected item, show the current value and request a replacement. `clear`
-removes it. Do not offer measured facts as editable human inputs; a later measurement
+is a reserved edit value: pass it for that allowlisted field through
+`prefill_engagement_inputs.py --json - --overwrite-existing`. The script restores the
+template value, removes that field's explicit-supply provenance, and never writes the
+literal word `clear`. Do not offer measured facts as editable human inputs; a later measurement
 supersedes them through evidence precedence.
 Write the explicit replacement with
 `prefill_engagement_inputs.py --json - --overwrite-existing`. Do not use that flag in

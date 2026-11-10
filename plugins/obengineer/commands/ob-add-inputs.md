@@ -14,8 +14,9 @@ Add inputs to an existing obengineer engagement.
    first; do not offer them as questions.
 4. Ask:
    `Would you like to add more inputs to the analysis phase?`
-   Under `Suggested inputs include`, number only unanswered items that could
-   materially improve the analysis. Accept `yes 1 3 4` or `no`.
+   Under `Suggested inputs include`, show only unanswered items that could
+   materially improve the analysis, retaining their canonical numbers 1–10 even
+   when the filtered list has gaps. Accept `yes 1 3 4` or `no`.
 5. Prompt once for each selected item, in order. A blank skips that item and keeps
    it on the intake-recommendations page. Never ask the human to type `unknown`.
    Show the checked `[x]`, `[ ]`, and `[-]` list, then ask the review question again.

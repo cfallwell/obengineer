@@ -84,6 +84,7 @@ OPTIONAL_INPUT_PATHS = {
     9: ("standards.percentile",),
     10: ("outcomes.first_journey",),
 }
+PROVENANCE_PATH = "input_provenance.supplied_paths"
 FIRST_QUESTION = """Before I inspect source, the network, or connected tools, please provide or confirm:
 1. What is the application name?
 2. What is the explicit production URL? If no browser applies, answer `no browser: <reason>`.
@@ -243,11 +244,27 @@ def optional_statuses(inputs_path: Path) -> dict[str, str]:
         raise StateError(f"cannot load optional input state: {exc}") from exc
     if not isinstance(current, dict) or not isinstance(baseline, dict):
         raise StateError("engagement inputs and template must be objects")
+    explicit = _get_path(current, PROVENANCE_PATH)
+    if explicit is None:
+        explicit_paths: set[str] = set()
+    elif (
+        isinstance(explicit, list)
+        and all(isinstance(path, str) for path in explicit)
+    ):
+        explicit_paths = set(explicit)
+    else:
+        raise StateError(f"{PROVENANCE_PATH} must be a list of paths")
     statuses: dict[str, str] = {}
     for item, paths in OPTIONAL_INPUT_PATHS.items():
         changed = any(
-            _get_path(current, path) != _get_path(baseline, path)
-            and _is_set(_get_path(current, path))
+            any(
+                explicit_path == path or explicit_path.startswith(path + ".")
+                for explicit_path in explicit_paths
+            )
+            or (
+                _get_path(current, path) != _get_path(baseline, path)
+                and _is_set(_get_path(current, path))
+            )
             for path in paths
         )
         statuses[str(item)] = "complete" if changed else "pending"

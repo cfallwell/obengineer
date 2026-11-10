@@ -22,6 +22,8 @@ TOOLKIT_ROOT = SKILL_ROOT.parent.parent
 SCHEMA_PATH = SKILL_ROOT / "schemas" / "env-prefill.schema.json"
 DEFAULT_TEMPLATE = TOOLKIT_ROOT / "inputs" / "engagement-inputs.template.yaml"
 PASSWORD_REFERENCE = re.compile(r"^\$\{[A-Za-z_][A-Za-z0-9_]*\}$")
+PROVENANCE_KEY = "input_provenance"
+SUPPLIED_PATHS_KEY = "supplied_paths"
 
 
 class PrefillError(ValueError):
@@ -122,6 +124,27 @@ def set_path(data: dict, dotted: str, value: object) -> None:
     current[parts[-1]] = value
 
 
+def supplied_paths(data: dict) -> set[str]:
+    provenance = data.get(PROVENANCE_KEY)
+    if provenance is None:
+        return set()
+    if not isinstance(provenance, dict):
+        raise PrefillError(f"{PROVENANCE_KEY} must be an object")
+    paths = provenance.get(SUPPLIED_PATHS_KEY, [])
+    if (
+        not isinstance(paths, list)
+        or any(not isinstance(path, str) or not path for path in paths)
+    ):
+        raise PrefillError(
+            f"{PROVENANCE_KEY}.{SUPPLIED_PATHS_KEY} must be a list of paths"
+        )
+    return set(paths)
+
+
+def set_supplied_paths(data: dict, paths: set[str]) -> None:
+    data[PROVENANCE_KEY] = {SUPPLIED_PATHS_KEY: sorted(paths)}
+
+
 def _uri_is_absolute(value: str) -> bool:
     parsed = urlparse(value)
     return parsed.scheme in {"http", "https"} and bool(parsed.netloc)
@@ -191,6 +214,7 @@ def apply_prefill(
     *,
     baseline: dict,
     force_names: set[str] | None = None,
+    clear_names: set[str] | None = None,
 ) -> list[str]:
     production_url = values.get("PRODUCTION_URL", "").strip()
     no_browser = values.get("NO_BROWSER_REASON", "").strip()
@@ -201,23 +225,41 @@ def apply_prefill(
 
     changed: list[str] = []
     force_names = force_names or set()
+    clear_names = clear_names or set()
+    provenance = supplied_paths(data)
     for name, rule in schema["properties"].items():
-        raw = values.get(name, "").strip()
-        if not raw:
-            continue
         target = rule["x-target"]
         current = get_path(data, target)
         default = get_path(baseline, target)
+        if name in clear_names:
+            if current != default:
+                set_path(data, target, default)
+                changed.append(target)
+            if target in provenance:
+                provenance.remove(target)
+                if target not in changed:
+                    changed.append(target)
+            continue
+        raw = values.get(name, "").strip()
+        if not raw:
+            continue
         if (
             name not in force_names
-            and not is_missing(current)
-            and current != default
+            and (
+                target in provenance
+                or (not is_missing(current) and current != default)
+            )
         ):
             continue
         converted = convert_value(name, raw, rule)
         if current != converted:
             set_path(data, target, converted)
             changed.append(target)
+        if target not in provenance:
+            provenance.add(target)
+            if target not in changed:
+                changed.append(target)
+    set_supplied_paths(data, provenance)
     validate_access(data)
     return changed
 
@@ -250,6 +292,17 @@ def prefill(
 ) -> list[str]:
     schema = load_schema()
     values = collect_values(project_root, schema, supplied)
+    clear_names: set[str] = set()
+    if supplied:
+        clear_names = {
+            name
+            for name, value in supplied.items()
+            if isinstance(value, str) and value.strip().lower() == "clear"
+        }
+    if clear_names and not overwrite_existing:
+        raise PrefillError("clear is accepted only with --overwrite-existing")
+    for name in clear_names:
+        values.pop(name, None)
     source = output if output.is_file() else template
     try:
         data = yaml.safe_load(source.read_text())
@@ -264,6 +317,7 @@ def prefill(
         schema,
         baseline=baseline,
         force_names=set(supplied or {}) if overwrite_existing else set(),
+        clear_names=clear_names,
     )
     if changed or not output.exists():
         atomic_dump_yaml(output, data)

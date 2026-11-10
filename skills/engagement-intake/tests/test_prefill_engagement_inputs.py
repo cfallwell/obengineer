@@ -118,6 +118,77 @@ def test_prefill_replaces_template_defaults_and_explicit_edit_replaces_existing(
     assert result["standards"]["percentile"] == "p95"
 
 
+def test_start_tracks_explicit_defaults_and_restart_preserves_them(tmp_path):
+    output = tmp_path / "inputs.yaml"
+    prefill.prefill(
+        tmp_path,
+        output,
+        supplied={
+            "SECURITY_ASSESSMENT_MODE": "passive",
+            "FIT_TO_ENTITLEMENT": "false",
+            "PUBLIC_RESEARCH_ALLOWED": "true",
+            "ANALYSIS_PERCENTILE": "p90",
+        },
+    )
+    data = yaml.safe_load(output.read_text())
+    assert data["input_provenance"]["supplied_paths"] == [
+        "entitlement.fit_to_entitlement",
+        "public_evidence.allowed",
+        "security_assessment.mode",
+        "standards.percentile",
+    ]
+
+    # A later start can see different local defaults, but explicit human values win.
+    prefill.prefill(
+        tmp_path,
+        output,
+        supplied={
+            "SECURITY_ASSESSMENT_MODE": "none",
+            "FIT_TO_ENTITLEMENT": "true",
+            "PUBLIC_RESEARCH_ALLOWED": "false",
+            "ANALYSIS_PERCENTILE": "p99",
+        },
+    )
+    restarted = yaml.safe_load(output.read_text())
+    assert restarted["security_assessment"]["mode"] == "passive"
+    assert restarted["entitlement"]["fit_to_entitlement"] is False
+    assert restarted["public_evidence"]["allowed"] is True
+    assert restarted["standards"]["percentile"] == "p90"
+
+
+def test_edit_clear_restores_template_value_and_removes_provenance(tmp_path):
+    output = tmp_path / "inputs.yaml"
+    prefill.prefill(
+        tmp_path,
+        output,
+        supplied={
+            "SECURITY_ASSESSMENT_MODE": "safe-active",
+            "ANALYSIS_PERCENTILE": "p99",
+        },
+    )
+    prefill.prefill(
+        tmp_path,
+        output,
+        supplied={
+            "SECURITY_ASSESSMENT_MODE": "clear",
+            "ANALYSIS_PERCENTILE": "clear",
+        },
+        overwrite_existing=True,
+    )
+    data = yaml.safe_load(output.read_text())
+    assert data["security_assessment"]["mode"] == "passive"
+    assert data["standards"]["percentile"] == "p90"
+    assert data["input_provenance"]["supplied_paths"] == []
+    assert "clear" not in output.read_text().lower()
+
+    with pytest.raises(prefill.PrefillError, match="--overwrite-existing"):
+        prefill.prefill(
+            tmp_path,
+            output,
+            supplied={"ANALYSIS_PERCENTILE": "clear"},
+        )
+
+
 def test_prefill_rejects_conflicting_production_surface_and_unknown_names(tmp_path):
     with pytest.raises(prefill.PrefillError, match="not both"):
         prefill.prefill(
