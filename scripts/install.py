@@ -438,6 +438,25 @@ def read_scaffold_manifest(path: Path) -> dict:
     return manifest
 
 
+def project_scaffold_conflicts(scope_root: Path) -> list[str]:
+    targets = [
+        scope_root / ".gitignore",
+        scope_root / SCAFFOLD_MANIFEST,
+        *(scope_root / destination for _, destination in SCAFFOLD_FILES),
+    ]
+    conflicts: list[str] = []
+    for target in targets:
+        if target.is_symlink():
+            conflicts.append(f"{target} is a symlink")
+            continue
+        unsafe_parent = _symlinked_or_escaping_parent(scope_root, target)
+        if unsafe_parent is not None:
+            conflicts.append(
+                f"{target} has symlinked or escaping parent {unsafe_parent}"
+            )
+    return conflicts
+
+
 def install_project_gitignore(
     scope_root: Path,
     dry_run: bool,
@@ -488,6 +507,9 @@ def install_project_gitignore(
 
 def install_project_scaffold(scope_root: Path, dry_run: bool) -> list[str]:
     """Create only missing project-root files and record only files we created."""
+    conflicts = project_scaffold_conflicts(scope_root)
+    if conflicts:
+        raise InstallConflict("; ".join(conflicts))
     manifest_path = scope_root / SCAFFOLD_MANIFEST
     manifest = read_scaffold_manifest(manifest_path)
     created = dict(manifest.get("created", {}))
@@ -584,6 +606,12 @@ def _owned_host_path(base: Path, relative: str) -> Path | None:
 
 def uninstall_project_scaffold(scope_root: Path, dry_run: bool) -> list[str]:
     """Remove only unchanged files proven to be installer-created; never directories."""
+    conflicts = project_scaffold_conflicts(scope_root)
+    if conflicts:
+        return [
+            "preserve project scaffold because containment checks failed: "
+            + "; ".join(conflicts)
+        ]
     manifest_path = scope_root / SCAFFOLD_MANIFEST
     manifest = read_scaffold_manifest(manifest_path)
     actions: list[str] = []
@@ -786,6 +814,10 @@ def main(argv=None) -> int:
         host.label: host_install_conflicts(host, scope_root, project)
         for host in selected
     }
+    if project:
+        scaffold_conflicts = project_scaffold_conflicts(scope_root)
+        if scaffold_conflicts:
+            conflicts["Project scaffold"] = scaffold_conflicts
     conflicts = {label: rows for label, rows in conflicts.items() if rows}
     if conflicts:
         print("REFUSE — installation would overwrite unowned or modified host files:")

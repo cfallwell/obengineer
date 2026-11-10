@@ -172,6 +172,45 @@ def test_symlinked_host_parent_cannot_escape_project(tmp_path):
     assert outside.read_text() == "outside\n"
 
 
+@pytest.mark.parametrize("target", (".gitignore", "artifacts"))
+def test_symlinked_scaffold_target_cannot_escape_or_be_replaced(tmp_path, target):
+    external = tmp_path.parent / f"{tmp_path.name}-{target.replace('.', '')}-external"
+    if target == "artifacts":
+        external.mkdir()
+        (tmp_path / target).symlink_to(external, target_is_directory=True)
+    else:
+        external.write_text("outside-ignore\n")
+        (tmp_path / target).symlink_to(external)
+
+    result = try_install(tmp_path, "--cursor")
+    assert result.returncode == 1
+    assert "Project scaffold" in result.stdout
+    assert "symlink" in result.stdout
+    if target == "artifacts":
+        assert list(external.iterdir()) == []
+        assert (tmp_path / target).is_symlink()
+    else:
+        assert external.read_text() == "outside-ignore\n"
+        assert (tmp_path / target).is_symlink()
+    assert not (tmp_path / ".cursor/commands").exists()
+
+
+def test_uninstall_preserves_scaffold_after_symlink_substitution(tmp_path):
+    run_install(tmp_path, "--cursor")
+    artifacts = tmp_path / "artifacts"
+    (artifacts / "README.md").unlink()
+    artifacts.rmdir()
+    external = tmp_path.parent / f"{tmp_path.name}-uninstall-external"
+    external.mkdir()
+    protected = external / "protected.txt"
+    protected.write_text("keep\n")
+    artifacts.symlink_to(external, target_is_directory=True)
+
+    run_install(tmp_path, "--cursor", "--uninstall")
+    assert artifacts.is_symlink()
+    assert protected.read_text() == "keep\n"
+
+
 def test_reinstall_is_digest_checked_and_modified_command_survives_uninstall(tmp_path):
     run_install(tmp_path, "--cursor")
     manifest_path = tmp_path / ".cursor/.obengineer-install.json"
