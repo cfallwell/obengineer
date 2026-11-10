@@ -17,6 +17,7 @@ from analysis_contract import (  # noqa: E402
     load_json,
     validate_contract,
     validate_manifest,
+    validate_run_timing,
     validate_worker_results,
 )
 from render_analysis_site import Renderer  # noqa: E402
@@ -34,6 +35,10 @@ def results():
     return [load_json(path) for path in sorted((FIXTURE / "results").glob("*.json"))]
 
 
+def timing():
+    return load_json(FIXTURE / "run-timing.json")
+
+
 def digest_tree(root: Path) -> str:
     digest = hashlib.sha256()
     for path in sorted(root.rglob("*")):
@@ -47,6 +52,7 @@ def test_representative_contract_and_job_audit_pass():
     assert validate_contract(contract()) == []
     assert validate_manifest(manifest()) == []
     assert validate_worker_results(manifest(), results()) == []
+    assert validate_run_timing(manifest(), timing(), results()) == []
 
 
 def test_manifest_reserves_coordinator_and_never_claims_repository_launch():
@@ -90,6 +96,27 @@ def test_collection_wall_time_must_fit_manifest_budget():
         "collection wall time" in failure
         for failure in validate_worker_results(manifest(), value)
     )
+
+
+def test_worker_deadline_limited_degradation_and_run_timing_are_enforced():
+    value = results()
+    value[0]["completedAt"] = "2026-11-10T20:10:01Z"
+    limited = value[3]
+    limited["limitations"] = []
+    limited["degradation"]["unavailableEvidenceScopes"] = ["invented scope"]
+    failures = validate_worker_results(manifest(), value)
+    assert any("deadlineSeconds" in failure for failure in failures)
+    assert any("limited work requires limitations" in failure for failure in failures)
+    assert any("exactly match manifest" in failure for failure in failures)
+
+    run = timing()
+    run["phases"]["reconciliation"]["completedAt"] = "2026-11-10T20:14:31Z"
+    run["phases"]["render"]["startedAt"] = "2026-11-10T20:14:31Z"
+    run["completedAt"] = "2026-11-10T20:20:01Z"
+    run["phases"]["validation"]["completedAt"] = run["completedAt"]
+    timing_failures = validate_run_timing(manifest(), run)
+    assert any("reconciliationSeconds" in failure for failure in timing_failures)
+    assert any("totalSeconds" in failure for failure in timing_failures)
 
 
 def test_runnable_job_failure_is_not_a_green_audit():
@@ -164,12 +191,76 @@ def test_semantic_gate_requires_first_touch_and_span_link_code():
     value["contracts"]["attribution"]["code"] = (
         value["contracts"]["attribution"]["code"].replace("localStorage", "memory")
     )
-    value["contracts"]["crossCutting"]["messagePropagation"] = (
-        value["contracts"]["crossCutting"]["messagePropagation"].replace("links", "refs")
-    )
+    message = value["contracts"]["crossCutting"]["messagePropagation"]
+    message["code"] = message["code"].replace("links", "refs")
     failures = validate_contract(value)
     assert any("attribution.code: missing localStorage" in failure for failure in failures)
     assert any("span-link joins require executable links code" in failure for failure in failures)
+
+
+def without_bus_and_collector(value):
+    value["architecture"]["buses"] = []
+    value["contracts"]["crossCutting"]["messagePropagation"] = {
+        "applicable": False,
+        "evidence": "No message bus or asynchronous carrier exists in the observed application boundary.",
+    }
+    value["technology"] = [
+        item for item in value["technology"] if "collector" not in item["name"].lower()
+    ]
+    value["contracts"]["collector"] = {
+        "applicable": False,
+        "evidence": "No Collector deployment or pipeline configuration exists in supplied evidence.",
+    }
+    return value
+
+
+def test_api_only_browser_only_and_no_bus_applicability(tmp_path):
+    browser = without_bus_and_collector(contract())
+    assert validate_contract(browser) == []
+    del browser["contracts"]["attribution"]["code"]
+    assert any("attribution.code" in failure for failure in validate_contract(browser))
+
+    api = without_bus_and_collector(contract())
+    api["architecture"]["frontend"] = {
+        "applicable": False,
+        "evidence": "The application exposes API services only and has no browser runtime or routes.",
+    }
+    api["contracts"]["spaRoutes"] = {
+        "applicable": False,
+        "evidence": "No browser runtime or client-side route transitions exist in the application.",
+    }
+    api["contracts"]["attribution"] = {
+        "applicable": False,
+        "evidence": "No browser sessions or campaign parameters exist in the application boundary.",
+    }
+    assert validate_contract(api) == []
+    output = tmp_path / "docs" / "observability" / "analysis" / "api" / "V1"
+    Renderer(api, output).render()
+    for page in ("attribution.md", "collector.md", "single-init-spa-routes.md"):
+        assert not (output / "contracts" / page).exists()
+        assert page not in (output / "contracts" / "index.md").read_text()
+
+    invalid = contract()
+    invalid["architecture"]["buses"] = []
+    assert any(
+        "messagePropagation.applicable" in failure
+        for failure in validate_contract(invalid)
+    )
+
+
+def test_telemetry_workflow_and_lexical_quality_mutations_fail():
+    value = contract()
+    del value["currentTelemetry"][0]["applicationScope"]
+    value["currentTelemetry"][1]["portfolioEvidence"] = {
+        "disposition": "unavailable",
+        "reason": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+    }
+    value["workflows"][0]["codeLocations"] = ["../outside.py"]
+    value["workflows"][0]["narrative"] = "word " * 20
+    failures = validate_contract(value)
+    assert any("applicationScope" in failure for failure in failures)
+    assert any("distinct lexical tokens" in failure for failure in failures)
+    assert any("authorized relative code path" in failure for failure in failures)
 
 
 def test_cardinality_arithmetic_is_checked():
@@ -241,6 +332,7 @@ def test_published_json_schemas_capture_bounded_jobs_and_required_objects():
     job_schema = json.loads((SKILL / "schemas" / "analysis-job-manifest.schema.json").read_text())
     contract_schema = json.loads((SKILL / "schemas" / "analysis-contract.schema.json").read_text())
     worker_schema = json.loads((SKILL / "schemas" / "analysis-worker-result.schema.json").read_text())
+    timing_schema = json.loads((SKILL / "schemas" / "analysis-run-timing.schema.json").read_text())
     assert job_schema["properties"]["jobs"]["maxItems"] == 6
     assert job_schema["properties"]["performanceBudgets"]["properties"][
         "totalSeconds"
@@ -253,4 +345,20 @@ def test_published_json_schemas_capture_bounded_jobs_and_required_objects():
         "contracts",
         "operations",
     }
+    definitions = contract_schema["$defs"]
+    assert {"applicationScope", "observedFrom", "observedTo", "readAt", "source",
+            "provenance", "portfolioEvidence"} <= set(
+        definitions["telemetry"]["required"]
+    )
+    assert "codeLocations" in definitions["workflow"]["required"]
+    assert set(definitions["frontend"]["required"]) == {"applicable", "evidence"}
+    message_schema = definitions["contracts"]["properties"]["crossCutting"][
+        "properties"
+    ]["messagePropagation"]
+    assert set(message_schema["required"]) == {"applicable", "evidence"}
+    assert message_schema["allOf"][0]["then"]["required"] == ["code"]
     assert set(worker_schema["required"]) >= {"startedAt", "completedAt", "evidence", "facts"}
+    assert worker_schema["allOf"][0]["then"]["required"] == ["degradation"]
+    assert set(timing_schema["properties"]["phases"]["required"]) == {
+        "collection", "reconciliation", "render", "validation"
+    }

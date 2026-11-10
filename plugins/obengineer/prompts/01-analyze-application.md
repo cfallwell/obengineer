@@ -38,6 +38,10 @@ only audit worker result intervals and must never claim it spawned them. If two 
 jobs are runnable, their recorded intervals overlap without exceeding remaining host
 capacity. MCP servers supplement direct APIs. They are not the only tenant source.
 Record source provenance and reconcile facts after parallel collection.
+Every worker interval fits its manifest `deadlineSeconds`. A `limited` result names
+nonempty limitations plus the exact manifest evidence scopes or required outputs that
+degraded. Record collection, reconciliation, rendering, validation, and total intervals
+in `analysis-run-timing.json`; each interval fits its manifest budget.
 
 Use the host's subagent facility. Launch as many runnable jobs as fit
 `min(6, available host slots - 1)` in one parallel tool call before awaiting any result;
@@ -81,6 +85,7 @@ Create:
 docs/observability/analysis/<app>/V<N>/
 docs/observability/analysis-job-manifest.json
 docs/observability/analysis-worker-results/
+docs/observability/analysis-run-timing.json
 docs/observability/analysis-contract.json
 docs/observability/attribute-schema.json
 docs/observability/implementation-map.json

@@ -226,6 +226,17 @@ def _list(obj: Any, path: str, failures: list[str], minimum: int = 1) -> list[An
 def _substantive(value: Any, path: str, failures: list[str], minimum: int = 80) -> None:
     if not isinstance(value, str) or len(value.strip()) < minimum:
         failures.append(f"{path}: requires at least {minimum} characters of substantive content")
+        return
+    tokens = re.findall(r"[A-Za-z][A-Za-z0-9_.-]*", value.casefold())
+    minimum_unique = 8 if minimum >= 80 else 3
+    if len(set(tokens)) < minimum_unique:
+        failures.append(
+            f"{path}: requires at least {minimum_unique} distinct lexical tokens"
+        )
+    if tokens and max(tokens.count(token) for token in set(tokens)) / len(tokens) > 0.6:
+        failures.append(f"{path}: one lexical token dominates the content")
+    if re.search(r"(.)\1{11,}", value, re.S):
+        failures.append(f"{path}: contains a meaningless repeated-character run")
 
 
 def _scan_placeholders(value: Any, path: str, failures: list[str]) -> None:
@@ -457,6 +468,13 @@ def validate_worker_results(manifest: Any, results: list[Any]) -> list[str]:
                 failures.append(f"{path}: completedAt must be after startedAt")
             else:
                 intervals.append((started, completed, result["jobId"]))
+                deadline = manifest_jobs.get(result.get("jobId"), {}).get("deadlineSeconds")
+                duration = (completed - started).total_seconds()
+                if isinstance(deadline, int) and duration > deadline:
+                    failures.append(
+                        f"{path}: worker interval {duration:.0f}s exceeds "
+                        f"deadlineSeconds {deadline}s"
+                    )
         evidence = _list(result.get("evidence"), f"{path}.evidence", failures, 0)
         evidence_ids = _unique_ids(evidence, f"{path}.evidence", failures)
         duplicate_evidence = global_evidence_ids & evidence_ids
@@ -471,6 +489,40 @@ def validate_worker_results(manifest: Any, results: list[Any]) -> list[str]:
         global_fact_ids.update(fact_ids)
         if result.get("status") in {"completed", "limited"} and not evidence:
             failures.append(f"{path}.evidence: completed work must cite evidence")
+        limitations = result.get("limitations")
+        degradation = result.get("degradation")
+        if result.get("status") == "limited":
+            if not isinstance(limitations, list) or not limitations:
+                failures.append(f"{path}.limitations: limited work requires limitations")
+            if not isinstance(degradation, dict):
+                failures.append(f"{path}.degradation: limited work requires exact degradation")
+            else:
+                missing = _list(
+                    degradation.get("missingRequiredOutputs"),
+                    f"{path}.degradation.missingRequiredOutputs", failures, 0,
+                )
+                unavailable = _list(
+                    degradation.get("unavailableEvidenceScopes"),
+                    f"{path}.degradation.unavailableEvidenceScopes", failures, 0,
+                )
+                _substantive(
+                    degradation.get("impact"), f"{path}.degradation.impact", failures, 20
+                )
+                if not missing and not unavailable:
+                    failures.append(f"{path}.degradation: exact degradation cannot be empty")
+                job = manifest_jobs.get(result.get("jobId"), {})
+                if set(missing) - set(job.get("requiredOutputs", [])):
+                    failures.append(
+                        f"{path}.degradation.missingRequiredOutputs: values must exactly match manifest"
+                    )
+                if set(unavailable) - set(job.get("evidenceScopes", [])):
+                    failures.append(
+                        f"{path}.degradation.unavailableEvidenceScopes: values must exactly match manifest"
+                    )
+        elif limitations:
+            failures.append(f"{path}.limitations: only limited results may declare limitations")
+        elif degradation is not None:
+            failures.append(f"{path}.degradation: only limited results may declare degradation")
         for fact_index, fact in enumerate(facts):
             fact_path = f"{path}.facts[{fact_index}]"
             if not _require(fact, ("id", "evidenceIds", "statement", "confidence"), fact_path, failures):
@@ -514,6 +566,98 @@ def validate_worker_results(manifest: Any, results: list[Any]) -> list[str]:
     return sorted(set(failures))
 
 
+def validate_run_timing(
+    manifest: Any,
+    timing: Any,
+    results: list[Any] | None = None,
+) -> list[str]:
+    failures = validate_manifest(manifest)
+    if failures:
+        return failures
+    if not _require(
+        timing, ("schemaVersion", "analysisId", "startedAt", "completedAt", "phases"),
+        "timing", failures,
+    ):
+        return sorted(set(failures))
+    if timing.get("schemaVersion") != 1:
+        failures.append("timing.schemaVersion: expected 1")
+    if timing.get("analysisId") != manifest.get("analysisId"):
+        failures.append("timing.analysisId: does not match manifest")
+    started = _parse_time(timing.get("startedAt"), "timing.startedAt", failures)
+    completed = _parse_time(timing.get("completedAt"), "timing.completedAt", failures)
+    names = ("collection", "reconciliation", "render", "validation")
+    budget_fields = {
+        "collection": "collectionSeconds",
+        "reconciliation": "reconciliationSeconds",
+        "render": "renderSeconds",
+        "validation": "validationSeconds",
+    }
+    phases = timing.get("phases")
+    parsed: list[tuple[str, datetime, datetime]] = []
+    if _require(phases, names, "timing.phases", failures):
+        for name in names:
+            phase = phases.get(name)
+            path = f"timing.phases.{name}"
+            if not _require(phase, ("startedAt", "completedAt"), path, failures):
+                continue
+            phase_start = _parse_time(phase.get("startedAt"), f"{path}.startedAt", failures)
+            phase_end = _parse_time(phase.get("completedAt"), f"{path}.completedAt", failures)
+            if phase_start and phase_end:
+                if phase_end <= phase_start:
+                    failures.append(f"{path}: completedAt must be after startedAt")
+                    continue
+                parsed.append((name, phase_start, phase_end))
+                duration = (phase_end - phase_start).total_seconds()
+                budget_name = budget_fields[name]
+                budget = manifest["performanceBudgets"][budget_name]
+                if duration > budget:
+                    failures.append(
+                        f"{path}: duration {duration:.0f}s exceeds {budget_name} {budget}s"
+                    )
+                if started and phase_start < started:
+                    failures.append(f"{path}: starts before the audited run")
+                if completed and phase_end > completed:
+                    failures.append(f"{path}: completes after the audited run")
+    for previous, current in zip(parsed, parsed[1:]):
+        if current[1] < previous[2]:
+            failures.append(f"timing.phases.{current[0]}: overlaps preceding {previous[0]} phase")
+    if results and parsed:
+        worker_intervals: list[tuple[datetime, datetime]] = []
+        for result in results:
+            try:
+                worker_start = datetime.fromisoformat(
+                    result["startedAt"].replace("Z", "+00:00")
+                )
+                worker_end = datetime.fromisoformat(
+                    result["completedAt"].replace("Z", "+00:00")
+                )
+            except (KeyError, AttributeError, ValueError):
+                continue
+            worker_intervals.append((worker_start, worker_end))
+        collection = next((phase for phase in parsed if phase[0] == "collection"), None)
+        if worker_intervals and collection and (
+            collection[1] != min(value[0] for value in worker_intervals)
+            or collection[2] != max(value[1] for value in worker_intervals)
+        ):
+            failures.append(
+                "timing.phases.collection: interval must exactly bound worker intervals"
+            )
+    if started and completed:
+        if completed <= started:
+            failures.append("timing: completedAt must be after startedAt")
+        else:
+            duration = (completed - started).total_seconds()
+            budget = manifest["performanceBudgets"]["totalSeconds"]
+            if duration > budget:
+                failures.append(
+                    f"timing: total duration {duration:.0f}s exceeds totalSeconds {budget}s"
+                )
+            if parsed and (parsed[0][1] != started or parsed[-1][2] != completed):
+                failures.append("timing: total interval must exactly bound audited phases")
+    _scan_placeholders(timing, "timing", failures)
+    return sorted(set(failures))
+
+
 def validate_contract(contract: Any) -> list[str]:
     failures = validate_contract_schema(contract)
     if failures:
@@ -551,13 +695,22 @@ def validate_contract(contract: Any) -> list[str]:
         frontend = architecture.get("frontend")
         if _require(
             frontend,
-            ("runtimeModel", "router", "initOwner", "singleInit", "routes", "evidenceIds"),
+            ("applicable", "evidence"),
             "contract.architecture.frontend",
             failures,
         ):
-            if frontend.get("singleInit") is not True:
-                failures.append("contract.architecture.frontend.singleInit: one provider init is required")
-            _list(frontend.get("routes"), "contract.architecture.frontend.routes", failures)
+            if not isinstance(frontend.get("applicable"), bool):
+                failures.append("contract.architecture.frontend.applicable: expected boolean")
+            _substantive(frontend.get("evidence"), "contract.architecture.frontend.evidence", failures, 20)
+            if frontend.get("applicable"):
+                _require(
+                    frontend,
+                    ("runtimeModel", "router", "initOwner", "singleInit", "routes", "evidenceIds"),
+                    "contract.architecture.frontend", failures,
+                )
+                if frontend.get("singleInit") is not True:
+                    failures.append("contract.architecture.frontend.singleInit: one provider init is required")
+                _list(frontend.get("routes"), "contract.architecture.frontend.routes", failures)
         for key in ("backends", "accounts", "failurePoints"):
             _list(architecture.get(key), f"contract.architecture.{key}", failures)
         for index, route in enumerate(frontend.get("routes", []) if isinstance(frontend, dict) else []):
@@ -619,8 +772,43 @@ def validate_contract(contract: Any) -> list[str]:
         )
     for index, item in enumerate(telemetry):
         path = f"contract.currentTelemetry[{index}]"
-        if _require(item, ("component", "status", "trust", "observed", "gaps", "evidenceIds"), path, failures):
+        if _require(item, (
+            "component", "status", "trust", "applicationScope", "observedFrom",
+            "observedTo", "readAt", "source", "provenance", "portfolioEvidence",
+            "observed", "gaps", "evidenceIds",
+        ), path, failures):
             _list(item.get("gaps"), f"{path}.gaps", failures)
+            _substantive(item.get("applicationScope"), f"{path}.applicationScope", failures, 20)
+            observed_from = _parse_time(item.get("observedFrom"), f"{path}.observedFrom", failures)
+            observed_to = _parse_time(item.get("observedTo"), f"{path}.observedTo", failures)
+            read_at = _parse_time(item.get("readAt"), f"{path}.readAt", failures)
+            if observed_from and observed_to and observed_to <= observed_from:
+                failures.append(f"{path}: observedTo must be after observedFrom")
+            if observed_to and read_at and read_at < observed_to:
+                failures.append(f"{path}: readAt cannot precede observedTo")
+            if item.get("provenance") not in {"measured", "stated", "public", "derived"}:
+                failures.append(f"{path}.provenance: unsupported value")
+            portfolio = item.get("portfolioEvidence")
+            if _require(portfolio, ("disposition",), f"{path}.portfolioEvidence", failures):
+                if portfolio.get("disposition") == "available":
+                    _require(
+                        portfolio, ("volume", "metricSets", "mts", "signalFlow"),
+                        f"{path}.portfolioEvidence", failures,
+                    )
+                    for field in ("volume", "metricSets", "mts", "signalFlow"):
+                        _substantive(
+                            portfolio.get(field), f"{path}.portfolioEvidence.{field}",
+                            failures, 20,
+                        )
+                elif portfolio.get("disposition") == "unavailable":
+                    _substantive(
+                        portfolio.get("reason"), f"{path}.portfolioEvidence.reason",
+                        failures, 20,
+                    )
+                else:
+                    failures.append(
+                        f"{path}.portfolioEvidence.disposition: expected available or unavailable"
+                    )
     for index, item in enumerate(strategies):
         _require(
             item,
@@ -713,14 +901,22 @@ def validate_contract(contract: Any) -> list[str]:
             (
                 "id", "name", "narrative", "businessTransactionIds", "spans", "events",
                 "metrics", "joins", "dashboardId", "detectorIds", "objectiveIds",
-                "verification", "workOrderIds", "evidenceIds",
+                "codeLocations", "verification", "workOrderIds", "evidenceIds",
             ),
             path,
             failures,
         ):
             continue
-        for key in ("spans", "events", "metrics", "joins", "verification"):
+        for key in ("spans", "events", "metrics", "joins", "codeLocations", "verification"):
             _list(workflow.get(key), f"{path}.{key}", failures)
+        for location_index, location in enumerate(workflow.get("codeLocations", [])):
+            if not isinstance(location, str) or not re.fullmatch(
+                r"(?!/)(?!.*(?:^|/)\.\.(?:/|$))[A-Za-z0-9._/-]+(?::[1-9][0-9]*(?:-[1-9][0-9]*)?)?",
+                location,
+            ):
+                failures.append(
+                    f"{path}.codeLocations[{location_index}]: expected authorized relative code path"
+                )
         unknown_transactions = set(workflow.get("businessTransactionIds", [])) - transaction_ids
         if unknown_transactions:
             failures.append(f"{path}.businessTransactionIds: unknown ids {sorted(unknown_transactions)}")
@@ -961,17 +1157,20 @@ def validate_contract(contract: Any) -> list[str]:
         spa = contracts.get("spaRoutes")
         if _require(
             spa,
-            ("owner", "classifier", "navigationSpan", "code"),
+            ("applicable", "evidence"),
             "contract.contracts.spaRoutes",
             failures,
         ):
-            spa_code = spa.get("code", "")
-            _substantive(spa_code, "contract.contracts.spaRoutes.code", failures)
-            for required in ("setGlobalAttributes", "route.change"):
-                if required not in spa_code:
-                    failures.append(
-                        "contract.contracts.spaRoutes.code: missing " + required
-                    )
+            if not isinstance(spa.get("applicable"), bool):
+                failures.append("contract.contracts.spaRoutes.applicable: expected boolean")
+            _substantive(spa.get("evidence"), "contract.contracts.spaRoutes.evidence", failures, 20)
+            if spa.get("applicable"):
+                _require(spa, ("owner", "classifier", "navigationSpan", "code"), "contract.contracts.spaRoutes", failures)
+                spa_code = spa.get("code", "")
+                _substantive(spa_code, "contract.contracts.spaRoutes.code", failures)
+                for required in ("setGlobalAttributes", "route.change"):
+                    if required not in spa_code:
+                        failures.append("contract.contracts.spaRoutes.code: missing " + required)
         cross = contracts.get("crossCutting")
         if _require(
             cross,
@@ -980,28 +1179,29 @@ def validate_contract(contract: Any) -> list[str]:
             failures,
         ):
             _list(cross.get("attributes"), "contract.contracts.crossCutting.attributes", failures, 3)
-            for key in ("providerBootstrap", "spanProcessor", "identityWrite", "backendPropagator", "messagePropagation"):
+            for key in ("providerBootstrap", "spanProcessor", "identityWrite", "backendPropagator"):
                 _substantive(cross.get(key), f"contract.contracts.crossCutting.{key}", failures)
             if "onStart" not in str(cross.get("spanProcessor", "")):
                 failures.append(
                     "contract.contracts.crossCutting.spanProcessor: missing onStart"
                 )
-            message_code = str(cross.get("messagePropagation", ""))
-            for required in ("inject", "extract"):
-                if required not in message_code:
-                    failures.append(
-                        "contract.contracts.crossCutting.messagePropagation: "
-                        f"missing {required}"
-                    )
-            if any(
-                join.get("type") == "span-link"
-                for join in contracts.get("joins", [])
-                if isinstance(join, dict)
-            ) and "links" not in message_code:
-                failures.append(
-                    "contract.contracts.crossCutting.messagePropagation: "
-                    "span-link joins require executable links code"
-                )
+            message = cross.get("messagePropagation")
+            if _require(message, ("applicable", "evidence"), "contract.contracts.crossCutting.messagePropagation", failures):
+                if not isinstance(message.get("applicable"), bool):
+                    failures.append("contract.contracts.crossCutting.messagePropagation.applicable: expected boolean")
+                _substantive(message.get("evidence"), "contract.contracts.crossCutting.messagePropagation.evidence", failures, 20)
+                if message.get("applicable"):
+                    _substantive(message.get("code"), "contract.contracts.crossCutting.messagePropagation.code", failures)
+                    message_code = str(message.get("code", ""))
+                    for required in ("inject", "extract"):
+                        if required not in message_code:
+                            failures.append("contract.contracts.crossCutting.messagePropagation.code: missing " + required)
+                    if any(
+                        join.get("type") == "span-link"
+                        for join in contracts.get("joins", [])
+                        if isinstance(join, dict)
+                    ) and "links" not in message_code:
+                        failures.append("contract.contracts.crossCutting.messagePropagation.code: span-link joins require executable links code")
             for index, attribute in enumerate(cross.get("attributes", [])):
                 _require(
                     attribute,
@@ -1015,23 +1215,21 @@ def validate_contract(contract: Any) -> list[str]:
         attribution = contracts.get("attribution")
         if _require(
             attribution,
-            ("trigger", "event", "firstTouch", "lastTouch", "baggageKeys", "code"),
+            ("applicable", "evidence"),
             "contract.contracts.attribution",
             failures,
         ):
-            for key in ("trigger", "firstTouch", "lastTouch", "code"):
-                _substantive(
-                    attribution.get(key),
-                    f"contract.contracts.attribution.{key}",
-                    failures,
-                    20,
-                )
-            attribution_code = str(attribution.get("code", ""))
-            for required in ("localStorage", "sessionStorage"):
-                if required not in attribution_code:
-                    failures.append(
-                        "contract.contracts.attribution.code: missing " + required
-                    )
+            if not isinstance(attribution.get("applicable"), bool):
+                failures.append("contract.contracts.attribution.applicable: expected boolean")
+            _substantive(attribution.get("evidence"), "contract.contracts.attribution.evidence", failures, 20)
+            if attribution.get("applicable"):
+                _require(attribution, ("trigger", "event", "firstTouch", "lastTouch", "baggageKeys", "code"), "contract.contracts.attribution", failures)
+                for key in ("trigger", "firstTouch", "lastTouch", "code"):
+                    _substantive(attribution.get(key), f"contract.contracts.attribution.{key}", failures, 20)
+                attribution_code = str(attribution.get("code", ""))
+                for required in ("localStorage", "sessionStorage"):
+                    if required not in attribution_code:
+                        failures.append("contract.contracts.attribution.code: missing " + required)
         for index, join in enumerate(contracts.get("joins", [])):
             _require(
                 join,
@@ -1040,34 +1238,24 @@ def validate_contract(contract: Any) -> list[str]:
                 failures,
             )
         collector = contracts.get("collector")
-        if _require(collector, ("placement", "processorOrder", "ottl", "redactions"), "contract.contracts.collector", failures):
-            _substantive(
-                collector.get("ottl"),
-                "contract.contracts.collector.ottl",
-                failures,
-                20,
-            )
-            order = collector.get("processorOrder", [])
-            lower = [str(item).lower() for item in order]
-            transform_positions = [i for i, item in enumerate(lower) if "transform" in item]
-            redact_positions = [i for i, item in enumerate(lower) if "redact" in item or "attribute" in item]
-            metric_positions = [i for i, item in enumerate(lower) if "spanmetric" in item]
-            batch_positions = [i for i, item in enumerate(lower) if "batch" in item]
-            if not transform_positions or not redact_positions or not metric_positions or not batch_positions:
-                failures.append("contract.contracts.collector.processorOrder: requires transform, redaction, spanmetrics, and batch")
-            elif not (
-                max(transform_positions) < min(metric_positions)
-                and max(redact_positions) < min(metric_positions)
-                and max(metric_positions) < min(batch_positions)
-            ):
-                failures.append("contract.contracts.collector.processorOrder: derive and redact before spanmetrics, then batch")
-            for index, redaction in enumerate(collector.get("redactions", [])):
-                _require(
-                    redaction,
-                    ("field", "action", "reason"),
-                    f"contract.contracts.collector.redactions[{index}]",
-                    failures,
-                )
+        if _require(collector, ("applicable", "evidence"), "contract.contracts.collector", failures):
+            if not isinstance(collector.get("applicable"), bool):
+                failures.append("contract.contracts.collector.applicable: expected boolean")
+            _substantive(collector.get("evidence"), "contract.contracts.collector.evidence", failures, 20)
+            if collector.get("applicable"):
+                _require(collector, ("placement", "processorOrder", "ottl", "redactions"), "contract.contracts.collector", failures)
+                _substantive(collector.get("ottl"), "contract.contracts.collector.ottl", failures)
+                order = [str(item).lower() for item in collector.get("processorOrder", [])]
+                transform = [i for i, item in enumerate(order) if "transform" in item]
+                redact = [i for i, item in enumerate(order) if "redact" in item or "attribute" in item]
+                metric = [i for i, item in enumerate(order) if "spanmetric" in item]
+                batch = [i for i, item in enumerate(order) if "batch" in item]
+                if not transform or not redact or not metric or not batch:
+                    failures.append("contract.contracts.collector.processorOrder: requires transform, redaction, spanmetrics, and batch")
+                elif not (max(transform) < min(metric) and max(redact) < min(metric) and max(metric) < min(batch)):
+                    failures.append("contract.contracts.collector.processorOrder: derive and redact before spanmetrics, then batch")
+                for redaction_index, redaction_item in enumerate(collector.get("redactions", [])):
+                    _require(redaction_item, ("field", "action", "reason"), f"contract.contracts.collector.redactions[{redaction_index}]", failures)
         cardinality = contracts.get("cardinality")
         if _require(
             cardinality,
@@ -1114,6 +1302,54 @@ def validate_contract(contract: Any) -> list[str]:
                         f"contract.operations.detectors[{detector_index}].groupBy: "
                         f"not dimension-eligible {sorted(unapproved)}"
                     )
+
+        frontend_applicable = architecture.get("frontend", {}).get("applicable") is True
+        spa_applicable = isinstance(spa, dict) and spa.get("applicable") is True
+        attribution_applicable = (
+            isinstance(attribution, dict) and attribution.get("applicable") is True
+        )
+        if not frontend_applicable and (spa_applicable or attribution_applicable):
+            failures.append(
+                "contract.contracts: browser-only contracts cannot be applicable "
+                "when architecture.frontend is not applicable"
+            )
+        client_routes = (
+            any(
+                route.get("navigation") == "client"
+                for route in architecture["frontend"].get("routes", [])
+            )
+            if frontend_applicable
+            else False
+        )
+        if client_routes != spa_applicable:
+            failures.append(
+                "contract.contracts.spaRoutes.applicable: must match evidence "
+                "of client-routed browser navigation"
+            )
+        message_applicable = (
+            isinstance(cross, dict)
+            and isinstance(cross.get("messagePropagation"), dict)
+            and cross["messagePropagation"].get("applicable") is True
+        )
+        if bool(architecture.get("buses")) != message_applicable:
+            failures.append(
+                "contract.contracts.crossCutting.messagePropagation.applicable: "
+                "must match the architecture bus inventory"
+            )
+        collector_applicable = (
+            isinstance(collector, dict) and collector.get("applicable") is True
+        )
+        has_collector = any(
+            "collector" in str(item.get("name", "")).casefold()
+            or "collector" in str(item.get("category", "")).casefold()
+            for item in technology
+            if isinstance(item, dict)
+        )
+        if has_collector != collector_applicable:
+            failures.append(
+                "contract.contracts.collector.applicable: must match the "
+                "evidence-derived technology inventory"
+            )
 
     reference = contract.get("reference")
     if _require(reference, ("evidence", "sources", "priorArtifacts", "unknowns"), "contract.reference", failures):

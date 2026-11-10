@@ -21,7 +21,14 @@ Update the status and updated fields in the same commit.
 """
 
 
-def note(title: str, kind: str, status: str, body: str = "Content line.\n") -> str:
+def note(
+    title: str,
+    kind: str,
+    status: str,
+    body: str = "Content line.\n",
+    work_orders: str = "[]",
+    extra_frontmatter: str = "",
+) -> str:
     return (
         "---\n"
         f"title: {title}\n"
@@ -31,7 +38,8 @@ def note(title: str, kind: str, status: str, body: str = "Content line.\n") -> s
         f"status: {status}\n"
         "updated: 2026-01-01\n"
         "sources: []\n"
-        "work_orders: []\n"
+        f"work_orders: {work_orders}\n"
+        f"{extra_frontmatter}"
         "---\n\n"
         f"[Analysis](../../../../../../../docs/observability/analysis/app/V1/index.md)"
         f" / **{title}**\n\n# {title}\n\n{body}"
@@ -97,13 +105,22 @@ def wiki(tmp_path: Path) -> Path:
     (service / "contract" / "baggage.md").write_text(note("baggage", "reference", "designed"))
     (service / "contract" / "attribute-schema.json").write_text('{"version":"1"}\n')
     (service / "findings" / "F-01-a-key.md").write_text(
-        note("F-01", "finding", "open")
+        note("F-01", "finding", "open", work_orders="[WO-001]")
     )
     (service / "business-transactions" / "checkout.md").write_text(
-        note("checkout", "bt", "designed")
+        note("checkout", "bt", "designed", work_orders="[WO-001]")
     )
     (service / "use-cases" / "checkout.md").write_text(
-        note("Checkout", "use-case", "proposed")
+        note("Checkout", "use-case", "proposed", work_orders="[WO-001]")
+    )
+    (service / "workflows" / "checkout-submit.md").write_text(
+        note(
+            "checkout.submit", "workflow", "proposed",
+            "The checkout submission workflow carries spans, metrics, and verification.\n"
+            "Its code location is `src/checkout/submit.ts`.\n"
+            "The work order installs the accepted signal contract.\n",
+            work_orders="[WO-001]",
+        )
     )
     (service / "slos" / "checkout-success.md").write_text(
         note("checkout success", "sli", "proposed")
@@ -120,25 +137,35 @@ def wiki(tmp_path: Path) -> Path:
     (work_orders / "WO-001.md").write_text(note(
         "WO-001", "work-order", "proposed",
         body="""## Findings
-- F-01
+- [[services/payments/findings/F-01-a-key]]
 ## Use cases
-- Checkout
+- [[services/payments/use-cases/checkout]]
 ## Workflows and business transactions
-- checkout
+- [[services/payments/workflows/checkout-submit]]
+- [[services/payments/business-transactions/checkout]]
 ## Target selectors
-- workflow:checkout.submit
+- Implement the mapped `workflow:checkout.submit` selector for this accepted scope.
 ## Repository legs
-- payments: src/
+- Change the payments repository only under its authorized `src/` parent.
 ## Dependencies
 - none
 ## Acceptance evidence
-- contract checks
+- Preserve passing deterministic contract checks and route classification evidence.
 ## Verification criteria
-- VC-001
+- Execute VC-001 and retain the bounded workflow query results.
 ## Coordination
-- linked PRs
+- Record linked repository and coordination pull requests before completion.
 ## Manual issue text
-Copy this work order.
+Copy this work order into the configured issue tracker without changing scope.
+""",
+        extra_frontmatter="""work_order_id: WO-001
+selectors: [workflow:checkout.submit]
+depends_on: []
+repository_legs:
+  - repository: payments
+    paths: [src/]
+    changes: [Implement bounded checkout workflow instrumentation in the authorized source tree.]
+    tests: [Run deterministic propagation and workflow contract tests for the repository leg.]
 """,
     ))
 
@@ -231,6 +258,48 @@ def test_ready_work_order_requires_acceptance(wiki):
     path = wiki.parents[1] / "implementation" / "work-orders" / "WO-001.md"
     path.write_text(path.read_text().replace("status: proposed", "status: ready"))
     assert any("before acceptance" in failure for failure in failures(wiki))
+
+
+def test_work_order_rejects_unknown_dependency_and_cycle(wiki):
+    path = wiki.parents[1] / "implementation" / "work-orders" / "WO-001.md"
+    path.write_text(path.read_text().replace("depends_on: []", "depends_on: [WO-999]"))
+    result = failures(wiki)
+    assert any("dependencies do not exist" in failure and "WO-999" in failure for failure in result)
+
+    path.write_text(path.read_text().replace("depends_on: [WO-999]", "depends_on: [WO-001]"))
+    assert any("dependency cycle" in failure for failure in failures(wiki))
+
+
+def test_work_order_rejects_invalid_selector_and_meaningless_leg(wiki):
+    path = wiki.parents[1] / "implementation" / "work-orders" / "WO-001.md"
+    text = path.read_text()
+    text = text.replace(
+        "selectors: [workflow:checkout.submit]",
+        "selectors: [unsupported:checkout]",
+    )
+    text = text.replace(
+        "changes: [Implement bounded checkout workflow instrumentation in the authorized source tree.]",
+        "changes: [xxxxx]",
+    )
+    path.write_text(text)
+    result = failures(wiki)
+    assert any("invalid target selector" in failure for failure in result)
+    assert any("changes is not meaningful" in failure for failure in result)
+
+
+def test_work_order_rejects_unauthorized_repository_path(wiki):
+    path = wiki.parents[1] / "implementation" / "work-orders" / "WO-001.md"
+    path.write_text(path.read_text().replace("paths: [src/]", "paths: [../secrets/]"))
+    assert any("authorized relative paths" in failure for failure in failures(wiki))
+
+
+def test_work_order_reverse_links_are_reciprocal(wiki):
+    path = wiki / "use-cases" / "checkout.md"
+    path.write_text(path.read_text().replace("work_orders: [WO-001]", "work_orders: []"))
+    assert any(
+        "does not declare the work order" in failure
+        for failure in failures(wiki)
+    )
 
 
 def test_index_count_is_checked(wiki):

@@ -11,6 +11,7 @@ from analysis_contract import (
     load_json,
     validate_contract,
     validate_manifest,
+    validate_run_timing,
     validate_worker_results,
 )
 
@@ -24,10 +25,12 @@ def main(argv: list[str] | None = None) -> int:
         type=Path,
         help="Directory containing one worker-result JSON file per runnable job",
     )
+    parser.add_argument("--timing", type=Path, help="Run timing audit JSON")
     args = parser.parse_args(argv)
     if not args.contract and not args.manifest:
         parser.error("provide --contract, --manifest, or both")
     failures: list[str] = []
+    worker_results = None
     if args.contract:
         failures.extend(validate_contract(load_json(args.contract)))
     if args.manifest:
@@ -37,16 +40,27 @@ def main(argv: list[str] | None = None) -> int:
             if not result_paths:
                 failures.append(f"results: no JSON files under {args.results}")
             else:
+                worker_results = [load_json(path) for path in result_paths]
                 failures.extend(
                     validate_worker_results(
                         manifest,
-                        [load_json(path) for path in result_paths],
+                        worker_results,
                     )
                 )
         else:
             failures.extend(validate_manifest(manifest))
+        if args.timing:
+            failures.extend(
+                validate_run_timing(
+                    manifest,
+                    load_json(args.timing),
+                    worker_results,
+                )
+            )
     elif args.results:
         parser.error("--results requires --manifest")
+    elif args.timing:
+        parser.error("--timing requires --manifest")
     failures = sorted(set(failures))
     if failures:
         for failure in failures:
@@ -58,6 +72,7 @@ def main(argv: list[str] | None = None) -> int:
             ("contract", args.contract),
             ("manifest", args.manifest),
             ("worker intervals", args.results),
+            ("run timing", args.timing),
         )
         if value
     )

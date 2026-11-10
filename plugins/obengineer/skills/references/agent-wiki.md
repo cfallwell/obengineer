@@ -154,6 +154,13 @@ Before acceptance, dependency-free orders are `proposed`; dependent orders are `
 Acceptance changes eligible orders to `ready`. A later version compares the prior queue
 and marks each order retained, changed, superseded, implemented, or verified.
 
+Canonical work-order frontmatter carries `work_order_id`, `selectors`, `depends_on`, and
+structured `repository_legs`; the body carries the required reverse-link sections.
+Verification rejects unsupported selectors, unknown or cyclic dependencies, repository
+IDs absent from the implementation map, absolute or traversal paths, paths outside
+`authorized_paths`, meaningless changes/tests, and a `ready` status whose acceptance or
+dependencies do not authorize execution.
+
 The first work order installs deterministic schema agreement, single-init,
 workflow-registry, baggage-allowlist, and deny-list checks.
 

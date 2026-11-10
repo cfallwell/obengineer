@@ -113,6 +113,10 @@ Never claim that a repository script spawns agents. With two or more runnable jo
 recorded worker intervals must overlap without exceeding host capacity after the
 coordinator reservation. Do not parallelize naming or schema reconciliation. Merge
 evidence into the ledger with measured, stated, public, or derived provenance.
+Every worker interval fits its job deadline. Limited results identify nonempty
+limitations and the exact unavailable manifest scopes or outputs. Persist
+`analysis-run-timing.json` with bounded collection, reconciliation, render, validation,
+and total intervals.
 
 The production scan checks timings, status versus content, router behavior, provider
 initialization, competing agents, CSP, consent, third parties, beacons, route changes,
@@ -130,6 +134,12 @@ account boundary, bus, downstream, third party by contract consequence, initiali
 owner, SPA route behavior, and failure point. Technology and Current telemetry are
 separate review views. Prior diagrams and guides supply evidence and depth only; they
 never donate another target's taxonomy.
+
+Each Current telemetry row records application scope, observation window and read time,
+source/provenance, and volume, MetricSet, MTS, and SignalFlow evidence. When those
+portfolio checks cannot be obtained, record an explicit `unavailable` disposition and
+reason rather than an empty field. Every workflow records repository-relative code
+locations.
 
 ### 4. Design from use cases inward
 
@@ -156,6 +166,9 @@ verification. Label every join `continue-trace`, `span-link`, or `attribute-pivo
 Cover only layers in evidence: deterministic guardrails, browser, identity/context,
 backend, messaging, collector, metrics/cardinality, logs, dashboards/detectors/objectives,
 release events, and verification. Order phases by dependency and trust.
+Browser attribution, message propagation, and Collector contracts each carry explicit
+applicability and evidence. Applicable contracts contain complete code/configuration;
+inapplicable contracts produce no detail page or link.
 
 ### 6. Materialize wiki and work orders
 

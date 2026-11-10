@@ -68,10 +68,10 @@ verify-wiki: ## Verify an agent wiki: links, frontmatter, counts, pointers, secr
 
 .PHONY: validate-analysis
 validate-analysis: ## Validate canonical analysis JSON and optional audited worker intervals
-	@test -n "$(CONTRACT)" || { echo "usage: make validate-analysis CONTRACT=<analysis-contract.json> [MANIFEST=<job-manifest.json> RESULTS=<worker-results-dir>] [OB_PROJECT=<repo>]"; exit 2; }
-	@contract="$(call at,$(CONTRACT))"; manifest="$(if $(MANIFEST),$(call at,$(MANIFEST)))"; results="$(if $(RESULTS),$(call at,$(RESULTS)))"; \
+	@test -n "$(CONTRACT)" || { echo "usage: make validate-analysis CONTRACT=<analysis-contract.json> [MANIFEST=<job-manifest.json> RESULTS=<worker-results-dir> TIMING=<run-timing.json>] [OB_PROJECT=<repo>]"; exit 2; }
+	@contract="$(call at,$(CONTRACT))"; manifest="$(if $(MANIFEST),$(call at,$(MANIFEST)))"; results="$(if $(RESULTS),$(call at,$(RESULTS)))"; timing="$(if $(TIMING),$(call at,$(TIMING)))"; \
 	  $(PY) skills/instrumentation-analyze/scripts/validate_analysis.py \
-	    --contract "$$contract" $${manifest:+--manifest "$$manifest"} $${results:+--results "$$results"}
+	    --contract "$$contract" $${manifest:+--manifest "$$manifest"} $${results:+--results "$$results"} $${timing:+--timing "$$timing"}
 
 .PHONY: render-analysis
 render-analysis: ## Deterministically render canonical analysis JSON as linked Markdown

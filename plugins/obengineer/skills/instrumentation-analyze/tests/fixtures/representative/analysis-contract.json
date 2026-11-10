@@ -35,6 +35,8 @@
   "architecture": {
     "narrative": "A React single-page storefront owns the only browser provider initialization and classifies client routes before starting navigation spans. The browser calls an order API in the web account; accepted requests publish through a managed event bus and queue to a worker in an integration account, which invokes fulfillment and records an acknowledgement or DLQ failure.",
     "frontend": {
+      "applicable": true,
+      "evidence": "Production route capture and source identify an interactive browser single-page application.",
       "runtimeModel": "React single-page application",
       "router": "React Router",
       "initOwner": "src/bootstrap/observability.ts",
@@ -188,6 +190,19 @@
       "component": "Browser RUM",
       "status": "partial",
       "trust": "untrusted",
+      "applicationScope": "Production Sample Storefront browser sessions on the public route families.",
+      "observedFrom": "2026-11-10T19:00:00Z",
+      "observedTo": "2026-11-10T20:00:00Z",
+      "readAt": "2026-11-10T20:10:00Z",
+      "source": "Read-only Observability Cloud RUM API",
+      "provenance": "measured",
+      "portfolioEvidence": {
+        "disposition": "available",
+        "volume": "The query returned 12500 browser spans during the bounded production window.",
+        "metricSets": "No browser route MetricSet was found for a bounded page classification.",
+        "mts": "Current browser MTS usage includes raw route values and cannot be trusted.",
+        "signalFlow": "A bounded route-volume SignalFlow query returned traffic for the selected application."
+      },
       "observed": "Initial document data arrives, but client-route identity is not refreshed and raw route values enter telemetry.",
       "gaps": [
         "No bounded page classifier runs on every client transition.",
@@ -199,6 +214,19 @@
       "component": "Application performance monitoring",
       "status": "present",
       "trust": "unverified",
+      "applicationScope": "Production Order API and Order Worker services participating in the storefront.",
+      "observedFrom": "2026-11-10T19:00:00Z",
+      "observedTo": "2026-11-10T20:00:00Z",
+      "readAt": "2026-11-10T20:11:00Z",
+      "source": "Read-only Observability Cloud APM API",
+      "provenance": "measured",
+      "portfolioEvidence": {
+        "disposition": "available",
+        "volume": "The query returned 8400 service spans across both application services.",
+        "metricSets": "Service RED MetricSets exist, but workflow and transaction tags are not indexed.",
+        "mts": "MTS inspection found service and environment dimensions without workflow identity.",
+        "signalFlow": "Service request and error SignalFlow queries returned data for the selected window."
+      },
       "observed": "Automatic HTTP spans identify services but sampled traces lack stable transaction and workflow attributes.",
       "gaps": [
         "No evidence-derived workflow registry is stamped on root and child spans.",
@@ -210,6 +238,16 @@
       "component": "Splunk platform logs and Log Observer Connect",
       "status": "partial",
       "trust": "unverified",
+      "applicationScope": "Production application indexes for the Order API and Order Worker services.",
+      "observedFrom": "2026-11-10T19:00:00Z",
+      "observedTo": "2026-11-10T20:00:00Z",
+      "readAt": "2026-11-10T20:12:00Z",
+      "source": "Read-only Splunk Platform search API",
+      "provenance": "measured",
+      "portfolioEvidence": {
+        "disposition": "unavailable",
+        "reason": "MetricSet, MTS, and SignalFlow concepts do not apply to the log-platform inventory."
+      },
       "observed": "Application logs are retained in approved indexes, while trace and span identifiers are inconsistent.",
       "gaps": [
         "Error rows cannot reliably deep-link into the corresponding APM trace.",
@@ -221,6 +259,16 @@
       "component": "Synthetics and path monitoring",
       "status": "absent",
       "trust": "unverified",
+      "applicationScope": "Public production checkout route and hosted payment dependency path.",
+      "observedFrom": "2026-11-10T19:00:00Z",
+      "observedTo": "2026-11-10T20:00:00Z",
+      "readAt": "2026-11-10T20:13:00Z",
+      "source": "Read-only Observability Cloud Synthetics API",
+      "provenance": "measured",
+      "portfolioEvidence": {
+        "disposition": "unavailable",
+        "reason": "No matching synthetic checks or path tests existed, so no volume or metric evidence was available."
+      },
       "observed": "No independent checkout canary or public-path test was present in the supplied telemetry inventory.",
       "gaps": [
         "A silent route failure has no independent transaction probe.",
@@ -531,6 +579,10 @@
       "dashboardId": "order-submission",
       "detectorIds": ["order-error-rate"],
       "objectiveIds": ["order-success"],
+      "codeLocations": [
+        "src/routes/checkout/payment.tsx:24-118",
+        "services/order-api/src/payment.ts:40-136"
+      ],
       "verification": [
         "A controlled authorization exposes started and completed events with no payment credential fields.",
         "The p90 duration query groups only by the approved environment, market, and provider dimensions."
@@ -628,6 +680,10 @@
       "dashboardId": "order-submission",
       "detectorIds": ["order-error-rate", "order-silent-outage"],
       "objectiveIds": ["order-success"],
+      "codeLocations": [
+        "services/order-api/src/orders.ts:52-184",
+        "services/order-worker/src/consume.ts:31-172"
+      ],
       "verification": [
         "A controlled message keeps one trace id from producer through fulfillment and carries the allowlisted baggage keys.",
         "A DLQ redrive starts a new trace with a link to the original and increments only bounded failure dimensions."
@@ -655,6 +711,8 @@
   "contracts": {
     "singleInit": "The host bootstrap is the only artifact that initializes browser telemetry, installs the allowlisted stamp processor, captures attribution, and subscribes to route changes. Route modules consume the shared API and never initialize another provider or application name.",
     "spaRoutes": {
+      "applicable": true,
+      "evidence": "Observed client-side route transitions require bounded page classification and navigation spans.",
       "owner": "src/bootstrap/observability.ts",
       "classifier": "The pure classifier maps known route families to catalog, checkout, confirmation, or unknown-safe enums; raw paths remain trace-only and never become dimensions.",
       "navigationSpan": "route.change",
@@ -717,9 +775,15 @@
       "spanProcessor": "const KEYS = ['sample.bt', 'workflow.name', 'sample.market', 'sample.account-id'];\nexport class BaggageStampProcessor {\n  onStart(span, context) {\n    const baggage = propagation.getBaggage(context);\n    for (const key of KEYS) {\n      const entry = baggage?.getEntry(key);\n      if (entry) span.setAttribute(key, entry.value.slice(0, 64));\n    }\n  }\n}",
       "identityWrite": "export function onIdentitySuccess(accountId) {\n  const safeId = String(accountId).slice(0, 64);\n  rum.setGlobalAttributes({ 'sample.account-id': safeId, 'enduser.id': safeId });\n  setAllowedBaggageEntry('sample.account-id', safeId);\n}",
       "backendPropagator": "const sdk = new NodeSDK({\n  textMapPropagator: new CompositePropagator({\n    propagators: [new W3CTraceContextPropagator(), new W3CBaggagePropagator()]\n  }),\n  spanProcessors: [new BaggageStampProcessor(), batchProcessor]\n});\nsdk.start();",
-      "messagePropagation": "export function publish(message) {\n  propagation.inject(context.active(), message.attributes, messageSetter);\n  return bus.send(message);\n}\nexport function consume(record) {\n  const extracted = propagation.extract(context.active(), record.attributes, messageGetter);\n  return context.with(extracted, () => processOrder(record));\n}\nexport function redrive(record) {\n  const original = propagation.extract(context.active(), record.originalTrace, messageGetter);\n  const link = { context: trace.getSpanContext(original), attributes: { 'messaging.operation': 'redrive' } };\n  return tracer.startActiveSpan('order.dlq.redrive', { links: [link] }, span => processRedrive(record).finally(() => span.end()));\n}"
+      "messagePropagation": {
+        "applicable": true,
+        "evidence": "The architecture inventory contains a cross-account event bus and queue boundary.",
+        "code": "export function publish(message) {\n  propagation.inject(context.active(), message.attributes, messageSetter);\n  return bus.send(message);\n}\nexport function consume(record) {\n  const extracted = propagation.extract(context.active(), record.attributes, messageGetter);\n  return context.with(extracted, () => processOrder(record));\n}\nexport function redrive(record) {\n  const original = propagation.extract(context.active(), record.originalTrace, messageGetter);\n  const link = { context: trace.getSpanContext(original), attributes: { 'messaging.operation': 'redrive' } };\n  return tracer.startActiveSpan('order.dlq.redrive', { links: [link] }, span => processRedrive(record).finally(() => span.end()));\n}"
+      }
     },
     "attribution": {
+      "applicable": true,
+      "evidence": "The browser route accepts campaign parameters and the engagement requires attribution continuity.",
       "trigger": "The host captures attribution exactly once per browser session after consent and before the first workflow request.",
       "event": "session.ad-attribution",
       "firstTouch": "Persist the first bounded source and medium in local storage for cross-session comparison.",
@@ -758,6 +822,8 @@
       }
     ],
     "collector": {
+      "applicable": true,
+      "evidence": "Deployment values and active pipeline exports identify an OpenTelemetry Collector gateway.",
       "placement": "A gateway Collector receives browser and service OTLP before the Observability Cloud and approved log exporters.",
       "processorOrder": ["memory_limiter", "transform/derive", "attributes/redact", "spanmetrics", "batch"],
       "ottl": "processors:\n  transform/derive:\n    error_mode: ignore\n    trace_statements:\n      - context: span\n        statements:\n          - set(attributes[\"sample.market\"], \"DEFAULT\") where attributes[\"sample.market\"] == nil\n          - set(attributes[\"page.type\"], \"other\") where attributes[\"page.type\"] == nil\nservice:\n  pipelines:\n    traces:\n      processors: [memory_limiter, transform/derive, attributes/redact, spanmetrics, batch]",

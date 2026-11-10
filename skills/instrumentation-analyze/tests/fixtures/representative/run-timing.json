@@ -1,0 +1,24 @@
+{
+  "schemaVersion": 1,
+  "analysisId": "sample-storefront-V1",
+  "startedAt": "2026-11-10T20:00:00Z",
+  "completedAt": "2026-11-10T20:18:30Z",
+  "phases": {
+    "collection": {
+      "startedAt": "2026-11-10T20:00:00Z",
+      "completedAt": "2026-11-10T20:09:30Z"
+    },
+    "reconciliation": {
+      "startedAt": "2026-11-10T20:09:30Z",
+      "completedAt": "2026-11-10T20:13:30Z"
+    },
+    "render": {
+      "startedAt": "2026-11-10T20:13:30Z",
+      "completedAt": "2026-11-10T20:16:30Z"
+    },
+    "validation": {
+      "startedAt": "2026-11-10T20:16:30Z",
+      "completedAt": "2026-11-10T20:18:30Z"
+    }
+  }
+}

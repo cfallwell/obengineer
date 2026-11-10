@@ -62,6 +62,15 @@ EMPTY_HEADING = re.compile(
 )
 
 
+def lexical_quality(text: str, minimum_unique: int = 5) -> bool:
+    tokens = re.findall(r"[A-Za-z][A-Za-z0-9_.-]*", text.casefold())
+    if len(set(tokens)) < minimum_unique:
+        return False
+    if tokens and max(tokens.count(token) for token in set(tokens)) / len(tokens) > 0.6:
+        return False
+    return re.search(r"(.)\1{11,}", text, re.S) is None
+
+
 def resolve_link(source: Path, raw: str) -> Path | None:
     target = raw.strip().split("#", 1)[0]
     if not target or target.startswith(("http://", "https://", "mailto:")):
@@ -102,7 +111,11 @@ def check(
         index_text,
         re.M | re.S | re.I,
     )
-    if not architecture or len(architecture.group("body").strip()) < 160:
+    if (
+        not architecture
+        or len(architecture.group("body").strip()) < 160
+        or not lexical_quality(architecture.group("body"))
+    ):
         failures.append("index.md Architecture summary must be substantive and visible")
     if not re.search(
         r"\|\s*Priority findings\s*\|\s*Primary use cases\s*\|",
@@ -143,8 +156,8 @@ def check(
             failures.append(f"{relative}: unresolved placeholder or empty-subject marker")
         prose = re.sub(r"```.*?```", "", text, flags=re.S)
         prose = re.sub(r"\[[^\]]+\]\([^)]+\)", "", prose)
-        prose = re.sub(r"[#*|`\-\s]", "", prose)
-        if len(prose) < 120:
+        condensed = re.sub(r"[#*|`\-\s]", "", prose)
+        if len(condensed) < 120 or not lexical_quality(prose):
             failures.append(f"{relative}: page has insufficient substantive content")
         if EMPTY_HEADING.search(text):
             failures.append(f"{relative}: contains an empty heading")
