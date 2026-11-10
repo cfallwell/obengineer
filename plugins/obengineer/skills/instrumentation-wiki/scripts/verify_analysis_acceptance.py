@@ -10,6 +10,7 @@ import json
 import re
 import subprocess
 import sys
+import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -215,59 +216,259 @@ def content_digest(repo: Path, paths: list[Path]) -> str:
     return digest.hexdigest()
 
 
+def bytes_digest(artifacts: dict[str, bytes]) -> str:
+    digest = hashlib.sha256()
+    for relative in sorted(artifacts):
+        digest.update(relative.encode())
+        digest.update(b"\0")
+        digest.update(artifacts[relative])
+        digest.update(b"\0")
+    return digest.hexdigest()
+
+
+def _analysis_parts(
+    repo: Path, analysis: Path, version: str
+) -> tuple[Path | None, str | None, list[str]]:
+    repo = repo.resolve()
+    candidate = analysis if analysis.is_absolute() else repo / analysis
+    candidate = candidate.resolve()
+    try:
+        relative = candidate.relative_to(repo)
+    except ValueError:
+        return None, None, ["analysis path must be inside the repository"]
+    parts = relative.parts
+    if (
+        len(parts) != 6
+        or parts[:3] != ("docs", "observability", "analysis")
+        or parts[4] != version
+        or parts[5] != "index.md"
+    ):
+        return None, None, [
+            "analysis path must be "
+            "docs/observability/analysis/<app>/V<N>/index.md"
+        ]
+    return relative, parts[3], []
+
+
+def commit_artifacts(
+    repo: Path,
+    analysis: Path,
+    version: str,
+    commit: str,
+    schema_version: int = 2,
+) -> tuple[dict[str, bytes], list[str]]:
+    relative, app, failures = _analysis_parts(repo, analysis, version)
+    if failures:
+        return {}, failures
+    assert relative is not None and app is not None
+    try:
+        resolved = git(
+            repo, "rev-parse", "--verify", f"{commit}^{{commit}}"
+        ).decode().strip()
+        if resolved != commit:
+            return {}, ["analysis_content_commit did not resolve exactly"]
+        analysis_root = relative.parent.as_posix()
+        wiki_root = (
+            Path("wiki/apps") / app / "versions" / version
+        ).as_posix()
+        listed = git(
+            repo,
+            "ls-tree",
+            "-r",
+            "--name-only",
+            commit,
+            "--",
+            analysis_root,
+            wiki_root,
+            *(f"docs/observability/{name}" for name in V2_COMPANIONS),
+        ).decode().splitlines()
+    except ValueError as exc:
+        return {}, [f"analysis content commit is not available: {exc}"]
+
+    selected = {
+        path for path in listed
+        if path != f"{analysis_root}/acceptance.yaml"
+    }
+    if not any(path.startswith(f"{analysis_root}/") for path in selected):
+        failures.append(
+            f"analysis content commit has no analysis tree at {analysis_root}"
+        )
+    if not any(path.startswith(f"{wiki_root}/") for path in selected):
+        failures.append(
+            f"analysis content commit has no versioned wiki at {wiki_root}"
+        )
+    required_companions = V2_COMPANIONS if schema_version == 2 else COMPANIONS
+    for name in required_companions:
+        path = f"docs/observability/{name}"
+        if path not in selected:
+            failures.append(f"analysis content commit is missing {path}")
+    if failures:
+        return {}, failures
+
+    artifacts: dict[str, bytes] = {}
+    for path in sorted(selected):
+        try:
+            artifacts[path] = git(repo, "show", f"{commit}:{path}")
+        except ValueError as exc:
+            failures.append(f"cannot read {path} from analysis content commit: {exc}")
+    return artifacts, failures
+
+
+def _selected_versions(repo: Path) -> dict[str, str]:
+    selected: dict[str, str] = {}
+    wiki_root = repo / "wiki" / "apps"
+    if not wiki_root.is_dir():
+        return selected
+    leading = re.compile(
+        r"(?i)\b(?:accepted|active|selected)(?:[-_ ]+version)?\b"
+        r"\s*(?::|—|-)\s*(?:\*\*)?(?:\[)?(V[1-9][0-9]*)(?:\])?"
+    )
+    version_token = re.compile(r"(?i)\bV[1-9][0-9]*\b")
+    active_status = re.compile(r"(?i)\b(?:accepted|active|selected)\b")
+    for index in sorted(wiki_root.glob("*/index.md")):
+        matches: set[str] = set()
+        for line in index.read_text(encoding="utf-8").splitlines():
+            match = leading.search(line)
+            if match:
+                matches.add(match.group(1).upper())
+                continue
+            statuses = list(active_status.finditer(line))
+            versions = list(version_token.finditer(line))
+            for status in statuses:
+                preceding = [
+                    version for version in versions
+                    if version.end() <= status.start()
+                ]
+                if preceding and status.start() - preceding[-1].end() <= 80:
+                    matches.add(preceding[-1].group().upper())
+        if len(matches) == 1:
+            selected[index.parent.name] = matches.pop()
+    return selected
+
+
+def _is_selected_version(repo: Path, app: str, version: str) -> bool:
+    selected = _selected_versions(repo).get(app)
+    if selected is not None:
+        return selected == version
+    candidates = list(
+        (repo / "docs" / "observability" / "analysis" / app).glob(
+            "V*/acceptance.yaml"
+        )
+    )
+    return len(candidates) == 1 and candidates[0].parent.name == version
+
+
+def _verify_companions(artifacts: dict[str, bytes]) -> list[str]:
+    failures: list[str] = []
+    with tempfile.TemporaryDirectory() as directory:
+        root = Path(directory)
+        for name in COMPANIONS[1:]:
+            relative = f"docs/observability/{name}"
+            if relative not in artifacts:
+                continue
+            path = root / name
+            path.write_bytes(artifacts[relative])
+            if name == "implementation-map.json":
+                found = implementation_map_verifier()(path)
+                label = "implementation map"
+            elif name == "provenance-ledger.json":
+                found = provenance_ledger_verifier()(path)
+                label = "provenance ledger"
+            else:
+                found = verification_plan_verifier()(path)
+                label = "verification plan"
+            failures.extend(f"{label}: {failure}" for failure in found)
+    return failures
+
+
 def verify(repo: Path, analysis: Path, version: str, expected_digest: str | None,
            commit: str | None = None, schema_version: int = 2) -> list[str]:
     repo = repo.resolve()
     failures: list[str] = []
-    paths, path_failures = artifact_paths(
-        repo, analysis, version, schema_version=schema_version
+    if not commit:
+        failures.append("acceptance record has no analysis_content_commit")
+        return failures
+    committed, commit_failures = commit_artifacts(
+        repo, analysis, version, commit, schema_version
     )
-    failures.extend(path_failures)
-    if expected_digest and paths:
-        actual = content_digest(repo, paths)
-        # Some schema v1 acceptances predate analysis-contract.json. Once that
-        # file appears for a newer run, preserve their original digest while
-        # allowing later v1 records that included it to remain verifiable.
-        contract = repo / "docs" / "observability" / "analysis-contract.json"
-        if actual != expected_digest and schema_version == 1 and contract in paths:
-            legacy_paths = [path for path in paths if path != contract]
-            if content_digest(repo, legacy_paths) == expected_digest:
-                actual = expected_digest
-        if actual != expected_digest:
-            failures.append(
-                f"accepted content digest differs: expected {expected_digest}, got {actual}"
-            )
-    if commit:
-        try:
-            resolved = git(repo, "rev-parse", "--verify", f"{commit}^{{commit}}").decode().strip()
-            if resolved != commit:
-                failures.append("analysis_content_commit did not resolve exactly")
-        except ValueError as exc:
-            failures.append(f"analysis content commit is not available: {exc}")
+    failures.extend(commit_failures)
+    if not committed:
+        return failures
 
-    docs = repo / "docs" / "observability"
-    implementation_map = docs / COMPANIONS[1]
-    ledger = docs / COMPANIONS[2]
-    plan = docs / COMPANIONS[3]
-    if implementation_map.is_file():
-        failures.extend(
-            f"implementation map: {failure}"
-            for failure in implementation_map_verifier()(implementation_map)
+    committed_digest = bytes_digest(committed)
+    optional_contract = "docs/observability/analysis-contract.json"
+    if (
+        expected_digest
+        and schema_version == 1
+        and committed_digest != expected_digest
+        and optional_contract in committed
+    ):
+        without_contract = {
+            path: content
+            for path, content in committed.items()
+            if path != optional_contract
+        }
+        if bytes_digest(without_contract) == expected_digest:
+            committed = without_contract
+            committed_digest = expected_digest
+    if expected_digest and committed_digest != expected_digest:
+        failures.append(
+            "analysis content commit digest differs: "
+            f"expected {expected_digest}, got {committed_digest}"
         )
-    if ledger.is_file():
-        failures.extend(
-            f"provenance ledger: {failure}"
-            for failure in provenance_ledger_verifier()(ledger)
+
+    relative, app, analysis_failures = _analysis_parts(repo, analysis, version)
+    failures.extend(analysis_failures)
+    if relative is None or app is None:
+        return failures
+    analysis_root = relative.parent.as_posix()
+    wiki_root = (Path("wiki/apps") / app / "versions" / version).as_posix()
+    selected = _is_selected_version(repo, app, version)
+    compare_current = {
+        path
+        for path in committed
+        if path.startswith(f"{analysis_root}/")
+        or path.startswith(f"{wiki_root}/")
+        or selected
+    }
+    current: dict[str, bytes] = {}
+    for path in sorted(compare_current):
+        candidate = repo / path
+        if candidate.is_file():
+            current[path] = candidate.read_bytes()
+            if current[path] != committed[path]:
+                failures.append(
+                    f"current accepted artifact differs from commit tree: {path}"
+                )
+        else:
+            failures.append(f"missing current accepted artifact: {path}")
+
+    for root in (analysis_root, wiki_root):
+        directory = repo / root
+        if directory.is_dir():
+            for candidate in directory.rglob("*"):
+                if candidate.is_file() and candidate.name != "acceptance.yaml":
+                    path = candidate.relative_to(repo).as_posix()
+                    if path not in committed:
+                        failures.append(
+                            f"current accepted content has extra artifact: {path}"
+                        )
+                        current[path] = candidate.read_bytes()
+
+    comparison = dict(committed)
+    comparison.update(current)
+    current_digest = bytes_digest(comparison)
+    if expected_digest and current_digest != expected_digest:
+        failures.append(
+            f"accepted content digest differs: expected {expected_digest}, "
+            f"got {current_digest}"
         )
-    if plan.is_file():
-        failures.extend(
-            f"verification plan: {failure}"
-            for failure in verification_plan_verifier()(plan)
-        )
+    failures.extend(_verify_companions(committed))
     return failures
 
 
 def discover_acceptance(repo: Path) -> tuple[Path | None, list[str]]:
+    repo = repo.resolve()
     root = repo / "docs" / "observability" / "analysis"
     candidates = sorted(
         path for path in root.glob("*/V*/acceptance.yaml")
@@ -278,10 +479,28 @@ def discover_acceptance(repo: Path) -> tuple[Path | None, list[str]]:
             "no acceptance record found at "
             "docs/observability/analysis/<app>/V<N>/acceptance.yaml"
         ]
-    if len(candidates) > 1:
-        rendered = [str(path.relative_to(repo)) for path in candidates]
-        return None, [f"acceptance record is ambiguous: {rendered}"]
-    return candidates[0], []
+    if len(candidates) == 1:
+        return candidates[0], []
+
+    selected = _selected_versions(repo)
+    resolved = [
+        path for path in candidates
+        if selected.get(path.parents[1].name) == path.parent.name
+    ]
+    if len(resolved) == 1:
+        return resolved[0], []
+    if selected and not resolved:
+        rendered = ", ".join(
+            f"{app}={version}" for app, version in sorted(selected.items())
+        )
+        return None, [
+            "selected accepted version has no acceptance record: " + rendered
+        ]
+    rendered = [str(path.relative_to(repo)) for path in candidates]
+    return None, [
+        "acceptance record is ambiguous; mark exactly one accepted version "
+        f"active in wiki/apps/<app>/index.md: {rendered}"
+    ]
 
 
 def main(argv=None) -> int:
@@ -318,9 +537,19 @@ def main(argv=None) -> int:
                 fields["schema_version"],
             )
         )
-        ledger = args.repo / "docs" / "observability" / "provenance-ledger.json"
-        if ledger.is_file():
-            actual = json.loads(ledger.read_text()).get("seals", {}).get(
+        committed, committed_failures = commit_artifacts(
+            args.repo,
+            Path(fields["analysis"]),
+            fields["version"],
+            fields["analysis_content_commit"],
+            fields["schema_version"],
+        )
+        failures.extend(committed_failures)
+        ledger = committed.get(
+            "docs/observability/provenance-ledger.json"
+        )
+        if ledger is not None:
+            actual = json.loads(ledger).get("seals", {}).get(
                 "analysis", {}
             ).get("digest")
             if fields.get("provenance_seal_digest") and \

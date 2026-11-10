@@ -80,11 +80,15 @@ def finish(related: Iterable[tuple[str, str]], next_link: tuple[str, str]) -> st
 class Renderer:
     def __init__(self, contract: dict[str, Any], output: Path) -> None:
         self.c = contract
-        self.output = output
+        self.output = output.resolve()
         self.written: set[Path] = set()
 
     def write(self, relative: str, text: str) -> None:
-        path = self.output / relative
+        path = (self.output / relative).resolve()
+        if not path.is_relative_to(self.output):
+            raise ValueError(
+                f"refusing to render outside version root: {relative}"
+            )
         path.parent.mkdir(parents=True, exist_ok=True)
         normalized = text.rstrip() + "\n"
         path.write_text(normalized, encoding="utf-8")
@@ -115,6 +119,11 @@ class Renderer:
         )
 
     def render(self) -> None:
+        failures = validate_contract(self.c)
+        if failures:
+            raise ValueError(
+                "refusing to render an invalid contract: " + "; ".join(failures)
+            )
         self.render_root()
         self.render_landing()
         self.render_architecture()
