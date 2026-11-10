@@ -8,8 +8,8 @@ Read the memory repository `.env` (copied from `templates/memory-repo/.env.templ
 
 | Variable | What it is |
 |---|---|
-| `SPLUNK_REALM` | Observability Cloud realm. The API base is `https://api.<realm>.signalfx.com`. There is no second base-URL variable. |
-| `SPLUNK_ACCESS_TOKEN` | Admin-level Observability Cloud API key. `Splunk_O11y_API_Key` is the same secret. |
+| `SPLUNK_REALM` | Observability Cloud realm. Resource and SignalFlow hosts are derived from it; there is no second base-URL variable. |
+| `SPLUNK_ACCESS_TOKEN` | API-scope Observability Cloud token with the least-privilege `usage` role where supported. Subscription Usage 2.0 may require an administrator; do not silently elevate. |
 | `SPLUNK_HOST` | Splunk Enterprise base URL. The same fact as `tenancy.splunk_platform_host`. |
 | `SPLUNK_TOKEN` | Splunk Enterprise API token for search and introspection. `SPLUNK_ENTERPRISE_TOKEN` is the same secret. |
 | `SPLUNK_ENTERPRISE_INDEXES` | Comma-separated Enterprise indexes the log search may use. |
@@ -25,12 +25,42 @@ If a variable is empty, an MCP server cannot be reached, or an API endpoint cann
 
 ## Servers and API endpoints
 
-Both products are required before a figure from the tenant is labelled `measured`. Each one is read through its MCP server and its API endpoint:
+Provenance is source-specific. An Observability Cloud fact is `measured` when its own MCP/API
+query succeeds even if Enterprise is unavailable, and the reverse is also true. A
+cross-product conclusion requiring both remains `Not in evidence` until both sources resolve:
 
-- `splunk-observability` and the Observability Cloud API at `https://api.<realm>.signalfx.com` — MetricSets and SignalFlow
+- `splunk-observability` plus product APIs. Resource APIs use the realm API base;
+  `https://api.<realm>.signalfx.com` is the resource API base.
+  SignalFlow executes at
+  `POST https://stream.<realm>.observability.splunkcloud.com/v2/signalflow/execute`.
 - `splunk-platform` and the Splunk Enterprise API at `SPLUNK_HOST` — search and introspection, limited to `SPLUNK_ENTERPRISE_INDEXES`
 
 Copy the MCP entries from `.mcp.optional.json`. Do not guess a command. Enabling one product is not enough: Observability Cloud does not see Enterprise indexes, and Enterprise does not see spans.
+
+## Entitlement and usage source matrix
+
+Read in this order. Record every value as a provenance-ledger fact.
+**Enforced system limits are not contractual entitlement.**
+
+| Fact | Read first | Minimum access | Fallback |
+|---|---|---|---|
+| Active/custom MTS and enforced limits | SignalFlow `sf.org.*` metrics at the stream endpoint | API token with read-only `usage` access | Subscription Usage export |
+| Contract custom-MTS entitlement | Subscription Usage UI/export or Billing evidence when available; no universal executable endpoint is assumed | `usage`, or administrator only where that tenant version requires it | Order form/account team; never substitute `sf.org.limit.*` |
+| APM trace, host, container, MMS/TMS usage | documented `sf.org.apm.*` and organization metrics | same read-only usage access | detailed usage export |
+| MMS entitlement | Subscription Usage MMS cardinality limit | `usage` or tenant-required administrator | order form; MMS is cardinality, not object slots |
+| RUM usage | documented RUM organization usage metrics | read-only usage access | RUM usage export |
+| RUM/replay contractual limits | Subscription Usage/order form | `usage` or tenant-required administrator | human-stated; replay acceptance remains explicitly human |
+| Synthetics usage | Synthetics usage metrics grouped by test type | read-only usage access | Synthetics usage export |
+| Synthetics contractual quotas | Subscription Usage/order form | `usage` or tenant-required administrator | human-stated |
+| Enterprise license quota | `GET /services/licenser/licenses` | `license_read` | order form; endpoint may be unavailable on Splunk Cloud Platform |
+| Index retention | `GET /services/data/indexes[/<name>]` | authenticated read; `indexes_list_all` only where required | admin/ACS export |
+| Log volume | `/services/search/jobs` or `/services/search/v2/jobs/export` | `search` plus exact `srchIndexesAllowed`; deny list wins | approved export; never broaden indexes |
+| ThousandEyes usage | `GET https://api.thousandeyes.com/v7/usage?aid=<group>` | View Billing / organization usage | account-team export |
+| ThousandEyes quotas | `GET https://api.thousandeyes.com/v7/quotas` | quota-management permission, which may be write-capable | Prefer contract/account-team export when granting quota-management access would violate read-only verification |
+
+When access is unavailable, ask the fallback question and label the value `stated`. When
+read and stated values conflict, preserve both ledger facts and use measured current usage
+without pretending it changes the contract.
 
 ## What to collect
 
@@ -94,11 +124,17 @@ Verified organization metrics for Infrastructure Monitoring system limits:
 | Custom MTS ceiling, 60-minute window | `sf.org.limit.customMetricMaxLimit` |
 | Custom MTS ceiling | `sf.org.limit.customMetricTimeSeries` |
 
-These are org-level. Say so unless the series is broken down by a dimension that matches `<app>`. Record both custom-MTS ceilings when both are present. They are different limits.
+These are org-level. Say so unless the series is broken down by a dimension that matches
+`<app>`. Record both custom-MTS ceilings when both are present. They are enforced limits,
+not proof of the purchased contractual entitlement.
 
-### `sf.org` usage, entitlement, and overages
+### `sf.org` usage and enforced headroom
 
-Query the metrics named in this file. Where a current metric and a limit metric both return, record the difference as the overage or the headroom. A human-typed entitlement stays `stated` until the same fact comes back from one of these metrics; then it is `measured`.
+Query the metrics named in this file. Where a current metric and a limit metric both
+return, record the difference as enforced system headroom (or limit exceedance), never as
+contractual overage. Human/order-form entitlement remains `stated` unless Billing or a
+Subscription Usage export provides that contractual fact; `sf.org.limit.*` never upgrades
+it to measured entitlement.
 
 Do not add an `sf.org.*` name that is not in this file and was not returned by the query. Extra series the MCP or the API returns are recorded under the name that source used.
 
@@ -130,7 +166,10 @@ Use `<metric>`, `<service>`, and `<app>` in anything that is written down. Do no
 
 Section 3, **Existing portfolio footprint**, gets the operational measurements: log volume, span volume, trace volume, the MetricSets that exist, and the SignalFlow cross-check. Each figure is `measured` or **Not in evidence**.
 
-Current and max MTS, `sf.org` entitlement, and overages are licensing figures. Write them into the entitlement exposure document's position-today table when that document is already required, and label the source `measured`. They do not appear in the customer document. Whether that document exists is decided in [`entitlement-exposure.md`](entitlement-exposure.md). A measured series does not by itself create it. When the document is out of scope, section 3 says the org-usage query ran or that it was **Not in evidence**, and it does not print the counts.
+Current MTS and `sf.org.limit.*` are usage/system-limit facts. Write them into the
+entitlement exposure document's position-today table when that document is required and
+label the source `measured`; compare contractual entitlement only when Billing, an export,
+or an order-form fact supplied it. They do not appear in the customer document.
 
 ## What this pass does not do
 

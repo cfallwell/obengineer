@@ -103,7 +103,7 @@ Eight things this run gets wrong if it is not deliberate about them:
 7. **Business Value Realization is section 26**, the last body section before the appendices, and it is written from three things only: the customer's `business_context`, the last twelve months of the **public record** (outage coverage, their own status history, complaints, field performance — each entry cited with URL, publication, and date), and the performance this run **measured**. Every figure carries a `stated` / `measured` / `public` / `derived` label, every claim names a workflow, indicator, or detector that exists in this document, and **no business number is ever inferred from an industry benchmark**. With no business inputs the section is still written — short, honest, coefficients named and unfilled. Spec: [`../skills/references/business-value.md`](../skills/references/business-value.md).
 8. **Entitlement prices the recommendation; it does not cap it.** Recommend what the application needs. When entitlement numbers were supplied, or a traffic baseline factor was supplied, also write `docs/observability/entitlement-exposure-<app>-<date>.md` for the **account team** — position today, what this adds with the arithmetic per row, the projected overage, the options, and a recommendation — and reference it from the customer document in exactly one document-control line, with no licensing or overage numbers in that document at all. A factor is supplied only when it is neither `unknown` nor an empty collection. When neither entitlement nor a supplied baseline exists, there is no exposure document and no assumed limit. A baseline with no entitlement is an expectation range, not an overage. Spec: [`../skills/references/entitlement-exposure.md`](../skills/references/entitlement-exposure.md). The trace-rate formula is in `cardinality-budget`; do not multiply requests per minute by spans per trace.
 
-**Cross-Cutting Attributes and Baggage Propagation is mandatory** and is the section most often dropped. Attribute-set table plus all five code subsections: provider bootstrap, the `SpanProcessor.onStart` stamp over an explicit key allowlist, the identity-success baggage write, the backend composite propagator, and producer inject / consumer extract once per bus in the architecture section. Prose saying "use baggage" does not satisfy it. If a piece does not exist in the target, keep the heading and write **Not in evidence — do not deploy** with the pattern shown anyway.
+**Cross-Cutting Attributes and Baggage Propagation is mandatory** and is the section most often dropped. Keep all five subsection headings. Load and emit code only for components in evidence; otherwise write **Not in evidence**, the enabling condition, and evidence needed. Never load every browser, identity, language, or bus variant speculatively. Context rules: [`../skills/references/context-loading.md`](../skills/references/context-loading.md).
 
 Also required, and easy to drop because they are not sections: record the tool, SDK, semconv, collector, and provider **versions** this document was designed against in `### Document control and evidence basis`, and call out any breaking change since the last run. Spec: [`../skills/references/version-currency.md`](../skills/references/version-currency.md).
 
@@ -113,6 +113,14 @@ Use `<org>.bt` as the bounded propagated global tag configured by the Splunk APM
 Transaction Global tag rule; `workflow.name` remains subordinate intent. Ask engineering
 once after analysis for unresolved repository/Jira ownership. Spec:
 [`../skills/references/implementation-work-orders.md`](../skills/references/implementation-work-orders.md).
+
+Emit `docs/observability/provenance-ledger.json` as the only machine evidence/run-state
+authority. Record context predicates and loaded references, then emit
+`docs/observability/verification-plan.json` with stable, actionable `VC-*` criteria.
+Validate both before review. Authorities:
+[`../skills/references/provenance-ledger.md`](../skills/references/provenance-ledger.md),
+[`../skills/references/context-loading.md`](../skills/references/context-loading.md), and
+[`../skills/references/verification-run.md`](../skills/references/verification-run.md).
 
 ## Acceptance
 

@@ -59,6 +59,10 @@ The renderer expects ordinary Markdown: ATX headings, pipe tables, fenced code
 blocks, `-`/`*` bullets, `1.` ordered lists, `>` blockquotes, `**bold**`,
 `` `code` ``, and `[links](url)`.
 
+`markdown-it-py==4.2.0` parses CommonMark plus pipe tables into the block/inline syntax
+tree. The `python-docx` writer consumes that tree; unsupported nodes fail rather than
+disappearing.
+
 The first line is the document title, and the title page is declared explicitly
 so prose cannot leak onto it:
 

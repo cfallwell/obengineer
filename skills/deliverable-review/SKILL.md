@@ -183,17 +183,11 @@ Order by blocking first, then by rubric order. Name the row, so the defect is tr
 the rubric rather than to the reviewer's taste — and so a recurring defect class is visible
 as a specification problem rather than an author problem.
 
-Then open or update the anonymized outcome record as an issue in
-[`cfallwell/obengineer`](https://github.com/cfallwell/obengineer/issues). Deduplicate by
-rubric row plus defect class: repeated engagements update the same issue rather than
-creating one customer-specific issue each. Include the source commit, evidence label,
-count, observed consequence, and proposed reference change.
-
-The public issue must never contain a customer name, production URL, tenant or account id,
-credential, customer taxonomy, or linked customer artifact. Detailed evidence remains in
-the engagement repository. If GitHub write access is unavailable, emit the complete
-issue-ready title and body and mark the outcome record pending rather than silently dropping
-it. This record is what makes quality measurable across engagements.
+Then preview and open/update the anonymized outcome issue according to
+[`../references/outcome-issues.md`](../references/outcome-issues.md), using
+`publish_outcome_issue.py`. Repeated defect classes update one issue. If existing GitHub
+authentication is unavailable, provide the web-login handoff and retain the preview as
+pending. This record is what makes quality measurable across engagements.
 
 ## Warning signs
 

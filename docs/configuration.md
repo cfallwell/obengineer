@@ -10,6 +10,11 @@ obengineer has four configuration layers:
 Command arguments can narrow a single invocation, but they do not replace the accepted
 contract or engagement inputs.
 
+`docs/observability/provenance-ledger.json` is the machine authority for evidence and run
+state. `verification-plan.json` defines read-only exit criteria; optional
+`verification-exclusions.json` contains only human-approved unremediable criteria bound to
+the accepted commit.
+
 ## Environment variables
 
 Copy [`templates/memory-repo/.env.template`](../templates/memory-repo/.env.template)
@@ -18,8 +23,8 @@ environment.
 
 | Variable | Used for | Effect when absent |
 |---|---|---|
-| `SPLUNK_REALM` | Observability Cloud realm; the API base is derived as `https://api.<realm>.signalfx.com`. | Observability API inventory cannot run. |
-| `SPLUNK_ACCESS_TOKEN` | Admin-level Observability Cloud API access used by the MCP integration and existing-telemetry inventory. | Observability tenant facts remain stated or “Not in evidence.” |
+| `SPLUNK_REALM` | Observability Cloud realm; resource and `https://stream.<realm>.observability.splunkcloud.com` SignalFlow hosts are derived from it. | Observability inventory cannot run. |
+| `SPLUNK_ACCESS_TOKEN` | API-scope Observability Cloud token with least-privilege read-only usage access; use administrator only when the tenant's Subscription Usage version requires it. | Observability tenant facts remain stated or “Not in evidence.” |
 | `SPLUNK_HOST` | Splunk Enterprise API base URL, such as `https://<host>:8089`. | Enterprise search and introspection cannot run. |
 | `SPLUNK_TOKEN` | Splunk Enterprise API token. | Enterprise tenant facts remain stated or “Not in evidence.” |
 | `SPLUNK_ENTERPRISE_INDEXES` | Comma-separated allowlist of indexes the analyze run may search. | Log-volume inventory is “Not in evidence”; the run does not search arbitrary indexes. |
@@ -76,6 +81,14 @@ docs/observability/engagement-inputs.yaml
 
 The complete schema and comments live in
 [`inputs/engagement-inputs.template.yaml`](../inputs/engagement-inputs.template.yaml).
+Schema v3 separates contractual entitlement, enforced limits, and MMS cardinality.
+Validate or deterministically migrate v2 with:
+
+```bash
+python3 /path/to/obengineer/skills/engagement-intake/scripts/verify_engagement_inputs.py \
+  docs/observability/engagement-inputs.yaml --migrate
+```
+
 Do not delete unknown fields. Set them to `unknown`, an empty string, or the documented
 empty collection so later runs can distinguish an explicit gap from an outdated schema.
 
@@ -177,7 +190,7 @@ Important hard controls:
 | `entitlement.rum.session_replay_accepted_in_writing: false` | Excludes always-on session replay. |
 | `entitlement.splunk_platform.log_observer_connect_entitled: false` | Excludes Log Observer Connect panels and routes those questions to supported alternatives. |
 | `observability_cloud.custom_mts_*` | Prices promoted metric dimensions against current custom MTS capacity. |
-| `mms_slots_remaining` and `tms_cardinality_ceiling` | Informs MetricSet selection and cardinality risk; the TMS value is a measured baseline, not a design cap. |
+| `mms_cardinality_entitled`, `mms_cardinality_in_use`, and `tms_cardinality_ceiling` | Informs MetricSet selection and cardinality risk; MMS is cardinality, not object slots, and the TMS value is a measured baseline rather than a design cap. |
 | RUM, Synthetics, platform, and ThousandEyes entitlement fields | Prices the matching recommendations and records unavailable licensed features. |
 
 Traffic values under `traffic_baseline.rum`, `apm`, `logs`, and
@@ -247,6 +260,7 @@ Installed commands append free-form invocation text to their run contract:
 | `/ob-generate` | Required `accept <analysis-path> at <analysis-commit-sha>`; verifies and records exact-commit acceptance before generating the wiki. |
 | `/ob-implement` | Optional bounded selector: work order, BT, workflow, use case, detector, objective, or config target. It must resolve to one accepted unified work order; if omitted, the accepted phase plan selects one. |
 | `/ob-terraform` | Application or environment focus already authorized by the accepted contract. |
+| `/ob-verify` | Optional criterion or cohort focus from the accepted verification plan; never grants mutation or remediation authority. |
 | `/ob-review` | Deliverable path; defaults to the analysis under `docs/observability/`. |
 | `/ob-render` | Markdown source path; defaults to the analysis under `docs/observability/`. |
 

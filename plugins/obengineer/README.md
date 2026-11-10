@@ -17,13 +17,14 @@ and configure the tenant as Terraform.
 | `$instrumentation-implement` | Land an accepted contract as ordered, single-concern pull requests |
 | `$observability-as-code` | Emit the contract as Terraform across the three Splunk providers, at executive, SRE, and engineer levels |
 | `$deliverable-review` | Grade a finished deliverable against the completeness bar and report defects by rubric row |
+| `$instrumentation-verify` | Verify accepted exit criteria read-only, notify humans, route remediation, and record outcomes |
 
 ## Requirements
 
-`python3` and `python-docx` for the document renderer:
+Python 3.10+, `python-docx`, pinned `markdown-it-py`, and pinned `PyYAML`:
 
 ```bash
-pip install python-docx
+pip install python-docx markdown-it-py==4.2.0 PyYAML==6.0.3
 ```
 
 The SessionStart hook checks for it and reports rather than installing anything. It

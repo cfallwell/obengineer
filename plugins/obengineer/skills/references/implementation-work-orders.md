@@ -43,6 +43,7 @@ repositories. The contract registers valid `<org>.bt` / `workflow.name` pairs.
 Analysis emits `docs/observability/implementation-map.json`. It maps every accepted
 business transaction, workflow, use case, detector, objective, and configuration slice to
 the repositories and optional Jira projects that own its implementation.
+Every `evidence` value is a stable ID from `provenance-ledger.json`, never a free-form path.
 
 Shape:
 
@@ -63,7 +64,7 @@ Shape:
       "work_order": "WO-014",
       "repositories": ["web", "graphql", "identity"],
       "mapping_status": "complete",
-      "evidence": ["diagram:c4.md", "source:web/src/routes/account.ts"]
+      "evidence": ["SRC-c4-production", "SRC-web-account-route"]
     }
   ]
 }

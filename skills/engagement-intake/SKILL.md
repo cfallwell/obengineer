@@ -86,7 +86,10 @@ engagement is for, drop those values and tell the human they were not kept.
 
 Before asking, look at the MCP servers already connected in this session.
 
-- **Splunk Observability Cloud and Splunk Enterprise are mandatory.** If either is absent, the gap report says so and points at copying that entry from `plugins/obengineer/.mcp.optional.json` with the organisation's own command. Do not invent a command. Tenant facts gathered without them are `stated`, not `measured`.
+- **Splunk Observability Cloud and Splunk Enterprise are mandatory for complete joined
+  inventory.** If either is absent, report that source-specific gap and point at its optional
+  entry. A successful query from the available product remains measured; only conclusions
+  requiring the absent source stay `Not in evidence`. Do not invent a command.
 - **Memory repository `.env`.** API keys for those two servers live in `.env`, copied from `templates/memory-repo/.env.template` in the toolkit. Tell the human to fill that file. Do not read the values into the inputs file. The variable names and the analyze pass are [`existing-telemetry.md`](../references/existing-telemetry.md).
 - **Read entitlement before asking.** When those integrations are available, read
   subscription usage, current/max MTS, MetricSet counts, and other measurable entitlement
@@ -153,7 +156,7 @@ plan does not.
 | Ask | What it prices |
 |---|---|
 | Custom MTS included, and current consumption | Every proposed dimension, charged against real headroom rather than against a guess. |
-| MMS slots remaining | Monitoring MetricSets are bounded, and a slot shortage is a feature that cannot be created rather than a bill. |
+| MMS cardinality entitled and in use | Monitoring MetricSets are bounded by cardinality, not object slots. |
 | Observed Troubleshooting MetricSet distinct-value peak, if they have one | A baseline the prediction compares against. Not a cap. Identity keys stay attribute-only either way. |
 | RUM sessions per month; replay entitled | Sampling, and whether replay may be discussed at all. |
 | Synthetics run quota and private locations | Test frequency and which locations the plan may assume. |

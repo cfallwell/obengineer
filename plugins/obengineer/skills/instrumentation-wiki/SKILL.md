@@ -45,6 +45,7 @@ Prompt: [`../../prompts/02-build-instrumentation-wiki.md`](../../prompts/02-buil
 | [`../references/incremental-runs.md`](../references/incremental-runs.md) | Whether this is a first run, a repeat, or a re-baseline. |
 | [`../references/analysis-run-lifecycle.md`](../references/analysis-run-lifecycle.md) | Exact-commit acceptance and the generation PR. |
 | [`../references/implementation-work-orders.md`](../references/implementation-work-orders.md) | App-level unified work orders, repository legs, linked PRs, and Jira fallback. |
+| [`../references/provenance-ledger.md`](../references/provenance-ledger.md) | Sealed analysis evidence and append-only generation artifacts. |
 
 ## Output
 
@@ -84,6 +85,10 @@ have dashboards built on them. Rules: [`../references/incremental-runs.md`](../r
 Verify the explicit acceptance record against the exact analysis commit before lifting
 anything. If the path or SHA is absent, stop and print the required `/ob-generate accept …`
 invocation from `analysis-run-lifecycle.md`.
+
+Validate the accepted provenance ledger and its analysis seal. Wiki `sources` and work-order
+evidence fields use ledger IDs; append generated note/artifact records without changing
+sealed entries.
 
 The analysis document is the source. Reuse its BT names, `workflow.name` strings, attribute
 keys, and finding ids exactly. Extend from new evidence; never rename for taste. If a prior

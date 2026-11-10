@@ -13,6 +13,7 @@ SELECTOR = re.compile(
     r"^(work-order|business-transaction|workflow|use-case|detector|objective|config):[^:]+$"
 )
 MAPPING_STATUS = {"complete", "incomplete"}
+LEDGER_ID = re.compile(r"^(?:SRC|FACT|CHECK|DEC|UNRES)-[A-Za-z0-9._-]+$")
 
 
 def verify(path: Path) -> list[str]:
@@ -94,6 +95,13 @@ def verify(path: Path) -> list[str]:
         evidence = target.get("evidence")
         if not isinstance(evidence, list) or not evidence:
             failures.append(f"targets[{index}].evidence is required")
+        elif not all(
+            isinstance(item, str) and LEDGER_ID.fullmatch(item)
+            for item in evidence
+        ):
+            failures.append(
+                f"targets[{index}].evidence must contain provenance-ledger ids"
+            )
 
     if len(work_orders) == 0:
         failures.append("no work-order mappings were defined")

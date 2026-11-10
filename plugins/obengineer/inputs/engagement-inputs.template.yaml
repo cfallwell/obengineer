@@ -20,7 +20,7 @@
 # secret. A login is a dummy account used for testing only. Whatever was
 # submitted must be rotated by its owner when analysis completes. unknown is valid.
 
-schema_version: 2
+schema_version: 3
 
 engagement:
   application: ""              # the identifier used in every filename and heading
@@ -161,24 +161,32 @@ tenancy:
 # ---------------------------------------------------------------------------
 entitlement:
   fit_to_entitlement: false          # true only on explicit customer request
+  provenance_fact_ids: {}            # normalized field path -> provenance-ledger fact id
+  migration_notes: []
 
   observability_cloud:
-    custom_mts_included: unknown       # licensed custom metric time series
+    custom_mts_entitled: unknown       # contractual custom metric time series
     custom_mts_in_use: unknown         # current consumption, from Org Metrics
+    custom_mts_system_limit: unknown   # enforced limit; not contractual entitlement
     hosts_licensed: unknown
+    hosts_in_use: unknown
     containers_licensed: unknown
+    containers_in_use: unknown
     traces_per_minute: unknown         # APM TAPM entitlement
-    mms_slots_remaining: unknown       # Monitoring MetricSets are a bounded resource
+    mms_cardinality_entitled: unknown
+    mms_cardinality_in_use: unknown    # MMS is cardinality, not object slots
     tms_cardinality_ceiling: unknown   # optional observed peak distinct values on an existing Troubleshooting MetricSet. A baseline for the prediction, not a cap
   rum:
     entitled: unknown
     sessions_per_month: unknown
+    sessions_in_use: unknown
     session_replay_entitled: unknown
     session_replay_accepted_in_writing: false   # cost and Core Web Vitals risk, in writing
   synthetics:
     entitled: unknown
     browser_runs_per_month: unknown
     uptime_runs_per_month: unknown
+    runs_in_use: unknown
     private_locations: []
   splunk_platform:
     entitled: unknown
@@ -188,6 +196,7 @@ entitlement:
   thousandeyes:
     entitled: unknown
     cloud_agent_units: unknown
+    cloud_agent_units_in_use: unknown
     enterprise_agents: unknown
     test_slots_available: unknown
 

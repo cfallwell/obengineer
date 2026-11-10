@@ -12,6 +12,8 @@ Run obengineer run 4 — observability as code.
    Run `python3 "{{OBENGINEER_ROOT}}/skills/instrumentation-wiki/scripts/verify_analysis_acceptance.py" --record docs/observability/analysis-<app>-<date>.acceptance.yaml --repo .`.
    **Stop if acceptance is absent or does not match** — this run configures a contract,
    it does not invent one.
+   Validate `provenance-ledger.json`, then append inventory, import, plan/schema-check,
+   refusal, and artifact records without altering sealed analysis entries.
 3. Follow `{{OBENGINEER_ROOT}}/prompts/04-generate-observability-as-code.md`.
 4. Skills: `$observability-as-code`, `$cardinality-budget`. Use only the resource names in
    `{{OBENGINEER_ROOT}}/skills/references/splunk-terraform-providers.md`.

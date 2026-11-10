@@ -80,7 +80,7 @@ the arithmetic inherits the weaker of the two.
 | Custom MTS | | | | |
 | Hosts / containers | | | | |
 | APM traces per minute | | | | |
-| MMS slots | | | | |
+| MMS cardinality | | | | |
 | RUM sessions per month | | | | |
 | Synthetics runs per month | | | | |
 | Platform GB/day | | | | |

@@ -16,12 +16,14 @@ memory or application repository; this repository remains the toolkit.
 ## Requirements
 
 - Git
-- Python 3
+- Python 3.10+
 - `python-docx` for Word document rendering
+- `markdown-it-py==4.2.0` for CommonMark parsing
+- `PyYAML==6.0.3` for engagement-input validation and migration
 - Terraform CLI when using `/ob-terraform`
 
 ```bash
-python3 -m pip install python-docx
+python3 -m pip install python-docx markdown-it-py==4.2.0 PyYAML==6.0.3
 ```
 
 ## Install
@@ -61,6 +63,7 @@ Open the memory repository in the installed host and run:
 /ob-generate accept docs/observability/analysis-<app>-<date>.md at <commit-sha>
 /ob-implement <target-selector>
 /ob-terraform
+/ob-verify
 ```
 
 The first three commands are sequential. `/ob-analyze` opens a docs-only analysis PR.
@@ -68,6 +71,8 @@ After human review and merge, a person accepts the exact reviewed commit with
 `/ob-generate accept … at …`
 before generation, implementation, or Terraform proceeds. After acceptance,
 implementation and Terraform generation can run independently.
+After deployment and the human-run Terraform apply, `/ob-verify` checks outcomes without
+mutating the tenant and routes unmet criteria to remediation.
 
 Use `/ob-review` to grade a deliverable and `/ob-render` to rebuild and verify its
 Word rendering.

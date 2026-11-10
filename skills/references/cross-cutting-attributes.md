@@ -299,9 +299,9 @@ responses at all.
 ## Not in evidence
 
 If the target has no bus, no IdP, or no browser, keep the H3 heading and write
-**Not in evidence — do not deploy yet**, then show the pattern anyway with one
-line on what would have to be true to enable it. The team gets the design the day
-the component lands instead of rediscovering this section.
+**Not in evidence**, the enabling condition, and the evidence needed to settle it.
+Do not load or emit an irrelevant browser, identity, or bus code pattern. The canonical
+pattern is loaded only when that component enters evidence.
 
 ## Verification
 

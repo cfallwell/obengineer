@@ -25,8 +25,8 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Install the two dependencies
-        run: python -m pip install python-docx pytest
+      - name: Install renderer and test dependencies
+        run: python -m pip install python-docx markdown-it-py==4.2.0 PyYAML==6.0.3 pytest
 
       # Contract tests over the agents, prompts, skills, and the wiki format, plus the
       # renderer round-trip: Markdown in, .docx out, verifier over the result. The

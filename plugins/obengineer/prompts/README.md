@@ -12,6 +12,7 @@ actually ran.
 | 2 | `/ob-generate` | [02](02-build-instrumentation-wiki.md) | Architect | Exact-commit acceptance, the agent wiki, app-level work orders, tracked versions. **No second document.** |
 | 3 | `/ob-implement` | [03](03-implement-instrumentation.md) | Implementer | Code PRs, one contract slice (or Phase 0) at a time |
 | 4 | `/ob-terraform` | [04](04-generate-observability-as-code.md) | Observability as Code | Terraform under `terraform/apps/<app>/`, plus a plan. No `apply`. |
+| 5 | `/ob-verify` | [05](05-verify-accepted-contract.md) | Verifier | Read-only tenant verification, human remediation report, ledger outcomes, and anonymized project issues |
 
 Do not skip 1→2. Do not run 3 or 4 against an analysis the human has not accepted.
 
@@ -23,6 +24,10 @@ could load without spending its context on irrelevant material.
 Runs 3 and 4 are independent of each other: instrumentation lands in application repos and
 configuration lands in a tenant, so neither blocks the other. Run 4 will refuse whatever
 run 3 has not yet delivered, by name.
+
+Run 5 follows deployed instrumentation and the human-applied Terraform plan. It is
+read-only and routes unmet criteria back to a work order, new plan, contract amendment, or
+human owner.
 
 Install the commands with [`../install.sh`](../install.sh). Without them, tell the agent
 to read the run contract and the agent file — the content is identical, only the

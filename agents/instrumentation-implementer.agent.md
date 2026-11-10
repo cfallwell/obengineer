@@ -39,6 +39,7 @@ target; these carry the reusable technique, loaded when the current slice needs 
 | Whether a meter dimension is affordable | [`../skills/cardinality-budget/SKILL.md`](../skills/cardinality-budget/SKILL.md) |
 | SDK per language, router per framework, Collector placement | [`../skills/references/platform-expertise.md`](../skills/references/platform-expertise.md) |
 | Bounded selectors, implementation map, multi-repository work orders, linked PRs, and Jira fallback | [`../skills/references/implementation-work-orders.md`](../skills/references/implementation-work-orders.md) |
+| Sealed evidence and append-only implementation proof | [`../skills/references/provenance-ledger.md`](../skills/references/provenance-ledger.md) |
 
 When the guide and one of these disagree, **the guide wins for this target** and the
 disagreement is worth reporting — it usually means the contract was written against a

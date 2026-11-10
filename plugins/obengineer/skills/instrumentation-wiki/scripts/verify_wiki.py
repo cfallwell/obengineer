@@ -199,7 +199,7 @@ def check(app: Path, repo_root: Path, index_max_lines: int) -> list[str]:
         }
         required_fields = (
             "status", "analysis", "analysis_commit", "analysis_pr",
-            "accepted_by", "accepted_at",
+            "accepted_by", "accepted_at", "provenance_seal_digest",
         )
         for field in required_fields:
             if not accepted.get(field):
@@ -223,6 +223,18 @@ def check(app: Path, repo_root: Path, index_max_lines: int) -> list[str]:
                 repo_root, Path(accepted["analysis"]), accepted["analysis_commit"]
             ):
                 failures.append(f"acceptance record {acceptance_path.name}: {failure}")
+        ledger_path = repo_root / "docs" / "observability" / "provenance-ledger.json"
+        if ledger_path.is_file() and accepted.get("provenance_seal_digest"):
+            try:
+                actual = json.loads(ledger_path.read_text()).get(
+                    "seals", {}
+                ).get("analysis", {}).get("digest")
+            except (json.JSONDecodeError, AttributeError):
+                actual = None
+            if actual != accepted["provenance_seal_digest"]:
+                failures.append(
+                    f"acceptance record {acceptance_path.name}: provenance seal mismatch"
+                )
 
     # ---- frontmatter -----------------------------------------------------
     fields: dict[Path, dict[str, str]] = {}

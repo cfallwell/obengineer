@@ -27,7 +27,7 @@ it belongs in a body section, not on the title page.
 
 The Markdown is the source of truth. Never hand-edit the .docx; re-render it.
 
-Requires: python-docx (pip install python-docx)
+Requires: python-docx and markdown-it-py 4.2.0
 """
 
 from __future__ import annotations
@@ -39,6 +39,7 @@ import sys
 from pathlib import Path
 
 try:
+    from markdown_it import MarkdownIt
     from docx import Document
     from docx.enum.table import WD_TABLE_ALIGNMENT
     from docx.enum.text import WD_ALIGN_PARAGRAPH, WD_BREAK
@@ -46,7 +47,10 @@ try:
     from docx.oxml.ns import qn
     from docx.shared import Inches, Pt, RGBColor
 except ImportError:  # pragma: no cover - dependency guard
-    sys.exit("python-docx is required: pip install python-docx")
+    sys.exit(
+        "renderer dependencies are required: "
+        "pip install python-docx markdown-it-py==4.2.0"
+    )
 
 HERE = Path(__file__).resolve().parent
 SKILL = HERE.parent
@@ -103,6 +107,7 @@ XREF = re.compile(
 )
 NUMBER = re.compile(r"\d+")
 LINK_COLOR = "0563C1"
+MARKDOWN = MarkdownIt("commonmark", {"html": True}).enable("table")
 
 
 class TemplateError(RuntimeError):
@@ -197,6 +202,19 @@ def collect_targets(lines: list[str], body_start: int, section_level: int) -> Ta
         if m:
             level = len(m.group(1))
             targets.add(level, m.group(2), level <= section_level, taken)
+    return targets
+
+
+def collect_ast_targets(tokens, section_level: int) -> Targets:
+    """Collect heading destinations from markdown-it block tokens."""
+    targets, taken = Targets(), set()
+    for index, token in enumerate(tokens):
+        if token.type != "heading_open":
+            continue
+        level = int(token.tag[1:])
+        inline = tokens[index + 1]
+        text = inline_text(inline.children)
+        targets.add(level, text, level <= section_level, taken)
     return targets
 
 
@@ -444,6 +462,129 @@ def write_inline(paragraph, text: str, base_size=None, bold=False, italic=False,
             run.font.name = BODY_FONT
 
 
+def inline_text(children) -> str:
+    """Visible text from markdown-it inline tokens, preserving placeholders."""
+    parts: list[str] = []
+    for token in children or []:
+        if token.type in ("text", "code_inline", "html_inline"):
+            parts.append(token.content)
+        elif token.type in ("softbreak", "hardbreak"):
+            parts.append(" ")
+        elif token.type == "image":
+            parts.append(token.content)
+    return "".join(parts)
+
+
+def _ast_link(paragraph, children, *, anchor=None, url=None, base_size=None,
+              bold=False, italic=False, targets=None) -> None:
+    before = list(paragraph._p)
+    write_inline_ast(
+        paragraph, children, base_size=base_size, bold=bold, italic=italic,
+        targets=targets, link_style=True,
+    )
+    moved = [el for el in list(paragraph._p) if el not in before]
+    link = OxmlElement("w:hyperlink")
+    if anchor is not None:
+        link.set(qn("w:anchor"), anchor)
+    else:
+        link.set(qn("r:id"), paragraph.part.relate_to(
+            url,
+            "http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink",
+            is_external=True,
+        ))
+    for element in moved:
+        paragraph._p.remove(element)
+        link.append(element)
+    paragraph._p.append(link)
+
+
+def write_inline_ast(paragraph, children, base_size=None, bold=False, italic=False,
+                     targets: "Targets | None" = None, link_style=False) -> None:
+    """Render markdown-it inline tokens without reparsing Markdown text."""
+    i = 0
+    children = children or []
+    while i < len(children):
+        token = children[i]
+        kind = token.type
+        if kind == "strong_open":
+            end = next(
+                (j for j in range(i + 1, len(children))
+                 if children[j].type == "strong_close"),
+                len(children),
+            )
+            write_inline_ast(
+                paragraph, children[i + 1:end], base_size, True, italic,
+                targets, link_style,
+            )
+            i = end + 1
+            continue
+        if kind == "em_open":
+            end = next(
+                (j for j in range(i + 1, len(children))
+                 if children[j].type == "em_close"),
+                len(children),
+            )
+            write_inline_ast(
+                paragraph, children[i + 1:end], base_size, bold, True,
+                targets, link_style,
+            )
+            i = end + 1
+            continue
+        if kind == "link_open":
+            depth, end = 1, i + 1
+            while end < len(children) and depth:
+                depth += children[end].type == "link_open"
+                depth -= children[end].type == "link_close"
+                end += 1
+            label = children[i + 1:end - 1]
+            href = token.attrGet("href") or ""
+            if href.startswith("#"):
+                if targets is None:
+                    raise TemplateError("anchor link cannot be resolved here")
+                anchor = targets.require_anchor(href, inline_text(label))
+                _ast_link(
+                    paragraph, label, anchor=anchor, base_size=base_size,
+                    bold=bold, italic=italic, targets=targets,
+                )
+            else:
+                _ast_link(
+                    paragraph, label, url=href, base_size=base_size,
+                    bold=bold, italic=italic, targets=targets,
+                )
+            i = end
+            continue
+        if kind == "code_inline":
+            run = paragraph.add_run(token.content)
+            set_mono(run, (base_size or 10.5) - 1.5)
+            shade(run._element.get_or_add_rPr(), INLINE_CODE_SHADE)
+            run.bold, run.italic = bold, italic
+        elif kind in ("text", "html_inline"):
+            text = token.content
+            if targets is not None and XREF.search(text):
+                write_xref_text(
+                    paragraph, text, targets, base_size=base_size,
+                    bold=bold, italic=italic,
+                )
+            else:
+                plain(
+                    paragraph, text, base_size, bold, italic, link=link_style
+                )
+        elif kind == "softbreak":
+            plain(paragraph, " ", base_size, bold, italic, link=link_style)
+        elif kind == "hardbreak":
+            paragraph.add_run().add_break()
+        elif kind in (
+            "strong_close", "em_close", "link_close",
+        ):
+            pass
+        else:
+            raise TemplateError(f"unsupported inline Markdown token: {kind}")
+        if link_style and paragraph.runs:
+            paragraph.runs[-1].font.color.rgb = RGBColor.from_string(LINK_COLOR)
+            paragraph.runs[-1].font.underline = True
+        i += 1
+
+
 # --------------------------------------------------------------------------- #
 # block builders
 # --------------------------------------------------------------------------- #
@@ -542,6 +683,52 @@ def add_table(doc, rows: list[list[str]], targets: "Targets | None" = None) -> N
             para.paragraph_format.space_after = Pt(1)
             write_inline(para, raw[i] if i < len(raw) else "", base_size=8.5,
                          targets=targets)
+    doc.add_paragraph().paragraph_format.space_after = Pt(4)
+
+
+def add_ast_table(doc, rows: list[list], targets: "Targets | None" = None) -> None:
+    """Render rows whose cells are markdown-it inline token lists."""
+    if not rows:
+        return
+    cols = max(len(row) for row in rows)
+    table = doc.add_table(rows=1, cols=cols)
+    table.style = "Table Grid"
+    table.alignment = WD_TABLE_ALIGNMENT.CENTER
+    table.autofit = True
+    tbl_pr = table._tbl.tblPr
+    layout = OxmlElement("w:tblLayout")
+    layout.set(qn("w:type"), "autofit")
+    tbl_pr.append(layout)
+    width = OxmlElement("w:tblW")
+    width.set(qn("w:type"), "pct")
+    width.set(qn("w:w"), "5000")
+    tbl_pr.append(width)
+
+    header = table.rows[0]
+    header._tr.get_or_add_trPr().append(OxmlElement("w:tblHeader"))
+    for index in range(cols):
+        cell = header.cells[index]
+        shade(cell._tc.get_or_add_tcPr(), HEADER_SHADE)
+        paragraph = cell.paragraphs[0]
+        paragraph.paragraph_format.space_before = Pt(2)
+        paragraph.paragraph_format.space_after = Pt(2)
+        children = rows[0][index] if index < len(rows[0]) else []
+        write_inline_ast(
+            paragraph, children, base_size=8.5, bold=True, targets=None
+        )
+        for run in paragraph.runs:
+            run.font.color.rgb = RGBColor(0xFF, 0xFF, 0xFF)
+
+    for row in rows[1:]:
+        cells = table.add_row().cells
+        for index in range(cols):
+            paragraph = cells[index].paragraphs[0]
+            paragraph.paragraph_format.space_before = Pt(1)
+            paragraph.paragraph_format.space_after = Pt(1)
+            children = row[index] if index < len(row) else []
+            write_inline_ast(
+                paragraph, children, base_size=8.5, targets=targets
+            )
     doc.add_paragraph().paragraph_format.space_after = Pt(4)
 
 
@@ -772,9 +959,11 @@ def build(md_path: Path, out_path: Path, *, section_level: int = 2,
         len(lines),
     )
     fields = parse_title_page(lines, body_start)
+    body_source = "\n".join(lines[body_start:])
+    tokens = MARKDOWN.parse(body_source)
     # Read every heading first: a reference to Appendix E resolves from
     # page 3, which it cannot do if the targets are discovered as they arrive.
-    targets = collect_targets(lines, body_start, section_level)
+    targets = collect_ast_targets(tokens, section_level)
 
     section = doc.sections[0]
     add_first_page_header(section, spec, fields.get("header", ""), banner)
@@ -794,43 +983,18 @@ def build(md_path: Path, out_path: Path, *, section_level: int = 2,
               "xrefs": 0}
     section_headings = []
     heading_index = 0
-    i = body_start
-    while i < len(lines):
-        line = lines[i]
+    i = 0
+    list_stack: list[str] = []
+    list_marker: str | None = None
+    quote_depth = 0
+    while i < len(tokens):
+        token = tokens[i]
+        kind = token.type
 
-        if line.startswith("```"):
-            language = line[3:].strip()
-            i += 1
-            block: list[str] = []
-            while i < len(lines) and not lines[i].startswith("```"):
-                block.append(lines[i])
-                i += 1
-            i += 1
-            add_code_block(doc, block, language)
-            counts["code_blocks"] += 1
-            continue
-
-        if line.startswith("|"):
-            rows = []
-            while i < len(lines) and lines[i].startswith("|"):
-                rows.append(split_row(lines[i]))
-                i += 1
-            if len(rows) >= 2:
-                add_table(doc, rows, targets)
-                counts["tables"] += 1
-            continue
-
-        i += 1
-        if not line.strip() or line.startswith("<!--"):
-            continue
-
-        m = re.match(r"^(#{1,6}) +(.*)$", line)
-        if m:
-            md_level = len(m.group(1))
+        if kind == "heading_open":
+            inline = tokens[i + 1]
+            md_level = int(token.tag[1:])
             is_section = md_level <= section_level
-            # The Markdown title owns the title page, so a top-level Markdown
-            # section maps to Word Heading 1 and the contents list reads the way
-            # the approved document does.
             word_level = max(1, min(md_level - 1, 4)) if section_level >= 2 \
                 else max(1, min(md_level, 4))
             para = doc.add_heading(level=word_level)
@@ -841,79 +1005,109 @@ def build(md_path: Path, out_path: Path, *, section_level: int = 2,
                 force_page_break_before(para)
                 section_headings.append(para)
                 counts["sections"] += 1
-            # Headings are link destinations, not link sources: a bookmark, and
-            # no cross-reference scan, so a heading named "Appendix B" does not
-            # link to itself.
-            write_inline(para, m.group(2))
-            add_bookmark(para, targets.order[heading_index]["bookmark"],
-                         heading_index + 1)
+            write_inline_ast(para, inline.children)
+            add_bookmark(
+                para, targets.order[heading_index]["bookmark"], heading_index + 1
+            )
             heading_index += 1
             counts["headings"] += 1
+            i += 3
             continue
 
-        if re.match(r"^(---+|\*\*\*+|___+)$", line.strip()):
+        if kind in ("fence", "code_block"):
+            add_code_block(doc, token.content.split("\n"), token.info.strip())
+            counts["code_blocks"] += 1
+            i += 1
             continue
 
-        if line.startswith("> "):
-            quote = [line[2:].strip()]
-            while i < len(lines) and lines[i].startswith("> "):
-                quote.append(lines[i][2:].strip())
+        if kind == "table_open":
+            rows: list[list] = []
+            row: list = []
+            i += 1
+            while i < len(tokens) and tokens[i].type != "table_close":
+                current = tokens[i]
+                if current.type == "tr_open":
+                    row = []
+                elif current.type in ("th_open", "td_open"):
+                    if i + 1 < len(tokens) and tokens[i + 1].type == "inline":
+                        row.append(tokens[i + 1].children or [])
+                elif current.type == "tr_close":
+                    rows.append(row)
                 i += 1
-            para = doc.add_paragraph()
-            para.paragraph_format.left_indent = Inches(0.3)
-            para.paragraph_format.space_before = Pt(6)
-            shade(para._p.get_or_add_pPr(), NOTE_SHADE)
-            write_inline(para, " ".join(quote), base_size=10, targets=targets)
+            add_ast_table(doc, rows, targets)
+            counts["tables"] += 1
+            i += 1
             continue
 
-        # Prose wraps across source lines, and a **bold span** or `code span`
-        # may wrap with it. Rejoin the continuation lines before parsing inline
-        # markers, or an unbalanced half-marker prints literally.
-        def take_continuation() -> str:
-            nonlocal i
-            parts: list[str] = []
-            while i < len(lines):
-                nxt = lines[i]
-                if (not nxt.strip()
-                        or nxt.startswith(("```", "|", "> ", "#", "<!--"))
-                        or re.match(r"^\s*(?:[-*+]|\d+\.) +", nxt)
-                        or re.match(r"^(---+|\*\*\*+|___+)$", nxt.strip())):
-                    break
-                parts.append(nxt.strip())
+        if kind in ("bullet_list_open", "ordered_list_open"):
+            list_stack.append("ordered" if kind.startswith("ordered") else "bullet")
+            i += 1
+            continue
+        if kind in ("bullet_list_close", "ordered_list_close"):
+            list_stack.pop()
+            i += 1
+            continue
+        if kind == "list_item_open":
+            list_marker = token.info or None
+            i += 1
+            continue
+        if kind == "list_item_close":
+            list_marker = None
+            i += 1
+            continue
+        if kind == "blockquote_open":
+            quote_depth += 1
+            i += 1
+            continue
+        if kind == "blockquote_close":
+            quote_depth -= 1
+            i += 1
+            continue
+
+        if kind == "paragraph_open":
+            inline = tokens[i + 1]
+            if list_stack and list_stack[-1] == "bullet":
+                para = doc.add_paragraph(
+                    style="List Bullet 2" if len(list_stack) > 1 else "List Bullet"
+                )
+                para.paragraph_format.space_after = Pt(3)
+            elif list_stack and list_stack[-1] == "ordered":
+                para = doc.add_paragraph()
+                para.paragraph_format.left_indent = Inches(0.5)
+                para.paragraph_format.first_line_indent = Inches(-0.25)
+                para.paragraph_format.space_after = Pt(3)
+                run = para.add_run(f"{list_marker or '1'}.\t")
+                run.bold = True
+                run.font.name = BODY_FONT
+            else:
+                para = doc.add_paragraph()
+            if quote_depth:
+                para.paragraph_format.left_indent = Inches(0.3)
+                para.paragraph_format.space_before = Pt(6)
+                shade(para._p.get_or_add_pPr(), NOTE_SHADE)
+            write_inline_ast(
+                para, inline.children, base_size=10 if quote_depth else None,
+                targets=targets,
+            )
+            i += 3
+            continue
+
+        if kind == "html_block":
+            if token.content.strip().startswith("<!--"):
                 i += 1
-            return " ".join(parts)
-
-        m = re.match(r"^(\s*)[-*+] +(.*)$", line)
-        if m:
-            nested = len(m.group(1)) >= 2
-            para = doc.add_paragraph(
-                style="List Bullet 2" if nested else "List Bullet")
-            para.paragraph_format.space_after = Pt(3)
-            write_inline(para, " ".join(filter(None,
-                                              [m.group(2), take_continuation()])),
-                         targets=targets)
+                continue
+            raise TemplateError(
+                "unsupported block HTML would be omitted: "
+                + token.content.strip()[:80]
+            )
+        if kind in (
+            "hr", "thead_open", "thead_close", "tbody_open",
+            "tbody_close", "tr_open", "tr_close", "th_open", "th_close",
+            "td_open", "td_close", "paragraph_close", "heading_close", "inline",
+        ):
+            i += 1
             continue
-
-        m = re.match(r"^(\s*)(\d+)\. +(.*)$", line)
-        if m:
-            # The literal source number, not Word auto-numbering: a single
-            # "List Number" style keeps counting across every list in the
-            # document instead of restarting at each one.
-            para = doc.add_paragraph()
-            para.paragraph_format.left_indent = Inches(0.5)
-            para.paragraph_format.first_line_indent = Inches(-0.25)
-            para.paragraph_format.space_after = Pt(3)
-            run = para.add_run(f"{m.group(2)}.\t")
-            run.bold = True
-            run.font.name = BODY_FONT
-            write_inline(para, " ".join(filter(None,
-                                              [m.group(3), take_continuation()])),
-                         targets=targets)
-            continue
-
-        write_inline(doc.add_paragraph(),
-                     " ".join(filter(None, [line.strip(), take_continuation()])),
-                     targets=targets)
+        raise TemplateError(f"unsupported block Markdown token: {kind}")
 
     # ---- the guarantee ----------------------------------------------------
     missing = [p.text[:60] for p in section_headings if not has_page_break_before(p)]

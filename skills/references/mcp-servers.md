@@ -118,11 +118,22 @@ The analyze inventory of logs, spans, traces, MetricSets, MTS, and `sf.org` usag
 tables above. The environment variable names are in that procedure and in
 `plugins/obengineer/.mcp.optional.json`. This file does not repeat the queries.
 
+## Verification access
+
+`/ob-verify` uses only list/get/search/query tools required by accepted criteria. It may
+read Observability Cloud, approved Enterprise indexes, ThousandEyes tests/results,
+repository checks, and Terraform plan/state evidence supplied by the human.
+
+It must refuse create/update/delete, detector enable/disable, Terraform apply, deploy,
+credential rotation, issue publication before preview, and repository merge. Outcome issue
+publication is a separate sanitized GitHub write governed by `outcome-issues.md`, not a
+tenant permission.
+
 ## Simple setup
 
 The developer environment is the configuration. Connected MCP servers are the
-inventory. Splunk Observability Cloud and Splunk Enterprise remain mandatory
-for a tenant fact to be labelled `measured`. Everything else is used when it
+inventory. Each product can independently produce measured facts; both are required only
+for conclusions joining Observability and Enterprise. Everything else is used when it
 is already there. At intake the human names the developer tools they use.
 Instrumentation scope is authorized later, by engineering, against the
 accepted contract.

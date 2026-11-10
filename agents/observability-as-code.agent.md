@@ -16,6 +16,7 @@ session loads what the current step needs instead of the whole discipline:
 | Whether a `group by` dimension exists at all | [`../skills/cardinality-budget/SKILL.md`](../skills/cardinality-budget/SKILL.md) |
 | Which platform answers which question | [`../skills/references/portfolio-decision-engine.md`](../skills/references/portfolio-decision-engine.md) |
 | Exact-commit acceptance | [`../skills/references/analysis-run-lifecycle.md`](../skills/references/analysis-run-lifecycle.md) |
+| Sealed evidence and append-only tenant/plan proof | [`../skills/references/provenance-ledger.md`](../skills/references/provenance-ledger.md) |
 
 ## Identity
 

@@ -10,6 +10,7 @@ verifier that cannot fail is decoration.
 from __future__ import annotations
 
 import importlib.util
+import hashlib
 import json
 import subprocess
 import sys
@@ -136,7 +137,31 @@ def wiki(tmp_path: Path) -> Path:
             "work_order": "01-the-shared-library",
             "repositories": ["payments"],
             "mapping_status": "complete",
-            "evidence": ["source:src/checkout.ts"],
+            "evidence": ["SRC-checkout-route"],
+        }],
+    }))
+    empty_digest = hashlib.sha256(b"[]").hexdigest()
+    (docs / "provenance-ledger.json").write_text(json.dumps({
+        "schema_version": 1,
+        "engagement": {"application": "app"},
+        "contract": {"sealed_ids": []},
+        "context_profile": {"predicates": {}, "loaded_references": []},
+        "sources": [{"id": "SRC-checkout-route"}],
+        "facts": [], "runs": [], "checks": [], "artifacts": [],
+        "decisions": [], "unresolved": [],
+        "seals": {"analysis": {"ids": [], "digest": empty_digest}},
+    }))
+    (docs / "verification-plan.json").write_text(json.dumps({
+        "schema_version": 1,
+        "criteria": [{
+            "id": "VC-001", "source_section": 17, "system": "repository",
+            "query": {"kind": "contract-check", "reference": "SRC-checkout-route"},
+            "expected": {"operator": "equals", "value": True},
+            "observation_window": "PT1M", "owner": "engineering",
+            "remediation": {
+                "route": "implementation", "selector": "work-order:WO-001",
+                "instructions": "Run WO-001 and recheck.",
+            },
         }],
     }))
     subprocess.run(["git", "-C", str(root), "init", "-q"], check=True)
@@ -167,6 +192,7 @@ def wiki(tmp_path: Path) -> Path:
         "accepted_at: 2026-01-01T00:00:00Z\n"
         "qualifications: []\n"
         "rejected_decisions: []\n"
+        f"provenance_seal_digest: {empty_digest}\n"
     )
     (root / ".cursor" / "rules").mkdir(parents=True)
     (root / ".cursor" / "rules" / "obengineer-wiki.mdc").write_text(

@@ -63,7 +63,7 @@ this tag cost *here*".
 Compare the total of all proposed promotions against:
 
 ```
-headroom = custom_mts_included - custom_mts_in_use
+headroom = custom_mts_entitled - custom_mts_in_use
 ```
 
 and keep a reserve — the estate grows, and a promotion is far harder to withdraw than
@@ -128,7 +128,7 @@ promotion. Add the two only after both are computed, and label the sum.
 Custom MTS from promotions stays the formula at the top of this skill. Compare each
 expectation with the matching entitlement field when that field was supplied:
 `sessions_per_month`, `traces_per_minute`, `ingest_gb_per_day`,
-`custom_mts_included - custom_mts_in_use`. Span volume has no matching field, so
+`custom_mts_entitled - custom_mts_in_use`. Span volume has no matching field, so
 it is shown and not subtracted from `traces_per_minute`. The comparison is the
 exposure document's job. This skill does not cap the design to make the comparison fit.
 
@@ -199,7 +199,10 @@ no way to see the cost, so nobody objects.
 
 ### Step 3 — Size the MetricSets, do not just name them
 
-- **Monitoring MetricSets** produce the metrics detectors and dashboards read. They are a bounded resource, and unlike MTS a shortage is not a bill — it is a MetricSet that cannot be created. Count the slots already used. If the contract needs more than `mms_slots_remaining`, say so with the number, order the promotions so the ones an SLI depends on come first, and put the shortfall in the exposure document. What must not happen is the TAM discovering the limit during configuration.
+- **Monitoring MetricSets** produce the metrics detectors and dashboards read. Budget
+  their cardinality, not a fictional count of object slots. Compare projected cardinality
+  with `mms_cardinality_entitled - mms_cardinality_in_use`, order promotions so SLI
+  dependencies come first, and put any shortfall in the exposure document.
 - **Troubleshooting MetricSets** serve Tag Spotlight and ad-hoc grouping. Cheaper, still not free. Predict their distinct values from the enum, and set `tms_cardinality_ceiling` beside that prediction when the human observed a peak. The peak is a baseline, not a cap. This is where identity-adjacent keys go when someone needs to slice by them — the honest answer to "but I need to group by tenant" is usually a TMS, not an MMS.
 - **The BT global tag is a special case.** `<org>.bt` becomes the APM Business Transaction
   Global tag rule. Name its bounded value registry and the valid subordinate
@@ -251,7 +254,9 @@ recommendation, and growth headroom. No entitlement supplied, no document.
 - **The BT global tag is described but never named.** The TAM cannot configure a Business
   Transaction rule from a description.
 - **Cardinality is discussed only as a risk.** Risk language produces exceptions. Numbers produce decisions.
-- **The contract's promotions exceed `mms_slots_remaining` and the document does not mention it.** The limit will be discovered during configuration, by the person least able to renegotiate it.
+- **The contract's promotions exceed MMS cardinality headroom and the document does not
+  mention it.** The limit will be discovered during configuration by the person least able
+  to renegotiate it.
 - **A promotion an SLI depends on quietly became attribute-only.** Something was cut to fit a budget nobody was asked about. Recommend it, price it, and let the customer choose.
 - **A licensed total or an overage figure appears in the customer document.** Wrong artifact and wrong audience; it reads as a sales motion inside a technical review.
 - **An exposure document exists with no supplied entitlement.** Every number in it is invented and it will be quoted as though it were not.

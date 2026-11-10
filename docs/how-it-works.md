@@ -114,6 +114,8 @@ Examples in canonical references describe shape with placeholders such as `<app>
 obengineer stores state in the artifact repository rather than in a chat session:
 
 - `engagement-inputs.yaml` stores human-supplied facts once;
+- `provenance-ledger.json` is the only machine authority for evidence, run state,
+  context loads, checks, artifacts, decisions, and unresolved items;
 - the analysis is the accepted customer contract;
 - `attribute-schema.json` is the machine-readable attribute and dimension contract;
 - the wiki stores one subject per note for targeted retrieval;
@@ -122,6 +124,9 @@ obengineer stores state in the artifact repository rather than in a chat session
 - `meta/run-log.md` records each analysis run;
 - `meta/decisions.md` records accepted and rejected decisions; and
 - host pointer files tell future agents to load the index and only relevant notes.
+
+Wiki run logs, evidence notes, and document control are human projections of the ledger,
+not independent machine authorities.
 
 This design makes completed runs inspectable and diffable. Acceptance is explicit and
 commit-bound: `/ob-generate accept <analysis-path> at <analysis-commit-sha>` verifies the
@@ -284,6 +289,21 @@ placeholders, unsupported items, and costs.
 
 It never applies. Configuration follows verified telemetry, and detectors start disabled
 until their signals have been observed for the agreed window.
+
+## Verification operation
+
+After deployment and human apply, `/ob-verify` executes accepted `VC-*` criteria using
+read-only tenant access. Results are `met`, `unmet`, or `unmeasurable`. Every unmet result
+notifies the human with exact remediation and recheck steps.
+
+Only a human can approve a criterion as unremediable. Approved exclusions remain in the
+human report and provenance ledger but are absent from machine result rows and denominators.
+Verification never remediates. It routes work to implementation, a new Terraform plan, a
+contract amendment, or a named owner.
+
+Outcome metrics publish numerator, denominator, and measurement coverage. Sanitized reusable
+defects are previewed and created/updated in the public project through existing authenticated
+GitHub access; absent authentication triggers a web-login handoff.
 
 ## Repeat-run behavior
 

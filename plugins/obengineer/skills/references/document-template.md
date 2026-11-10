@@ -38,7 +38,8 @@ the committed markdown is not reviewable.
 
 Also emitted: `docs/observability/attribute-schema.json`, the machine form of the attribute
 dictionary appendix, and `docs/observability/implementation-map.json`, which maps accepted
-contract targets to repository legs and optional Jira projects.
+contract targets to repository legs and optional Jira projects. The same accepted commit
+also contains `provenance-ledger.json` and `verification-plan.json`.
 
 **The lower layer is a wiki, not a second document.** Everything an agent needs that a
 customer does not read — per-BT notes, per-workflow notes, work orders, run history, tracked
@@ -278,8 +279,8 @@ this directory. Structure, in order:
    - `Messaging boundary — <bus>` — producer inject and consumer extract, once per bus in the architecture section. Baggage does **not** cross a bus by itself.
 
 If a piece genuinely does not exist in the target (no bus, no IdP), keep the H3
-and write **Not in evidence — do not deploy** with the pattern shown anyway, so
-the team has it the day the bus lands.
+and write **Not in evidence**, the enabling condition, and the evidence needed. Do not
+load or emit irrelevant code; load the canonical pattern when the component enters scope.
 
 Long variants — every bus, every language, the full generated classifier — go to
 Appendix B. The five subsections above stay here; they are the contract, not supporting
@@ -417,6 +418,13 @@ Tag Spotlight shows the tag; the MetricSet cardinality dialog is acceptable; a t
 crosses every bus with one `trace_id`; a detector could be built on the MetricSet; a
 platform search by `trace_id` returns the log; a ThousandEyes test covers the public path
 the real users take.
+
+Assign each criterion a stable `VC-<number>` id and emit it in
+`docs/observability/verification-plan.json` with source section, read-only system/query,
+expected predicate, observation window, owner, and actionable remediation route,
+selector/instructions, and recheck steps. Criteria without a remediation route are human
+notifications and cannot enter the machine result schema until a human resolves or excludes
+them. Authority: [`verification-run.md`](verification-run.md).
 
 An exit criterion that cannot be checked is a hope with a deadline attached.
 

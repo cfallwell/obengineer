@@ -255,8 +255,8 @@ def test_italics_render_as_italics_and_not_as_asterisks(rendered):
 
 
 def test_bold_and_code_spans_may_wrap_across_source_lines(tmp_path):
-    """Prose wraps at 80 columns; a **bold span** wraps with it. A line-based
-    parser sees two unbalanced halves and prints the markers literally."""
+    """Prose wraps at 80 columns; a **bold span** wraps with it. The former
+    scanner saw two unbalanced halves and printed the markers literally."""
     md = tmp_path / "wrapped.md"
     md.write_text(
         "# Title\n\n## Section\n\n"
@@ -421,6 +421,38 @@ def test_verifier_catches_a_heading_with_no_bookmark(rendered):
 def test_verifier_passes_on_a_clean_render(rendered):
     md, docx, _ = rendered
     assert verify.check(md, docx, 2) == []
+
+
+def test_commonmark_ast_handles_tilde_fence_placeholders_and_escaped_table_pipe(
+        tmp_path):
+    md = tmp_path / "commonmark.md"
+    md.write_text(
+        "# Title\n\n"
+        "## Section\n\n"
+        "The `<app>` and <org> placeholders remain literal.\n\n"
+        "| Key | Value |\n|---|---|\n| route | a \\| b |\n\n"
+        "~~~python\nprint('<app>')\n~~~\n"
+    )
+    docx = tmp_path / "commonmark.docx"
+    counts = render.build(md, docx)
+    assert counts["tables"] == 1
+    assert counts["code_blocks"] == 1
+    assert verify.check(md, docx, 2) == []
+    doc = Document(docx)
+    text = "\n".join(paragraph.text for paragraph in doc.paragraphs)
+    table_text = "\n".join(cell.text for table in doc.tables for row in table.rows
+                           for cell in row.cells)
+    assert "<app>" in text
+    assert "<org>" in text
+    assert "a | b" in table_text
+
+
+def test_unsupported_block_html_fails_instead_of_disappearing(tmp_path):
+    md = tmp_path / "html.md"
+    md.write_text("# Title\n\n## Section\n\n<div>must not disappear</div>\n")
+    with pytest.raises(render.TemplateError) as exc:
+        render.build(md, tmp_path / "html.docx")
+    assert "unsupported block HTML" in str(exc.value)
 
 
 def test_verifier_catches_a_missing_page_break(rendered):
