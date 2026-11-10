@@ -18,6 +18,9 @@ replace the compact index with expanded detail sections.
 
 If inputs do not exist, invoke `/ob-start`. Missing optional inputs do not block analysis
 and do not require the human to type `unknown`.
+Do not begin collection unless `.obengineer/run-context.json` records
+`analysis_authorized: true` and `last_event: review-no`. Only the exact `no` response at
+optional review creates that state; a `yes` selection never does.
 
 ## Evidence collection
 
@@ -35,8 +38,10 @@ Use maximum safe parallelism for independent sources:
 MCP servers supplement direct APIs. They are not the only tenant source. Record source
 provenance and reconcile facts after parallel collection.
 
-The live production scan is required unless inputs explain why no browser applies. Test
-and QA are not substitutes. A different site's scan or taxonomy is not evidence.
+The live production scan uses the explicit production URL confirmed during the first
+question and is required unless inputs say `no browser: <reason>`. Do not replace it with
+a URL discovered from source or connected systems. Test and QA are not substitutes. A
+different site's scan or taxonomy is not evidence.
 
 ## Design
 

@@ -10,6 +10,11 @@ site, schema, ledger, verification plan, versioned wiki, and complete work-order
 and immediately dispatch analysis. They do not open an input-only PR. The analysis PR
 includes and validates those changes.
 
+Dispatch is gated by the atomic local `.obengineer/run-context.json`. Its intake states
+are `new -> required -> optional-review -> optional-answers -> optional-review`.
+Selecting optional numbers never dispatches analysis. Only an exact `no` recorded in
+`optional-review` sets `analysis_authorized: true` with `last_event: review-no`.
+
 ## One branch and PR per version
 
 Normalize the application to lowercase kebab-case. Determine the next immutable uppercase

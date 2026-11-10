@@ -4,21 +4,26 @@ description: Start — collect the minimum inputs, offer optional additions, and
 
 Start or resume an obengineer engagement.
 
-1. Read `{{OBENGINEER_ROOT}}/prompts/00-manage-analysis-inputs.md` in `start`
-   mode and follow it.
-2. Use `{{OBENGINEER_ROOT}}/skills/engagement-intake/SKILL.md` to discover
-   measurable facts before asking the human. Never require the word `unknown`;
-   unanswered suggestions go to the intake-recommendations page.
-3. Ask only for the application name, current production URL when it is not
-   discoverable, and “what hurts today?” before offering the numbered optional
-   inputs.
+1. Before reading source, using the network, browsing production, or discovering MCP/API
+   tools, run:
+   `python3 "{{OBENGINEER_ROOT}}/skills/engagement-intake/scripts/manage_run_context.py" start --project-root .`
+   Ask the emitted application, explicit production URL or `no browser: <reason>`, and
+   “what hurts today?” question immediately. Do not prepend discovery or setup narration.
+2. Read `{{OBENGINEER_ROOT}}/prompts/00-manage-analysis-inputs.md` in `start`
+   mode and follow it. Securely prefill the input artifact through
+   `prefill_engagement_inputs.py`; never copy a raw password or token.
+3. After the required answer, use the skill to discover measurable optional facts.
+   Never require `unknown`; omissions go to the intake-recommendations page.
 4. Ask:
    `Would you like to add more inputs to the analysis phase?`
    Then show only useful, unanswered items under `Suggested inputs include`.
-   Accept `yes 1 3 4` or `no`. Prompt once for each selected item, in order.
-5. Validate and save the inputs, then follow
+   Send every review and answer turn through `manage_run_context.py`. Display its
+   `[x]`, `[ ]`, and `[-]` checklist. Prompt once for each selected item, in order.
+   After answers, return to optional review. `yes 1 3 4` never starts analysis.
+5. Validate and save the inputs. Follow
    `{{OBENGINEER_ROOT}}/commands/ob-analyze.md`. This command starts analysis;
-   the human does not invoke `/ob-analyze` separately.
+   the human does not invoke `/ob-analyze` separately. Dispatch only when an exact `no`
+   has produced `analysis_authorized: true` and `last_event: review-no`.
 
 The completed run opens one analysis PR. Its final chat response contains only the
 host-native side-panel documentation link followed by review, add/edit-input,

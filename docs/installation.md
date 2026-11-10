@@ -66,6 +66,19 @@ User-scoped installation omits `--project`:
 
 Restart the host after installation so it discovers the new commands and skills.
 
+Project-scoped installation also creates only missing root scaffold files:
+
+```text
+.gitignore
+.env.template
+artifacts/README.md
+```
+
+It never overwrites an existing file. `.obengineer/scaffold-manifest.json` records a
+digest only for files the installer created. Reinstall preserves edits. After the final
+installed host is removed, uninstall removes an owned scaffold file only when its digest
+is unchanged; it never removes the `artifacts/` directory or files the user added.
+
 ### Install locations
 
 | Host | User-scoped | Project-scoped |
@@ -74,9 +87,9 @@ Restart the host after installation so it discovers the new commands and skills.
 | Claude Code | `~/.claude/{skills,commands}` | `<project>/.claude/{skills,commands}` |
 | Codex | `~/.codex/skills` and `~/.codex/prompts` | `<project>/.agents/skills` and `<project>/.agents/prompts` |
 
-Each host directory receives `.obengineer-install.json`. The manifest records the
+Each host directory receives `.obengineer-install.json`. That manifest records the
 source checkout, scope, and paths created by the installer so removal is bounded to
-those paths.
+those paths. The separate project scaffold manifest is local and ignored.
 
 ### Installer options
 
@@ -119,9 +132,18 @@ Uninstall removes the replacement; it cannot restore content that existed before
 install. Review a `--dry-run` before installing into a host with custom files of the
 same names.
 
+Root scaffold files follow a stricter rule: existing files are never replaced, including
+files created by an earlier install. An owned file changed after installation is treated
+as user content and preserved during uninstall.
+
 ## 4. Configure optional read-only Splunk access
 
-No manual file editing or template copying is required. From the memory repository run:
+The project scaffold begins `.env.template` with `PRODUCTION_URL`, `TEST_LOGIN_ID`, and
+`PASSWORD_REF`, then maps optional start inputs to engagement-input fields.
+`ARTIFACTS_DIR=artifacts` is prefilled. `PASSWORD_REF` must be a `${VAR}` reference;
+there is no raw-password variable.
+
+For interactive read-only Splunk credentials, from the memory repository run:
 
 ```bash
 /path/to/obengineer/scripts/setup-splunk-access.sh

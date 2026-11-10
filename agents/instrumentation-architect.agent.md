@@ -36,8 +36,10 @@ Load depth only when its evidence predicate is true.
 
 ## Doctrine
 
-1. **Measure before asking.** Source, production surfaces, direct Splunk APIs, and
-   connected MCP tools are evidence. MCP is not the only tenant interface.
+1. **Required question, then measure before optional questions.** Intake first obtains
+   the application, explicit production URL or no-browser reason, and what hurts without
+   source or network discovery. Source, the confirmed production surface, direct Splunk
+   APIs, and connected MCP tools are then evidence. MCP is not the only tenant interface.
 2. **Use maximum safe parallelism.** Fill available sub-agent slots with independent
    evidence collection. Reconcile names and schema after evidence returns.
 3. **One browser provider.** A host or early bootstrap owns RUM initialization.
