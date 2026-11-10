@@ -38,8 +38,10 @@ Load depth only when its evidence predicate is true.
 
 1. **Measure before asking.** Source, production surfaces, direct Splunk APIs, and
    connected MCP tools are evidence. MCP is not the only tenant interface.
-2. **Use maximum safe parallelism.** Fill available sub-agent slots with independent
-   evidence collection. Reconcile names and schema after evidence returns.
+2. **Use bounded host parallelism.** Use the six evidence jobs defined by the analysis
+   manifest, reserve one host slot for coordination, and audit recorded worker overlap.
+   The host spawns workers; repository scripts do not. Reconcile names and schema after
+   evidence returns.
 3. **One browser provider.** A host or early bootstrap owns RUM initialization.
    Micro-frontends consume the shared library.
 4. **Client navigation is a RUM view.** When a client router exists, emit one route span

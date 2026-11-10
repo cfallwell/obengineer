@@ -50,13 +50,18 @@ The script prompts in the terminal, writes local `.env`, and never prints the to
 
 ## Analysis
 
-`/ob-start` automatically runs analysis V1. Independent evidence sources run with maximum
-safe sub-agent parallelism. Naming and schema reconciliation happen after evidence returns.
+`/ob-start` automatically runs analysis V1. Six bounded evidence jobs run through the
+host with one concurrency slot reserved for coordination. Repository tooling audits
+result intervals but does not spawn workers. Naming and schema reconciliation happen
+after evidence returns.
 
 The analysis PR contains:
 
 ```text
 docs/observability/analysis/<app>/V1/
+docs/observability/analysis-contract.json
+docs/observability/analysis-job-manifest.json
+docs/observability/analysis-worker-results/
 docs/observability/attribute-schema.json
 docs/observability/implementation-map.json
 docs/observability/provenance-ledger.json
@@ -97,9 +102,10 @@ Navigation remains inside the host's side panel or native document surface:
 - breadcrumbs on every page; and
 - relative links to all detail.
 
-The compact landing page includes version/status, side-panel notice, next steps, changes,
-a linked Contents table, one analysis-summary paragraph, and compact Priority Findings
-and Primary Use Cases previews. Its Contents opens separate side-panel views for:
+The long linked landing page includes version, status, next steps, changes, a substantive
+summary for every linked review area, the observed architecture directly on the landing
+page, and Priority Findings and Primary Use Cases previews. Its table of contents opens
+separate side-panel views for:
 
 1. changes in this version and next steps;
 2. analysis summary;

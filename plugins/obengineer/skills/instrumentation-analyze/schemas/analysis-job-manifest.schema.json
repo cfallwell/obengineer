@@ -1,0 +1,73 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://obengineer.dev/schemas/analysis-job-manifest.schema.json",
+  "title": "Analysis job manifest",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "analysisId",
+    "executionAuthority",
+    "repositoryCapability",
+    "hostConcurrency",
+    "jobs"
+  ],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "analysisId": { "type": "string", "pattern": "^[a-z0-9][a-z0-9-]+-V[1-9][0-9]*$" },
+    "executionAuthority": { "const": "host" },
+    "repositoryCapability": { "const": "audit-only" },
+    "hostConcurrency": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["maxConcurrentAgents", "coordinatorSlots"],
+      "properties": {
+        "maxConcurrentAgents": { "type": "integer", "minimum": 2 },
+        "coordinatorSlots": { "const": 1 }
+      }
+    },
+    "jobs": {
+      "type": "array",
+      "minItems": 6,
+      "maxItems": 6,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "title", "runnable", "evidenceScopes", "requiredOutputs"],
+        "properties": {
+          "id": {
+            "enum": [
+              "production",
+              "source-technology",
+              "diagrams-prior-artifacts",
+              "observability-cloud",
+              "platform-cloud-messaging",
+              "public-security"
+            ]
+          },
+          "title": { "type": "string", "minLength": 8 },
+          "runnable": { "type": "boolean" },
+          "evidenceScopes": {
+            "type": "array",
+            "minItems": 1,
+            "uniqueItems": true,
+            "items": { "type": "string", "minLength": 3 }
+          },
+          "requiredOutputs": {
+            "type": "array",
+            "minItems": 1,
+            "uniqueItems": true,
+            "items": { "type": "string", "minLength": 3 }
+          },
+          "skipReason": { "type": "string", "minLength": 12 }
+        },
+        "allOf": [
+          {
+            "if": { "properties": { "runnable": { "const": false } } },
+            "then": { "required": ["skipReason"] }
+          }
+        ]
+      }
+    }
+  }
+}

@@ -70,46 +70,50 @@ recommended review step.
 
 ## Landing page
 
-The approved landing page is a compact index, not the whole analysis stacked into one
-view. It represents the full strategy through one summary, linked contents, and two
-previews. Architecture, findings, strategy, path, work orders, use cases, workflows,
-transactions, contracts, operations, and reference open as separate side-panel views.
+The approved landing page is a long linked index. It does not duplicate every object
+detail, but it gives a substantive summary of every review area before linking the
+canonical detail view. A reviewer can understand the observed architecture and choose
+the next subject without opening pages blindly. **Architecture is summarized on the
+landing page itself**; it is never hidden behind the first link.
 
 Use this exact order:
 
 1. `[V1] [V2] [V3]`;
 2. breadcrumb: `Analysis`;
-3. title and one-line scope/status;
-4. **Side-panel navigation** notice: all controls remain in this panel; no browser,
-   localhost server, or high port;
-5. one contextual callout:
+3. title and substantive scope;
+4. `## Status`;
+5. one contextual `## Next steps` section:
    - **Next steps** while awaiting acceptance; or
    - **V<N> accepted — implementation can start** after acceptance;
 6. `## Changes in this version`;
-7. `## Contents`, as a three-column table: `Section | What it contains | Open`;
-8. `## Analysis summary`, one substantive paragraph;
-9. a compact two-column table whose headers are `Priority findings` and
-   `Primary use cases`, with names in the first row and **Review findings** /
-   **Review use cases** links in the second.
-
-Nothing else is expanded on the landing page.
+7. `## Table of contents and section summaries`, as a three-column table:
+   `Section | Substantive summary | Open`;
+8. `## Architecture summary`, with the observed storefront/client composition,
+   backends, accounts, buses, downstreams, third-party consequences, initialization
+   owner, SPA route behavior, and failure path;
+9. `## Priority review map`, a two-column table whose headers are `Priority findings`
+   and `Primary use cases`, with names and review links; and
+10. `## Side-panel navigation`, stating that the site uses only relative Markdown.
 
 The Contents table rows, in order, are:
 
 1. Architecture
-2. Findings
-3. Instrumentation strategy
-4. Implementation path
-5. Work orders
-6. Use cases
-7. Workflows
-8. Business transactions
-9. Shared signal contracts
-10. Operations and verification
-11. Reference
+2. Technology
+3. Current telemetry
+4. Findings
+5. Instrumentation strategy
+6. Implementation path
+7. Work orders
+8. Use cases
+9. Workflows
+10. Business transactions
+11. Shared signal contracts
+12. Operations and verification
+13. Reference
 
-Every `Open` cell links the matching detail index. Work orders link the complete
-versioned queue. There are no unlinked content rows.
+Every summary is at least one substantive sentence grounded in the matching detail.
+Every `Open` cell links the matching detail index, which must be nonempty. The local Work orders view
+summarizes and links the complete versioned queue; there are no unlinked content rows.
 
 ## Next steps
 
@@ -187,17 +191,41 @@ are `proposed`; acceptance makes them `ready`. Dependent rows remain `blocked`.
 Review in that order.
 
 A use-case summary states why it matters, the question answered, what is created, its
-workflows, business transactions, signals, dashboards, detectors, acceptance proof, and
-work orders.
+workflows, business transactions, full span and event design, bounded metrics, dashboards,
+thresholded detectors, objective and error budget, acceptance proof, and work orders.
 
-A workflow page carries boundaries, span tree, events, captured context, meters, joins,
-detectors, objective, code locations, verification, and work orders.
+A workflow page carries boundaries, span tree, events, captured context, meters with
+three to six bounded dimensions, every join labelled `continue-trace`, `span-link`, or
+`attribute-pivot`, detectors, objective, code locations, verification, and work orders.
 
 A business-transaction page carries the bounded grouping value, included workflows,
 where it is set, propagation, tenant rule, verification query, and work orders.
 
 Each direction is linked. A reviewer can move from a finding to a use case to a workflow
 to a transaction to a work order and back without searching.
+
+## Canonical JSON, orchestration, and deterministic rendering
+
+Every version is rendered from a canonical `analysis-contract.json` that conforms to
+`instrumentation-analyze/schemas/analysis-contract.schema.json`. The contract contains
+the architecture, technology, current telemetry, findings, strategy, implementation
+phases, work orders, use cases, workflows, business transactions, cross-cutting
+contracts, operations, and reference evidence. The renderer is deterministic: the same
+validated JSON produces byte-identical Markdown.
+
+Evidence collection uses `analysis-job-manifest.schema.json`. A manifest contains at
+most six fixed workstreams: production; source and technology; diagrams and prior
+artifacts; Observability Cloud; platform, cloud, and messaging; and public evidence plus
+authorized security review. The host owns worker creation. The repository **does not
+claim it can spawn agents**; it validates worker results and their recorded intervals.
+One host concurrency slot is always reserved for the coordinator. When two or more jobs
+are runnable, audited intervals must show overlap without exceeding the remaining host
+capacity.
+
+The semantic gate rejects unresolved placeholders, empty pages, missing required object
+fields, unbounded meter designs, detectors without thresholds, objectives without error
+budgets, incorrect Collector order, inconsistent cardinality arithmetic, broken links,
+and missing breadcrumbs.
 
 ## Conditional summaries
 
