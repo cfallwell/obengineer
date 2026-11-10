@@ -4,7 +4,7 @@
   "jobId": "production",
   "status": "completed",
   "startedAt": "2026-11-10T20:00:00Z",
-  "completedAt": "2026-11-10T20:08:00Z",
+  "completedAt": "2026-11-10T20:04:30Z",
   "evidence": [
     {
       "id": "EV-PROD-ROUTES",

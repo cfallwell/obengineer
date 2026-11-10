@@ -3,8 +3,8 @@
   "analysisId": "sample-storefront-V1",
   "jobId": "public-security",
   "status": "completed",
-  "startedAt": "2026-11-10T20:09:00Z",
-  "completedAt": "2026-11-10T20:12:30Z",
+  "startedAt": "2026-11-10T20:05:30Z",
+  "completedAt": "2026-11-10T20:08:30Z",
   "evidence": [
     {
       "id": "EV-SEC-HEADERS",

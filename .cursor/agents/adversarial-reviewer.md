@@ -12,7 +12,7 @@ When invoked:
    performance regressions, broken install upgrades, missing copied assets, stale mirrors,
    shallow analysis, serial work that should be parallel, broken version navigation,
    secret exposure, and changes that lose the approved analysis depth or layout.
-4. Treat the supplied architect contract and Test Customer guide as the quality floor.
+4. Treat the supplied architect contract and approved prior guide as the quality floor.
 5. Post actionable PR comments only when explicitly asked, with file, line, evidence,
    severity, and acceptance test.
 

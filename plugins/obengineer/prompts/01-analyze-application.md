@@ -39,6 +39,12 @@ jobs are runnable, their recorded intervals overlap without exceeding remaining 
 capacity. MCP servers supplement direct APIs. They are not the only tenant source.
 Record source provenance and reconcile facts after parallel collection.
 
+Use the host's subagent facility. Launch as many runnable jobs as fit
+`min(6, available host slots - 1)` in one parallel tool call before awaiting any result;
+start queued jobs as slots free. Do not perform runnable worker jobs serially in the
+coordinator. If the host cannot run subagents, keep the PR draft and report the analysis
+as blocked rather than presenting a serial shallow run as complete.
+
 The live production scan uses the explicit production URL confirmed during the first
 question and is required unless inputs say `no browser: <reason>`. Do not replace it with
 a URL discovered from source or connected systems. Test and QA are not substitutes. A

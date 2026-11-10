@@ -90,6 +90,34 @@ def test_prefill_preserves_existing_human_values(tmp_path):
     assert result["engagement"]["application"] == "existing-app"
 
 
+def test_prefill_replaces_template_defaults_and_explicit_edit_replaces_existing(tmp_path):
+    output = tmp_path / "inputs.yaml"
+    output.write_text(prefill.DEFAULT_TEMPLATE.read_text())
+
+    prefill.prefill(
+        tmp_path,
+        output,
+        supplied={
+            "SECURITY_ASSESSMENT_MODE": "none",
+            "PUBLIC_RESEARCH_ALLOWED": "true",
+            "ANALYSIS_PERCENTILE": "p99",
+        },
+    )
+    result = yaml.safe_load(output.read_text())
+    assert result["security_assessment"]["mode"] == "none"
+    assert result["public_evidence"]["allowed"] is True
+    assert result["standards"]["percentile"] == "p99"
+
+    prefill.prefill(
+        tmp_path,
+        output,
+        supplied={"ANALYSIS_PERCENTILE": "p95"},
+        overwrite_existing=True,
+    )
+    result = yaml.safe_load(output.read_text())
+    assert result["standards"]["percentile"] == "p95"
+
+
 def test_prefill_rejects_conflicting_production_surface_and_unknown_names(tmp_path):
     with pytest.raises(prefill.PrefillError, match="not both"):
         prefill.prefill(

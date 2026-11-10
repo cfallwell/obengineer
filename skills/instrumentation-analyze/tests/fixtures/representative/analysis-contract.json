@@ -717,7 +717,7 @@
       "spanProcessor": "const KEYS = ['sample.bt', 'workflow.name', 'sample.market', 'sample.account-id'];\nexport class BaggageStampProcessor {\n  onStart(span, context) {\n    const baggage = propagation.getBaggage(context);\n    for (const key of KEYS) {\n      const entry = baggage?.getEntry(key);\n      if (entry) span.setAttribute(key, entry.value.slice(0, 64));\n    }\n  }\n}",
       "identityWrite": "export function onIdentitySuccess(accountId) {\n  const safeId = String(accountId).slice(0, 64);\n  rum.setGlobalAttributes({ 'sample.account-id': safeId, 'enduser.id': safeId });\n  setAllowedBaggageEntry('sample.account-id', safeId);\n}",
       "backendPropagator": "const sdk = new NodeSDK({\n  textMapPropagator: new CompositePropagator({\n    propagators: [new W3CTraceContextPropagator(), new W3CBaggagePropagator()]\n  }),\n  spanProcessors: [new BaggageStampProcessor(), batchProcessor]\n});\nsdk.start();",
-      "messagePropagation": "export function publish(message) {\n  propagation.inject(context.active(), message.attributes, messageSetter);\n  return bus.send(message);\n}\nexport function consume(record) {\n  const extracted = propagation.extract(context.active(), record.attributes, messageGetter);\n  return context.with(extracted, () => processOrder(record));\n}"
+      "messagePropagation": "export function publish(message) {\n  propagation.inject(context.active(), message.attributes, messageSetter);\n  return bus.send(message);\n}\nexport function consume(record) {\n  const extracted = propagation.extract(context.active(), record.attributes, messageGetter);\n  return context.with(extracted, () => processOrder(record));\n}\nexport function redrive(record) {\n  const original = propagation.extract(context.active(), record.originalTrace, messageGetter);\n  const link = { context: trace.getSpanContext(original), attributes: { 'messaging.operation': 'redrive' } };\n  return tracer.startActiveSpan('order.dlq.redrive', { links: [link] }, span => processRedrive(record).finally(() => span.end()));\n}"
     },
     "attribution": {
       "trigger": "The host captures attribution exactly once per browser session after consent and before the first workflow request.",
@@ -725,7 +725,7 @@
       "firstTouch": "Persist the first bounded source and medium in local storage for cross-session comparison.",
       "lastTouch": "Persist the current bounded source and medium in session storage for the active order journey.",
       "baggageKeys": ["sample.attribution.source", "sample.attribution.medium", "sample.ads-attributed"],
-      "code": "export function captureAttribution(url, referrer) {\n  const medium = url.searchParams.get('utm_medium') || '';\n  const source = medium === 'cpc' ? 'paid-search' : referrer ? 'referral' : 'direct';\n  const value = { source, medium: medium || 'none', attributed: source !== 'direct' };\n  sessionStorage.setItem('sample.attribution.last', JSON.stringify(value));\n  addActiveSpanEvent('session.ad-attribution', value);\n  setBoundedAttributionBaggage(value);\n}"
+      "code": "export function captureAttribution(url, referrer) {\n  const medium = url.searchParams.get('utm_medium') || '';\n  const source = medium === 'cpc' ? 'paid-search' : referrer ? 'referral' : 'direct';\n  const value = { source, medium: medium || 'none', attributed: source !== 'direct' };\n  const firstKey = 'sample.attribution.first';\n  if (!localStorage.getItem(firstKey)) localStorage.setItem(firstKey, JSON.stringify(value));\n  sessionStorage.setItem('sample.attribution.last', JSON.stringify(value));\n  addActiveSpanEvent('session.ad-attribution', value);\n  setBoundedAttributionBaggage(value);\n}"
     },
     "joins": [
       {
@@ -801,6 +801,7 @@
           "Producer, consumer, fulfillment, retry, and dead-letter counts.",
           "Trace deep link, Log Observer Connect results, and release-event overlay."
         ],
+        "signalFlow": "total = data('sample.order.submission', filter=filter('deployment.environment', 'prod')).sum(by=['sample.market'])\nfailed = data('sample.order.submission', filter=filter('deployment.environment', 'prod') and filter('status', 'failed')).sum(by=['sample.market'])\n(failed / total * 100).publish(label='order error percent by market')",
         "releaseOverlay": true
       }
     ],

@@ -101,12 +101,13 @@ def test_start_asks_required_question_before_any_discovery_and_gates_analysis():
         "discover measurable optional facts"
     )
     for text in (command, prompt):
-        assert "explicit production URL" in text
-        assert "no browser: <reason>" in text
-        assert "what hurts" in text.lower()
-        assert "yes 1 3" in text
-        assert "never starts analysis" in text
-        assert "exact `no`" in text
+        normalized = re.sub(r"\s+", " ", text)
+        assert "explicit production URL" in normalized
+        assert "no browser: <reason>" in normalized
+        assert "what hurts" in normalized.lower()
+        assert "yes 1 3" in normalized
+        assert "never starts analysis" in normalized
+        assert "exact `no`" in normalized
         for marker in ("[x]", "[ ]", "[-]"):
             assert marker in text
     assert "analysis_authorized: true" in analyze
@@ -346,6 +347,19 @@ def test_security_coverage_and_credential_handling_remain_contractual():
         "Exposure", "Risk if unaddressed", "Remediation path", "Verification",
     ):
         assert required in critical
+
+
+def test_linked_analysis_references_do_not_use_retired_section_numbers():
+    for relative in (
+        "critical-findings.md",
+        "security-assessment.md",
+        "service-levels.md",
+        "existing-telemetry.md",
+    ):
+        text = (SKILLS / "references" / relative).read_text()
+        assert not re.search(r"\bsection(?:s)?\s+(?:[0-9]+|[0-9]+ and [0-9]+)", text, re.I), (
+            f"{relative} still routes generated analysis through retired monolith sections"
+        )
 
 
 def test_terraform_provider_names_and_no_apply_boundary():

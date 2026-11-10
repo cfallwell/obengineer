@@ -1,7 +1,7 @@
 # Service levels — indicators and objectives in the customer's voice
 
-Authoring spec for **section 24** of the customer document, defined in
-[`document-template.md`](document-template.md).
+Authoring spec for objectives in the versioned Operations view and matching wiki notes,
+defined by [`analysis-site.md`](analysis-site.md).
 
 ## Why the voice matters
 
@@ -23,10 +23,10 @@ One table, every SLI in the engagement, so the set can be reviewed as a set. Cov
 are visible here and nowhere else.
 
 ```markdown
-| SLI | User-facing statement | Good events | Total events | Objective | Window | Workflow | Owner |
-|---|---|---|---|---|---|---|---|
-| checkout-success | A customer who submits an order gets a confirmation | spans where `workflow.name='checkout.order.submit'` and `error=false` | all spans where `workflow.name='checkout.order.submit'` | 99.5% | 28d rolling | `checkout.order.submit` | Commerce |
-| checkout-latency | Confirmation appears within four seconds | good events with `duration <= 4s` | all good events | 99% | 28d rolling | `checkout.order.submit` | Commerce |
+| SLI | User-facing statement | Good events | Total events | Objective | Window | Workflow |
+|---|---|---|---|---|---|---|
+| checkout-success | A customer who submits an order gets a confirmation | spans where `workflow.name='checkout.order.submit'` and `error=false` | all spans where `workflow.name='checkout.order.submit'` | 99.5% | 28d rolling | `checkout.order.submit` |
+| checkout-latency | Confirmation appears within four seconds | good events with `duration <= 4s` | all good events | 99% | 28d rolling | `checkout.order.submit` |
 ```
 
 Then an H2 per SLI that carries an error budget, with the budget in both units the reader
@@ -35,7 +35,7 @@ implies, and the dashboard it appears on.
 
 ## Rules that keep the section honest
 
-**Every SLI names a workflow from section 20.** An indicator with no workflow behind it
+**Every SLI names a workflow in the accepted workflow registry.** An indicator with no workflow behind it
 cannot be computed, and this is the check that catches an SLI invented in a meeting. If the
 workflow does not exist yet, the SLI is `blocked on instrumentation` and says so.
 
@@ -78,7 +78,7 @@ complain about them. For each ranked journey there should be an indicator for:
 
 Three indicators per critical journey is usually right. Fewer means something a customer
 would phone about is unmeasured; many more means the section is being used as a metric
-inventory, which is section 21's job.
+inventory, which belongs in the Metrics view.
 
 ## Handing it to configuration
 
@@ -99,7 +99,7 @@ placement — objectives are the executive layer's product, burn rate is the SRE
 
 ## What this portfolio cannot compute yet — milestone M5
 
-Section 24 does not grow a DORA row or an MTTx row in order to look complete.
+The Operations view does not grow a DORA row or an MTTx row in order to look complete.
 Observability Cloud has no metric that is MTTD, MTTA, MTTR, or a DORA measure
 (deployment frequency, lead time for changes, change-failure rate, time to
 restore). Writing a `signalfx_slo` and calling it one of those is a false chart.
@@ -108,7 +108,7 @@ restore). Writing a `signalfx_slo` and calling it one of those is a false chart.
 lifecycle that app already tracks. That computation is a milestone **M5**
 objective: an ITSI service and the KPIs that turn the stated
 `mttd_minutes` / `mtta_minutes` / `mttr_minutes` inputs into a measured series.
-Until M5 lands, those inputs stay `stated` in section 26. They are not detectors
+Until M5 lands, those inputs stay `stated` in the business-value workings. They are not detectors
 in the Observability Cloud modules.
 
 **DORA** still cannot be computed in Observability Cloud, and it cannot be
@@ -118,9 +118,11 @@ the source does not exist. Do not approximate DORA with a latency SLO.
 
 ## Warning signs
 
-- **An SLI with no owner.** It will not be defended, and an undefended objective is deleted at the first inconvenient breach.
+- **An SLI with no existing notification and review policy.** It will not be acted on,
+  and an undefended objective is deleted at the first inconvenient breach.
 - **100% as an objective.** It means no error budget, so no release is ever safe, so the objective will be ignored the first time it matters.
 - **Every objective is `99.9%`.** Uniform targets across journeys of different value mean nobody weighed them.
 - **An indicator computed from a metric that does not exist yet**, presented without that dependency stated.
-- **The objective and the detector threshold in section 23 disagree.** They are the same commitment written twice; reconcile them or drop one.
+- **The objective and its detector threshold disagree.** They are the same commitment
+  written twice; reconcile them or drop one.
 - **A dashboard panel with no indicator behind it, next to an indicator on no dashboard.** Both are symptoms of the two sections being written independently.

@@ -104,6 +104,24 @@ def test_state_machine_requires_explicit_no_after_checked_optional_loop(tmp_path
     assert "pending" not in state["optional"]["items"].values()
 
 
+def test_start_does_not_reask_inputs_prefilled_from_project_context(tmp_path):
+    inputs = write_required_inputs(tmp_path)
+    data = yaml.safe_load(inputs.read_text())
+    data["analysis_access"]["login_id"] = "qa-user"
+    data["analysis_access"]["password_ref"] = "${OBENGINEER_TEST_PASSWORD}"
+    data["analysis_access"]["rotate_on_completion"] = True
+    data["standards"]["percentile"] = "p95"
+    inputs.write_text(yaml.safe_dump(data, sort_keys=False))
+    state = context.start(context.new_context(), inputs)
+    assert state["state"] == "optional-review"
+    assert all(value == "complete" for value in state["required"].values())
+    assert state["optional"]["items"]["3"] == "complete"
+    assert state["optional"]["items"]["9"] == "complete"
+    prompt = context.render_required_prompt(state)
+    assert "already complete" in prompt
+    assert "What is the application name?" not in prompt
+
+
 def test_non_explicit_no_and_out_of_order_answers_are_rejected(tmp_path):
     inputs = write_required_inputs(tmp_path)
     state = context.complete_required(context.start(context.new_context()), inputs)
@@ -131,6 +149,24 @@ def test_explicit_no_can_authorize_when_no_optional_items_are_offered(tmp_path):
     state = context.review(state, "no", [])
     assert state["analysis_authorized"] is True
     assert state["last_event"] == "review-no"
+
+
+def test_reopen_clears_authorization_and_preserves_completed_inputs(tmp_path):
+    inputs = write_required_inputs(tmp_path)
+    state = context.start(context.new_context(), inputs)
+    state = context.review(state, "yes 1", [1, 2])
+    state = context.record_answer(state, 1, "answered")
+    state = context.review(state, "no", [2])
+    assert state["analysis_authorized"] is True
+    assert state["optional"]["items"]["1"] == "complete"
+    assert state["optional"]["items"]["2"] == "skipped"
+
+    state = context.reopen(state, inputs)
+    assert state["analysis_authorized"] is False
+    assert state["last_event"] == "reopen"
+    assert state["state"] == "optional-review"
+    assert state["optional"]["items"]["1"] == "complete"
+    assert state["optional"]["items"]["2"] == "pending"
 
 
 def test_context_write_is_atomic_and_schema_valid(tmp_path):

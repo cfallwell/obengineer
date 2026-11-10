@@ -3,8 +3,8 @@
   "analysisId": "sample-storefront-V1",
   "jobId": "platform-cloud-messaging",
   "status": "completed",
-  "startedAt": "2026-11-10T20:08:30Z",
-  "completedAt": "2026-11-10T20:14:00Z",
+  "startedAt": "2026-11-10T20:05:15Z",
+  "completedAt": "2026-11-10T20:09:30Z",
   "evidence": [
     {
       "id": "EV-PLATFORM-LOGS",

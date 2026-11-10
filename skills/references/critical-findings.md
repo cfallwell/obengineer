@@ -1,7 +1,7 @@
-# Critical findings — the section that must not be buried
+# Critical findings — the review view that must not be buried
 
-Authoring spec for **section 4** of the customer document, defined in
-[`document-template.md`](document-template.md).
+Authoring spec for the versioned `findings/` review area defined by
+[`analysis-site.md`](analysis-site.md) and represented on the landing page.
 
 A scan of a real application finds things nobody asked about: a credential reachable from
 the browser, a consent gate that resolves after the first beacon, an endpoint that answers
@@ -11,9 +11,9 @@ easiest to lose — they arrive as a side effect of looking for something else, 
 written down where they were found, which is page 180 of an instrumentation document nobody
 reads to the end.
 
-**So they get their own section, and it is section 4.** Immediately after the architecture
-they were found in, before the course of action, before the portfolio gaps, before anything
-a vendor wants to say. If the reader stops after six pages, they still leave with the list.
+**So they get their own landing-page summary and linked review view.** Findings follow the
+architecture, technology, and current-telemetry readout and precede the strategy. A reviewer
+must encounter them before recommendations or implementation detail.
 
 ## What qualifies
 
@@ -44,10 +44,10 @@ sounds:
 | **Critical** | Exploitable or exposing now, with no compensating control. Assume it is known to someone outside the team | P0 recommended fixes and the phased plan by finding id |
 | **High** | Real exposure or a materially misleading signal, but gated by something — an authenticated path, a low-traffic surface, a partial control | P0 when confirmed or high confidence; otherwise the earliest owned phase |
 | **Medium** | Wrong and worth fixing, with bounded blast radius. It will cost an investigation later | Scheduled remediation path |
-| **Low** | Hygiene. Record it so it does not get rediscovered as new every run | Open items, section 30 |
+| **Low** | Hygiene. Record it so it does not get rediscovered as new every run | Reference/open items |
 
-Order the section by severity descending. Never by discovery order, never grouped by the
-body section they came from — a reader scanning for the worst thing should find it in the
+Order the findings index by severity descending. Never by discovery order or source page —
+a reader scanning for the worst thing should find it in the
 first table row.
 
 Confidence is `confirmed`, `high`, `medium`, or `low` and describes the evidence, not
@@ -74,7 +74,7 @@ Stable ids (`F-01`) matter more than they look: the phased plan, the work order 
 wiki note, and the customer's own ticket all need to refer to the same finding six months
 later, and "the one about the key" does not survive a reorganisation.
 
-Then **one H2 per finding**, with all six parts and in this order. The order is the argument:
+Then **one linked detail page per finding**, with all six parts and in this order. The order is the argument:
 what happened, where, who can reach it, what it costs, what to do, how to know it worked.
 
 1. **Observed** — what was measured, with the evidence. A request and its response shape, a line of bundle output, a timing pair. Not an inference presented as an observation.
@@ -102,10 +102,14 @@ credential into a follow-up run to "confirm" it.
 
 A finding is not done when it is written. It has these destinations:
 
-- **`P0 recommended fixes` at the start of section 5**, by id, for every confirmed or high-confidence vulnerability. The row names containment, structural repair, owner, and verification.
-- **Phase 0 or the phased plan** (section 17), by id, when the finding blocks signal trust or implementation. A documented exposure with no schedule is documented, not addressed.
+- **The strategy and implementation path**, by id, for every confirmed or high-confidence
+  vulnerability. The row names containment, structural repair, trigger, and verification.
+- **A Phase 0 work order or later phase**, by id, when the finding blocks signal trust or
+  implementation. A documented exposure with no schedule is documented, not addressed.
 - **A wiki note** under `findings/`, so the next run knows it existed and can report it as still-open, fixed, or regressed rather than discovering it again as new. See [`agent-wiki.md`](agent-wiki.md).
-- **The delta section of the next document** (`Changes since v<N-1>`), with its current state. A finding that silently disappears between two versions of a document is the worst outcome available: the reader cannot tell whether it was fixed or dropped.
+- **`Changes in V<N>` on the next landing page**, with its current state. A finding that
+  silently disappears between versions is the worst outcome available: the reader cannot
+  tell whether it was fixed or dropped.
 
 ## Warning signs
 
@@ -114,4 +118,5 @@ A finding is not done when it is written. It has these destinations:
 - **A finding whose remediation is "review this".** Review is what produced the finding. The remediation is what changes.
 - **The word "potential" doing load-bearing work.** Either it is reachable, or it is reachable under a condition you should name.
 - **A finding that only makes sense to the person who found it.** It will be read by someone triaging forty items, cold, on a Monday.
-- **The same finding appearing in section 4 and again inside a use case as a caveat.** One authority. Section 4 owns it; anywhere else references its id.
+- **The same finding duplicated inside a use case as a caveat.** One authority. The
+  finding detail owns it; use cases reference its id.
