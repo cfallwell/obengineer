@@ -204,23 +204,21 @@ class Renderer:
             "# Architecture",
             "",
             a["narrative"],
-            "",
-            "## Storefront and route model",
-            "",
-            f"The observed client is **{frontend['runtimeModel']}**, uses **{frontend['router']}**, "
-            f"and assigns the sole provider initialization to `{frontend['initOwner']}`. "
-            f"Single initialization is contractually {'required' if frontend['singleInit'] else 'unresolved'}.",
-            "",
-            table(
-                ("Path class", "Bounded page type", "Navigation", "Evidence"),
-                (
-                    (r["pathClass"], r["pageType"], r["navigation"], ", ".join(r["evidenceIds"]))
-                    for r in frontend["routes"]
+        ]
+        if frontend["applicable"]:
+            sections.extend((
+                "", "## Storefront and route model", "",
+                f"The observed client is **{frontend['runtimeModel']}**, uses **{frontend['router']}**, "
+                f"and assigns the sole provider initialization to `{frontend['initOwner']}`. "
+                f"Single initialization is contractually {'required' if frontend['singleInit'] else 'unresolved'}.",
+                "",
+                table(
+                    ("Path class", "Bounded page type", "Navigation", "Evidence"),
+                    ((r["pathClass"], r["pageType"], r["navigation"], ", ".join(r["evidenceIds"])) for r in frontend["routes"]),
                 ),
-            ),
-            "",
-            "## Backend services and failure points",
-            "",
+            ))
+        sections.extend((
+            "", "## Backend services and failure points", "",
             table(
                 ("Service", "Runtime", "Account", "Role", "Failure points"),
                 (
@@ -233,15 +231,12 @@ class Renderer:
                     )
                     for b in a["backends"]
                 ),
-            ),
-            "",
-            "## Accounts, buses, and downstream systems",
-            "",
+            ), "", "## Accounts, buses, and downstream systems", "",
             table(
                 ("Account", "Provider", "Boundary", "Evidence"),
                 ((x["id"], x["provider"], x["boundary"], ", ".join(x["evidenceIds"])) for x in a["accounts"]),
             ),
-        ]
+        ))
         if a["buses"]:
             sections.extend(
                 (
@@ -322,14 +317,25 @@ class Renderer:
 
     def render_telemetry(self) -> None:
         rows = (
-            (x["component"], x["status"], x["trust"], x["observed"], "; ".join(x["gaps"]), ", ".join(x["evidenceIds"]))
+            (
+                x["component"], x["applicationScope"],
+                f"{x['observedFrom']} to {x['observedTo']} (read {x['readAt']})",
+                f"{x['source']} ({x['provenance']})",
+                self._portfolio_evidence(x["portfolioEvidence"]),
+                x["status"], x["trust"], x["observed"],
+                "; ".join(x["gaps"]), ", ".join(x["evidenceIds"]),
+            )
             for x in self.c["currentTelemetry"]
         )
         text = (
             f"{breadcrumb(current='Current telemetry')}\n\n# Current telemetry\n\n"
             f"{self.c['summaries']['currentTelemetry']}\n\n"
             "## Portfolio footprint and trust\n\n"
-            + table(("Component", "Status", "Trust", "Observed", "Gaps", "Evidence"), rows)
+            + table((
+                "Component", "Application scope", "Observation window",
+                "Source and provenance", "Volume / MetricSet / MTS / SignalFlow evidence",
+                "Status", "Trust", "Observed", "Gaps", "Evidence",
+            ), rows)
             + "\n\nSignals marked present are not assumed trustworthy. Trust depends on verified "
             "load order, stable resource identity, complete propagation, and queryable data "
             "at the product surface that owns the question.\n"
@@ -339,6 +345,15 @@ class Renderer:
             )
         )
         self.write("telemetry/index.md", text)
+
+    @staticmethod
+    def _portfolio_evidence(value: dict[str, Any]) -> str:
+        if value["disposition"] == "unavailable":
+            return f"Unavailable: {value['reason']}"
+        return (
+            f"Volume: {value['volume']}; MetricSets: {value['metricSets']}; "
+            f"MTS: {value['mts']}; SignalFlow: {value['signalFlow']}"
+        )
 
     def render_findings(self) -> None:
         rows = (
@@ -587,6 +602,8 @@ class Renderer:
                 + table(("Metric", "Type", "Unit", "Purpose", "Bounded dimensions"), metrics)
                 + "\n\n## Join contract\n\n"
                 + table(("From", "To", "Join type", "Carrier", "Reason"), joins)
+                + "\n\n## Code locations\n\n"
+                + bullets(item["codeLocations"])
                 + "\n\n## Operations and verification\n\n"
                 f"- Dashboard: [{item['dashboardId']}](../operations/dashboards/{item['dashboardId']}.md)\n"
                 f"- Detectors: {', '.join(item['detectorIds'])}\n"
@@ -645,14 +662,26 @@ class Renderer:
 
     def render_contracts(self) -> None:
         c = self.c["contracts"]
-        pages = (
-            ("Single initialization and SPA routes", "single-init-spa-routes.md", "One provider owner, bounded route classification, and client-navigation spans."),
-            ("Cross-cutting propagation", "cross-cutting.md", "Write-once baggage, an allowlisted stamp processor, backend extraction, and message carriers."),
-            ("First-touch attribution", "attribution.md", "One event per session, first and last touch storage, and a bounded baggage subset."),
-            ("Parent-child, span links, and pivots", "joins.md", "An explicit join type for every browser, service, bus, webhook, batch, and identity boundary."),
-            ("Collector processing", "collector.md", "Derivation, privacy controls, processor ordering, and export-safe signal handling."),
+        pages = [
+            (
+                "Cross-cutting propagation",
+                "cross-cutting.md",
+                "Write-once baggage, an allowlisted stamp processor, and backend extraction"
+                + (
+                    " with explicit message carriers."
+                    if c["crossCutting"]["messagePropagation"]["applicable"]
+                    else "."
+                ),
+            ),
+            ("Parent-child, span links, and pivots", "joins.md", "An explicit join type for every evidenced causal or identity boundary."),
             ("Cardinality and MPM", "cardinality.md", "Entitlement arithmetic and explicit dimension-eligible versus attribute-only lists."),
-        )
+        ]
+        if c["spaRoutes"]["applicable"]:
+            pages.insert(0, ("Single initialization and SPA routes", "single-init-spa-routes.md", "One provider owner, bounded route classification, and client-navigation spans."))
+        if c["attribution"]["applicable"]:
+            pages.insert(2 if c["spaRoutes"]["applicable"] else 1, ("First-touch attribution", "attribution.md", "One event per session, first and last touch storage, and a bounded baggage subset."))
+        if c["collector"]["applicable"]:
+            pages.insert(-1, ("Collector processing", "collector.md", "Derivation, privacy controls, processor ordering, and export-safe signal handling."))
         index = (
             f"{breadcrumb(current='Shared signal contracts')}\n\n# Shared signal contracts\n\n"
             f"{self.c['summaries']['contracts']}\n\n"
@@ -664,18 +693,22 @@ class Renderer:
         )
         self.write("contracts/index.md", index)
         spa = c["spaRoutes"]
-        self.write(
-            "contracts/single-init-spa-routes.md",
-            f"{breadcrumb('Shared signal contracts', 'Single initialization and SPA routes')}\n\n"
-            "# Single initialization and SPA routes\n\n"
-            f"{c['singleInit']}\n\n"
-            "## Route instrumentation\n\n"
-            f"**Owner:** `{spa['owner']}` · **Navigation span:** `{spa['navigationSpan']}`\n\n"
-            f"{spa['classifier']}\n\n"
-            + code(spa["code"], "javascript")
-            + finish((("Contracts", "index.md"), ("Architecture", "../overview/index.md")), ("Return to Contracts", "index.md")),
-        )
+        if spa["applicable"]:
+            self.write(
+                "contracts/single-init-spa-routes.md",
+                f"{breadcrumb('Shared signal contracts', 'Single initialization and SPA routes')}\n\n"
+                "# Single initialization and SPA routes\n\n"
+                f"{c['singleInit']}\n\n"
+                "## Route instrumentation\n\n"
+                f"**Owner:** `{spa['owner']}` · **Navigation span:** `{spa['navigationSpan']}`\n\n"
+                f"{spa['classifier']}\n\n"
+                + code(spa["code"], "javascript")
+                + finish((("Contracts", "index.md"), ("Architecture", "../overview/index.md")), ("Return to Contracts", "index.md")),
+            )
         cross = c["crossCutting"]
+        cross_related = [("Contracts", "index.md")]
+        if c["collector"]["applicable"]:
+            cross_related.append(("Collector", "collector.md"))
         self.write(
             "contracts/cross-cutting.md",
             f"{breadcrumb('Shared signal contracts', 'Cross-cutting propagation')}\n\n"
@@ -702,24 +735,28 @@ class Renderer:
             + code(cross["identityWrite"], "javascript")
             + "\n\n## Backend composite propagator\n\n"
             + code(cross["backendPropagator"], "javascript")
-            + "\n\n## Message inject and extract\n\n"
-            + code(cross["messagePropagation"], "javascript")
-            + finish((("Contracts", "index.md"), ("Collector", "collector.md")), ("Return to Contracts", "index.md")),
+            + (
+                "\n\n## Message inject and extract\n\n"
+                + code(cross["messagePropagation"]["code"], "javascript")
+                if cross["messagePropagation"]["applicable"] else ""
+            )
+            + finish(cross_related, ("Return to Contracts", "index.md")),
         )
         attr = c["attribution"]
-        self.write(
-            "contracts/attribution.md",
-            f"{breadcrumb('Shared signal contracts', 'First-touch attribution')}\n\n"
-            "# First-touch attribution\n\n"
-            f"{attr['trigger']}\n\n"
-            f"- Event: `{attr['event']}`\n"
-            f"- First touch: {attr['firstTouch']}\n"
-            f"- Last touch: {attr['lastTouch']}\n"
-            f"- Baggage subset: {', '.join(attr['baggageKeys'])}\n\n"
-            "## Deterministic classifier and capture\n\n"
-            + code(attr["code"], "javascript")
-            + finish((("Contracts", "index.md"), ("Use cases", "../use-cases/index.md")), ("Return to Contracts", "index.md")),
-        )
+        if attr["applicable"]:
+            self.write(
+                "contracts/attribution.md",
+                f"{breadcrumb('Shared signal contracts', 'First-touch attribution')}\n\n"
+                "# First-touch attribution\n\n"
+                f"{attr['trigger']}\n\n"
+                f"- Event: `{attr['event']}`\n"
+                f"- First touch: {attr['firstTouch']}\n"
+                f"- Last touch: {attr['lastTouch']}\n"
+                f"- Baggage subset: {', '.join(attr['baggageKeys'])}\n\n"
+                "## Deterministic classifier and capture\n\n"
+                + code(attr["code"], "javascript")
+                + finish((("Contracts", "index.md"), ("Use cases", "../use-cases/index.md")), ("Return to Contracts", "index.md")),
+            )
         self.write(
             "contracts/joins.md",
             f"{breadcrumb('Shared signal contracts', 'Join contract')}\n\n# Parent-child, span links, and pivots\n\n"
@@ -733,19 +770,20 @@ class Renderer:
             + finish((("Contracts", "index.md"), ("Workflows", "../workflows/index.md")), ("Return to Contracts", "index.md")),
         )
         collector = c["collector"]
-        self.write(
-            "contracts/collector.md",
-            f"{breadcrumb('Shared signal contracts', 'Collector processing')}\n\n# Collector processing\n\n"
-            f"{collector['placement']}\n\n"
-            f"**Processor order:** {' → '.join(collector['processorOrder'])}. Derivation and "
-            "redaction run before spanmetrics so generated series contain bounded values and "
-            "never preserve fields that policy requires removing.\n\n"
-            "## OTTL derivation\n\n"
-            + code(collector["ottl"], "yaml")
-            + "\n\n## Redaction contract\n\n"
-            + table(("Field", "Action", "Reason"), ((r["field"], r["action"], r["reason"]) for r in collector["redactions"]))
-            + finish((("Contracts", "index.md"), ("Cardinality", "cardinality.md")), ("Return to Contracts", "index.md")),
-        )
+        if collector["applicable"]:
+            self.write(
+                "contracts/collector.md",
+                f"{breadcrumb('Shared signal contracts', 'Collector processing')}\n\n# Collector processing\n\n"
+                f"{collector['placement']}\n\n"
+                f"**Processor order:** {' → '.join(collector['processorOrder'])}. Derivation and "
+                "redaction run before spanmetrics so generated series contain bounded values and "
+                "never preserve fields that policy requires removing.\n\n"
+                "## OTTL derivation\n\n"
+                + code(collector["ottl"], "yaml")
+                + "\n\n## Redaction contract\n\n"
+                + table(("Field", "Action", "Reason"), ((r["field"], r["action"], r["reason"]) for r in collector["redactions"]))
+                + finish((("Contracts", "index.md"), ("Cardinality", "cardinality.md")), ("Return to Contracts", "index.md")),
+            )
         card = c["cardinality"]
         self.write(
             "contracts/cardinality.md",

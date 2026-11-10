@@ -84,3 +84,13 @@ def test_empty_heading_fails(site):
     path = version / "technology" / "index.md"
     path.write_text(path.read_text() + "\n\n## Empty\n\n")
     assert any("empty heading" in failure for failure in verify.check(version, root))
+
+
+def test_repeated_character_page_is_not_substantive(site):
+    version, root = site
+    path = version / "technology" / "index.md"
+    path.write_text("[Analysis](../index.md)\n\n# Technology\n\n" + "x" * 500)
+    assert any(
+        "insufficient substantive content" in failure
+        for failure in verify.check(version, root)
+    )

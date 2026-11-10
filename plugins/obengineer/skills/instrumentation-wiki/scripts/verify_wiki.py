@@ -30,7 +30,7 @@ import json
 import re
 import sys
 from datetime import date
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 try:
     import yaml
@@ -109,6 +109,59 @@ POINTER_RULES = [
 
 FRONTMATTER = re.compile(r"\A---\n(.*?)\n---\n", re.S)
 WIKILINK = re.compile(r"\[\[([^\]|#]+)")
+WORK_ORDER_ID = re.compile(r"^WO-[0-9]{3,}$")
+SELECTOR = re.compile(
+    r"^(?:work-order:WO-[0-9]{3,}|"
+    r"(?:business-transaction|workflow|use-case|detector|objective|config):"
+    r"[a-z0-9][a-z0-9._-]*)$"
+)
+WORK_ORDER_SECTIONS = (
+    "findings",
+    "use cases",
+    "workflows and business transactions",
+    "target selectors",
+    "repository legs",
+    "dependencies",
+    "acceptance evidence",
+    "verification criteria",
+    "coordination",
+)
+
+
+def markdown_sections(text: str) -> dict[str, str]:
+    matches = list(re.finditer(r"^##\s+(.+?)\s*$", text, re.M))
+    return {
+        match.group(1).strip().lower(): text[
+            match.end():matches[index + 1].start() if index + 1 < len(matches) else len(text)
+        ].strip()
+        for index, match in enumerate(matches)
+    }
+
+
+def meaningful(text: object) -> bool:
+    if not isinstance(text, str):
+        return False
+    tokens = re.findall(r"[A-Za-z][A-Za-z0-9._-]*", text)
+    return len(tokens) >= 4 and len(set(token.casefold() for token in tokens)) >= 3
+
+
+def authorized_relative_path(value: object, authorized: list[str]) -> bool:
+    if not isinstance(value, str) or not value or "\\" in value:
+        return False
+    path = PurePosixPath(value)
+    if path.is_absolute() or ".." in path.parts or "." in path.parts:
+        return False
+    normalized = path.as_posix().rstrip("/") + "/"
+    for parent in authorized:
+        if not isinstance(parent, str) or not parent:
+            continue
+        parent_path = PurePosixPath(parent)
+        if parent_path.is_absolute() or ".." in parent_path.parts:
+            continue
+        parent_value = parent_path.as_posix().rstrip("/")
+        if parent_value in {"", "."} or normalized.startswith(parent_value + "/"):
+            return True
+    return False
 
 
 def wiki_root_of(service: Path) -> Path | None:
@@ -229,7 +282,7 @@ def check(target: Path, repo_root: Path, index_max_lines: int) -> list[str]:
         repo_root / "docs" / "observability" / "analysis" / app_root.name /
         version / "acceptance.yaml"
     )
-    is_accepted = acceptance_path.is_file()
+    is_accepted = False
     # Proposed analysis versions must pass before acceptance. When an acceptance
     # record exists, verify its content digest and version binding.
     if acceptance_path.is_file():
@@ -241,11 +294,12 @@ def check(target: Path, repo_root: Path, index_max_lines: int) -> list[str]:
         sys.modules[spec.name] = module
         spec.loader.exec_module(module)
         accepted, acceptance_failures = module.parse_record(acceptance_path)
-        failures.extend(
+        record_failures = [
             f"acceptance record: {failure}" for failure in acceptance_failures
-        )
+        ]
+        failures.extend(record_failures)
         if not acceptance_failures:
-            failures.extend(
+            verification_failures = [
                 f"acceptance record: {failure}"
                 for failure in module.verify(
                     repo_root,
@@ -255,7 +309,9 @@ def check(target: Path, repo_root: Path, index_max_lines: int) -> list[str]:
                     accepted["analysis_content_commit"],
                     accepted["schema_version"],
                 )
-            )
+            ]
+            failures.extend(verification_failures)
+            is_accepted = not verification_failures
 
     # ---- frontmatter -----------------------------------------------------
     fields: dict[Path, dict] = {}
@@ -311,52 +367,208 @@ def check(target: Path, repo_root: Path, index_max_lines: int) -> list[str]:
         if "[Analysis](" not in body(p.read_text()):
             failures.append(f"{rel[p]}: no Analysis breadcrumb")
 
-    # ---- unified work orders ---------------------------------------------
-    for p in app_work_orders:
-        if p.name == "index.md":
-            continue
-        status = fields.get(p, {}).get("status")
-        if is_accepted and status == "proposed":
-            failures.append(
-                f"{rel[p]}: accepted versions cannot leave eligible work "
-                "orders proposed; use ready or blocked"
-            )
-        if not is_accepted and status == "ready":
-            failures.append(
-                f"{rel[p]}: work orders cannot be ready before acceptance"
-            )
-        content = body(p.read_text()).lower()
-        for heading in (
-            "## findings",
-            "## use cases",
-            "## workflows and business transactions",
-            "## target selectors",
-            "## repository legs",
-            "## dependencies",
-            "## acceptance evidence",
-            "## verification criteria",
-            "## coordination",
-        ):
-            if heading not in content:
-                failures.append(f"{rel[p]}: work order is missing {heading}")
-        if "## jira issues" not in content and "## manual issue text" not in content:
-            failures.append(
-                f"{rel[p]}: work order needs Jira issues or manual issue text"
-            )
-
     implementation_map = repo_root / "docs" / "observability" / "implementation-map.json"
+    map_data: dict = {}
+    repositories: dict[str, list[str]] = {}
+    mapped_targets: dict[str, str] = {}
+    mapped_repositories: dict[str, set[str]] = {}
     if implementation_map.is_file():
         try:
-            mapped_orders = {
-                target.get("work_order")
-                for target in json.loads(implementation_map.read_text()).get("targets", [])
+            map_data = json.loads(implementation_map.read_text())
+            repositories = {
+                repository.get("id"): repository.get("authorized_paths", [])
+                for repository in map_data.get("repositories", [])
+                if isinstance(repository, dict)
+                and isinstance(repository.get("id"), str)
+                and isinstance(repository.get("authorized_paths"), list)
+            }
+            mapped_targets = {
+                target.get("selector"): target.get("work_order")
+                for target in map_data.get("targets", [])
                 if isinstance(target, dict)
             }
+            for target in map_data.get("targets", []):
+                if (
+                    isinstance(target, dict)
+                    and isinstance(target.get("work_order"), str)
+                    and isinstance(target.get("repositories"), list)
+                ):
+                    mapped_repositories.setdefault(
+                        target["work_order"], set()
+                    ).update(
+                        value for value in target["repositories"]
+                        if isinstance(value, str)
+                    )
         except json.JSONDecodeError:
-            mapped_orders = set()
+            failures.append("implementation map is not valid JSON")
+        mapped_orders = set(mapped_targets.values())
         available_orders = {path.stem for path in app_work_orders}
         for order in sorted(mapped_orders - available_orders):
             failures.append(f"implementation map has no app-level work order: {order}")
+    else:
+        failures.append("missing docs/observability/implementation-map.json")
+
+    # ---- unified work orders ---------------------------------------------
+    work_order_fields: dict[str, dict] = {}
+    work_order_bodies: dict[str, str] = {}
+    for p in app_work_orders:
+        if p.name == "index.md":
+            continue
+        fm = fields.get(p, {})
+        order_id = fm.get("work_order_id")
+        if not isinstance(order_id, str) or not WORK_ORDER_ID.fullmatch(order_id):
+            failures.append(f"{rel[p]}: frontmatter has invalid work_order_id")
+            order_id = p.stem
+        elif order_id != p.stem:
+            failures.append(f"{rel[p]}: work_order_id does not match filename")
+        work_order_fields[order_id] = fm
+        content = body(p.read_text())
+        work_order_bodies[order_id] = content
+        sections = markdown_sections(content)
+        for heading in WORK_ORDER_SECTIONS:
+            if heading not in sections:
+                failures.append(f"{rel[p]}: work order is missing ## {heading}")
+            elif heading != "dependencies" and not meaningful(sections[heading]):
+                failures.append(f"{rel[p]}: ## {heading} is not meaningful")
+        if "jira issues" not in sections and "manual issue text" not in sections:
+            failures.append(f"{rel[p]}: work order needs Jira issues or manual issue text")
+
+        selectors = fm.get("selectors")
+        if not isinstance(selectors, list) or not selectors:
+            failures.append(f"{rel[p]}: selectors must be a non-empty YAML list")
+            selectors = []
+        for selector in selectors:
+            if not isinstance(selector, str) or not SELECTOR.fullmatch(selector):
+                failures.append(f"{rel[p]}: invalid target selector {selector!r}")
+            elif mapped_targets.get(selector) != order_id:
+                failures.append(
+                    f"{rel[p]}: selector {selector!r} is not mapped to {order_id}"
+                )
+            elif selector not in sections.get("target selectors", ""):
+                failures.append(
+                    f"{rel[p]}: ## target selectors does not name {selector!r}"
+                )
+
+        dependencies = fm.get("depends_on")
+        if not isinstance(dependencies, list) or not all(
+            isinstance(value, str) and WORK_ORDER_ID.fullmatch(value)
+            for value in dependencies
+        ):
+            failures.append(f"{rel[p]}: depends_on must contain work-order IDs")
+
+        legs = fm.get("repository_legs")
+        if not isinstance(legs, list) or not legs:
+            failures.append(f"{rel[p]}: repository_legs must be a non-empty YAML list")
+            legs = []
+        for index, leg in enumerate(legs):
+            leg_path = f"{rel[p]}: repository_legs[{index}]"
+            if not isinstance(leg, dict):
+                failures.append(f"{leg_path} must be an object")
+                continue
+            repository = leg.get("repository")
+            if repository not in repositories:
+                failures.append(f"{leg_path} references unknown repository {repository!r}")
+                authorized = []
+            else:
+                authorized = repositories[repository]
+            paths = leg.get("paths")
+            if not isinstance(paths, list) or not paths or not all(
+                authorized_relative_path(value, authorized) for value in paths
+            ):
+                failures.append(f"{leg_path}.paths must be authorized relative paths")
+            for key in ("changes", "tests"):
+                values = leg.get(key)
+                if not isinstance(values, list) or not values or not all(
+                    meaningful(value) for value in values
+                ):
+                    failures.append(f"{leg_path}.{key} is not meaningful")
+        actual_repositories = {
+            leg.get("repository") for leg in legs if isinstance(leg, dict)
+        }
+        if actual_repositories != mapped_repositories.get(order_id, set()):
+            failures.append(
+                f"{rel[p]}: repository legs {sorted(actual_repositories)} do not "
+                f"match mapped repositories {sorted(mapped_repositories.get(order_id, set()))}"
+            )
+        repository_section = sections.get("repository legs", "")
+        for repository in actual_repositories:
+            if isinstance(repository, str) and repository not in repository_section:
+                failures.append(
+                    f"{rel[p]}: ## repository legs does not name {repository!r}"
+                )
+
+        status = fm.get("status")
+        dependencies = dependencies if isinstance(dependencies, list) else []
+        dependency_section = sections.get("dependencies", "")
+        if dependencies:
+            for dependency in dependencies:
+                if dependency not in dependency_section:
+                    failures.append(
+                        f"{rel[p]}: ## dependencies does not name {dependency}"
+                    )
+        elif not re.search(r"\bnone\b", dependency_section, re.I):
+            failures.append(f"{rel[p]}: ## dependencies must explicitly say none")
+        if is_accepted and status == "proposed":
+            failures.append(
+                f"{rel[p]}: accepted versions cannot leave work orders proposed"
+            )
+        if is_accepted and status == "blocked" and not dependencies:
+            failures.append(
+                f"{rel[p]}: accepted dependency-free work order must be ready"
+            )
+        if not is_accepted and status == "ready":
+            failures.append(f"{rel[p]}: work orders cannot be ready before acceptance")
+        if not is_accepted:
+            expected = "blocked" if dependencies else "proposed"
+            if status != expected:
+                failures.append(
+                    f"{rel[p]}: before acceptance status must be {expected}"
+                )
+
+    order_ids = set(work_order_fields)
+    graph: dict[str, list[str]] = {}
+    for order_id, fm in work_order_fields.items():
+        dependencies = fm.get("depends_on", [])
+        dependencies = dependencies if isinstance(dependencies, list) else []
+        graph[order_id] = dependencies
+        unknown = set(dependencies) - order_ids
+        if unknown:
+            failures.append(
+                f"{order_id}: dependencies do not exist: {sorted(unknown)}"
+            )
+        if fm.get("status") == "ready":
+            incomplete = {
+                dependency
+                for dependency in dependencies
+                if work_order_fields.get(dependency, {}).get("status")
+                not in {"implemented", "verified", "retired"}
+            }
+            if incomplete:
+                failures.append(
+                    f"{order_id}: ready work order has incomplete dependencies "
+                    f"{sorted(incomplete)}"
+                )
+
+    visiting: set[str] = set()
+    visited: set[str] = set()
+
+    def visit(order_id: str, trail: list[str]) -> None:
+        if order_id in visiting:
+            failures.append(
+                "work-order dependency cycle: " + " -> ".join([*trail, order_id])
+            )
+            return
+        if order_id in visited:
+            return
+        visiting.add(order_id)
+        for dependency in graph.get(order_id, []):
+            if dependency in graph:
+                visit(dependency, [*trail, order_id])
+        visiting.remove(order_id)
+        visited.add(order_id)
+
+    for order_id in sorted(graph):
+        visit(order_id, [])
 
     # ---- links -----------------------------------------------------------
     # Obsidian resolves a bare name by shortest path, a slashed name by path.
@@ -402,6 +614,35 @@ def check(target: Path, repo_root: Path, index_max_lines: int) -> list[str]:
         failures.append(f"{len(broken)} broken wikilink(s): {broken[:5]}")
     if ambiguous:
         failures.append(f"{len(ambiguous)} ambiguous wikilink(s): {ambiguous[:5]}")
+
+    # Every object-to-order edge must be reciprocal. The work order links the
+    # canonical note path; the note declares the same ID in frontmatter.
+    for note, fm in fields.items():
+        if fm.get("type") == "work-order":
+            continue
+        for order_id in fm.get("work_orders", []) if isinstance(fm.get("work_orders"), list) else []:
+            if order_id not in work_order_bodies:
+                failures.append(f"{rel[note]}: references missing work order {order_id}")
+                continue
+            note_key = str(note.relative_to(version_root).with_suffix(""))
+            linked = {
+                match.group(1).strip().rstrip("/")
+                for match in WIKILINK.finditer(work_order_bodies[order_id])
+            }
+            if note_key not in linked:
+                failures.append(
+                    f"{order_id}: missing reverse link to [[{note_key}]]"
+                )
+    for order_id, content in work_order_bodies.items():
+        sections = markdown_sections(content)
+        for heading in ("findings", "use cases", "workflows and business transactions"):
+            for match in WIKILINK.finditer(sections.get(heading, "")):
+                target = match.group(1).strip().rstrip("/")
+                note = by_path.get(target)
+                if note is not None and order_id not in fields.get(note, {}).get("work_orders", []):
+                    failures.append(
+                        f"{order_id}: reverse-linked note [[{target}]] does not declare the work order"
+                    )
 
     # ---- index: a map, not a summary -------------------------------------
     indexes = [version_root / "index.md", *[service / "index.md" for service in services]]

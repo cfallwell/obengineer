@@ -24,5 +24,12 @@
   ],
   "limitations": [
     "Contractual entitlement was supplied as a fixture assumption rather than queried from a billing source."
-  ]
+  ],
+  "degradation": {
+    "missingRequiredOutputs": [],
+    "unavailableEvidenceScopes": [
+      "RUM, APM, Infrastructure, Synthetics, MetricSets, and usage"
+    ],
+    "impact": "Usage entitlement evidence remains stated rather than measured, so cardinality headroom requires confirmation."
+  }
 }

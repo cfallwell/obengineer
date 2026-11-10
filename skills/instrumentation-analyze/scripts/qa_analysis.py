@@ -9,7 +9,12 @@ import tempfile
 import time
 from pathlib import Path
 
-from analysis_contract import load_json, validate_contract, validate_worker_results
+from analysis_contract import (
+    load_json,
+    validate_contract,
+    validate_run_timing,
+    validate_worker_results,
+)
 from render_analysis_site import Renderer
 from verify_analysis_site import check
 
@@ -50,6 +55,13 @@ def main() -> int:
     started = time.perf_counter()
     failures = validate_contract(contract)
     failures.extend(validate_worker_results(manifest, results))
+    failures.extend(
+        validate_run_timing(
+            manifest,
+            load_json(FIXTURE / "run-timing.json"),
+            results,
+        )
+    )
     validation_seconds = time.perf_counter() - started
     budgets = contract["operations"]["performanceBudgets"]
     if validation_seconds > budgets["validationSeconds"]:

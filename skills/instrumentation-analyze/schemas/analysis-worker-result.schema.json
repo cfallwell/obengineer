@@ -43,8 +43,39 @@
       "type": "array",
       "items": { "type": "string", "minLength": 12 }
     },
+    "degradation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["missingRequiredOutputs", "unavailableEvidenceScopes", "impact"],
+      "properties": {
+        "missingRequiredOutputs": {
+          "type": "array", "uniqueItems": true,
+          "items": { "type": "string", "minLength": 3 }
+        },
+        "unavailableEvidenceScopes": {
+          "type": "array", "uniqueItems": true,
+          "items": { "type": "string", "minLength": 3 }
+        },
+        "impact": { "type": "string", "minLength": 20 }
+      }
+    },
     "error": { "type": "string", "minLength": 12 }
   },
+  "allOf": [
+    {
+      "if": { "properties": { "status": { "const": "limited" } } },
+      "then": {
+        "required": ["degradation"],
+        "properties": { "limitations": { "minItems": 1 } }
+      },
+      "else": {
+        "properties": {
+          "limitations": { "maxItems": 0 },
+          "degradation": false
+        }
+      }
+    }
+  ],
   "$defs": {
     "evidence": {
       "type": "object",

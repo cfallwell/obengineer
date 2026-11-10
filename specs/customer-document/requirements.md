@@ -30,12 +30,12 @@ Traceable requirements for the linked analysis site. The authoring authorities a
 | ID | Requirement | Verified by |
 |---|---|---|
 | R12 | Architecture covers client composition, route model, init owner, backends, accounts, buses, downstreams, third-party consequences, diagrams, and failure points | contract schema and semantic validator |
-| R13 | Technology and Current telemetry are first-class evidence-linked views | contract schema and renderer tests |
+| R13 | Technology and Current telemetry are first-class evidence-linked views; telemetry records scope, observation/read time, provenance, and volume/MetricSet/MTS/SignalFlow evidence or an unavailable disposition | contract schema and renderer tests |
 | R14 | Findings carry evidence, confidence, exposure, risk, remediation, affected objects/work orders, and runnable verification | semantic validator |
 | R15 | Business transactions have bounded grouping values, owning artifacts, exhaustive workflow membership, set/propagation rules, tenant configuration, and proof | semantic validator |
-| R16 | Workflows have boundaries, span trees, events, bounded metrics, joins, dashboard, detectors, objectives, code locations, verification, and work orders | semantic validator |
+| R16 | Workflows have boundaries, span trees, events, bounded metrics, joins, dashboard, detectors, objectives, authorized relative code locations, verification, and work orders | semantic validator |
 | R17 | Use cases have narrative, question, signals, metrics, dashboard, thresholded detectors, objective/error budget, join type, proof, and work orders | semantic validator |
-| R18 | Cross-cutting contracts include one init, SPA route code, allowlisted baggage stamp, identity write, backend propagator, bus propagation, attribution, Collector OTTL/redaction/order, and cardinality arithmetic | semantic validator |
+| R18 | Browser attribution, bus propagation, and Collector processing carry explicit applicability/evidence; applicable contracts include full code/configuration and inapplicable contracts render no page or link | schema, semantic validator, and renderer tests |
 | R19 | Operations include dashboard hierarchy, detector catalogue, objectives, release overlays, log correlation, conditional Synthetics/ThousandEyes, and verification | semantic validator |
 | R20 | Every discovered object has an accepted, deferred, rejected, or unresolved disposition with evidence | analysis contract and live QA |
 
@@ -47,14 +47,14 @@ Traceable requirements for the linked analysis site. The authoring authorities a
 | R22 | Analysis begins only after an exact `no` at optional review | run-context state tests |
 | R23 | At most six evidence jobs run with one coordinator slot reserved | manifest validator |
 | R24 | When two or more jobs are runnable, audited intervals overlap | worker-result validator |
-| R25 | Representative validation and rendering stay within recorded budgets | `make qa-analysis` |
+| R25 | Every worker interval fits its deadline, and collection, reconciliation, rendering, validation, and total wall time fit recorded budgets | worker/run-timing validators; `make qa-analysis` |
 
 ## Version and implementation
 
 | ID | Requirement | Verified by |
 |---|---|---|
 | R26 | `[V1] [V2] ...` versions are immutable and do not link newer detail | site verifier |
-| R27 | Analysis creates the complete work-order queue before acceptance | wiki and contract validators |
+| R27 | Analysis creates a complete work-order queue with valid selectors, authorized repository paths, reciprocal links, existing acyclic dependencies, and acceptance-ready statuses | wiki and contract validators |
 | R28 | Acceptance changes only eligible proposed orders to Ready | acceptance and wiki tests |
 | R29 | Implementation consumes one Ready order from the accepted version | implement command/skill tests |
 | R30 | Verification uses stable `source_ref` values for new plans and reads legacy plans only for migration | verification v1/v2 tests |
