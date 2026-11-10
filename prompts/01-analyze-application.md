@@ -14,7 +14,7 @@ The review surface is
 [`../skills/references/analysis-site.md`](../skills/references/analysis-site.md), not the
 legacy monolithic template.
 Use `../templates/analysis-site/index.md` and `detail.md` as the approved layout. Do not
-replace the compact index with expanded detail sections.
+replace the long linked index with duplicated object detail.
 
 If inputs do not exist, invoke `/ob-start`. Missing optional inputs do not block analysis
 and do not require the human to type `unknown`.
@@ -24,19 +24,20 @@ optional review creates that state; a `yes` selection never does.
 
 ## Evidence collection
 
-Use maximum safe parallelism for independent sources:
+Create the six bounded jobs in `analysis-job-manifest.schema.json`:
 
 - production browser behavior;
-- source, configuration, dependencies, and diagrams;
-- direct Observability Cloud API endpoints;
-- direct Splunk Platform API endpoints across approved indexes;
-- relevant connected MCP tools;
-- cloud and messaging inventory;
-- authorized security checks; and
-- public evidence when permitted.
+- source, configuration, dependencies, and technology;
+- diagrams and prior artifacts;
+- direct Observability Cloud endpoints and relevant connected integrations;
+- direct Splunk Platform endpoints, cloud boundaries, and messaging; and
+- public evidence plus authorized security checks.
 
-MCP servers supplement direct APIs. They are not the only tenant source. Record source
-provenance and reconcile facts after parallel collection.
+Reserve one host slot for the coordinator. The host starts workers; the repository can
+only audit worker result intervals and must never claim it spawned them. If two or more
+jobs are runnable, their recorded intervals overlap without exceeding remaining host
+capacity. MCP servers supplement direct APIs. They are not the only tenant source.
+Record source provenance and reconcile facts after parallel collection.
 
 The live production scan uses the explicit production URL confirmed during the first
 question and is required unless inputs say `no browser: <reason>`. Do not replace it with
@@ -48,11 +49,14 @@ different site's scan or taxonomy is not evidence.
 Produce the full instrumentation strategy:
 
 - architecture, languages, frameworks, runtimes, third parties, and current telemetry;
+- accounts, buses, downstreams, third parties by consequence, one init owner, SPA routes,
+  diagrams, prior artifacts, and failure points;
 - actionable findings;
 - dependency-ordered implementation path;
 - use cases first, then workflows, then business transactions;
 - attributes, metrics, propagation, attribution, collector, and logs where applicable;
-- dashboards, detectors with thresholds, objectives with error budgets, and verification;
+- dashboards, detectors with thresholds and windows, objectives with error budgets,
+  release correlation, Synthetics and ThousandEyes where applicable, and verification;
 - Cross-Cutting Attributes and Baggage Propagation with its applicable provider,
   allowlisted `SpanProcessor.onStart`, identity, backend, and bus patterns; and
 - every proposed work order and repository leg.
@@ -69,6 +73,9 @@ Create:
 
 ```text
 docs/observability/analysis/<app>/V<N>/
+docs/observability/analysis-job-manifest.json
+docs/observability/analysis-worker-results/
+docs/observability/analysis-contract.json
 docs/observability/attribute-schema.json
 docs/observability/implementation-map.json
 docs/observability/provenance-ledger.json
@@ -76,14 +83,19 @@ docs/observability/verification-plan.json
 wiki/apps/<app>/versions/V<N>/
 ```
 
-Run Prompt 02 inside this run. The version's landing page links every detail page and its
-matching wiki/work-order snapshot. Word is optional; when requested it is a summary under
-20 pages.
+Run Prompt 02 inside this run. Validate the canonical contract and render the complete
+tree deterministically. The landing page carries versions, status, next steps, a table of
+contents, a visible architecture summary, and substantive summaries linking every
+nonempty detail area and matching work-order snapshot. Word is optional; when requested
+it is a summary under 20 pages.
 
 ## Review and handoff
 
-Validate links, breadcrumbs, schema, map, ledger, verification plan, wiki, work-order
-dependencies, reverse links, and credential scanning. Open one analysis PR.
+Run `make qa-analysis`. Validate manifest intervals and coordinator capacity, canonical
+object fields, deterministic rendering, placeholders, links, breadcrumbs, schema, map,
+ledger, verification plan, wiki,
+work-order dependencies, reverse links, performance budgets, and credential scanning.
+Open one analysis PR.
 
 When ready for review, ask the human to review the linked PR. Process review comments and
 commit corrections. Ask:

@@ -175,10 +175,12 @@ def test_direct_apis_and_mcp_are_complementary():
         assert variable in telemetry
 
 
-def test_analysis_uses_maximum_safe_parallelism_but_serial_names():
+def test_analysis_uses_bounded_host_parallelism_but_serial_names():
     skill = (SKILLS / "instrumentation-analyze" / "SKILL.md").read_text()
     lifecycle = (SKILLS / "references" / "analysis-run-lifecycle.md").read_text()
-    assert "every safe sub-agent slot" in skill
+    assert "exactly six workstreams" in skill
+    assert "one host concurrency slot for the coordinator" in skill
+    assert "repository validates only" in skill
     assert "Naming and schema reconciliation remain serial" in lifecycle
 
 
@@ -191,7 +193,7 @@ def test_analysis_site_is_the_review_authority():
         assert "localhost" in text
         assert "[V1] [V2] [V3]" in text or "[V1] [V2]" in text or "[V1] [V2] ..." in text
     for required in (
-        "Findings", "Instrumentation strategy", "Work orders",
+        "Technology", "Current telemetry", "Findings", "Instrumentation strategy", "Work orders",
         "Use cases", "Workflows", "Business transactions",
         "Shared signal contracts", "Reference",
     ):
@@ -206,31 +208,31 @@ def test_analysis_navigation_is_internal_and_breadcrumbed():
     assert "Every `Open` cell links the matching detail index" in site
 
 
-def test_approved_compact_landing_layout_is_committed_and_ordered():
+def test_approved_long_linked_landing_layout_is_committed_and_ordered():
     template = (ROOT / "templates" / "analysis-site" / "index.md").read_text()
     required = (
         "[V1](../V1/index.md) [V2](../V2/index.md) **[V3]**",
         "[Analysis](../index.md)",
-        "Side-panel navigation",
+        "## Status",
         "Next steps",
         "## Changes in this version",
-        "## Contents",
-        "## Analysis summary",
+        "## Table of contents and section summaries",
+        "## Architecture summary",
         "| Priority findings | Primary use cases |",
+        "## Side-panel navigation",
     )
     positions = [template.index(item) for item in required]
     assert positions == sorted(positions)
     rows = (
-        "Architecture", "Findings", "Instrumentation strategy",
+        "Architecture", "Technology", "Current telemetry", "Findings", "Instrumentation strategy",
         "Implementation path", "Work orders", "Use cases", "Workflows",
         "Business transactions", "Shared signal contracts",
         "Operations and verification", "Reference",
     )
     row_positions = [template.index(f"| {row} |") for row in rows]
     assert row_positions == sorted(row_positions)
-    assert template.count("\n## ") == 3, (
-        "detail sections belong in separate side-panel views, not expanded on the landing"
-    )
+    assert template.count("\n## ") >= 7
+    assert "storefront or client composition" in template
 
 
 def test_analysis_creates_versioned_wiki_and_all_work_orders():
