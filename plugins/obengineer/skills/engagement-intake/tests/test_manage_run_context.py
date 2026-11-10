@@ -169,6 +169,47 @@ def test_reopen_clears_authorization_and_preserves_completed_inputs(tmp_path):
     assert state["optional"]["items"]["2"] == "pending"
 
 
+def test_explicit_template_defaults_render_checked_after_restart(tmp_path):
+    inputs = write_required_inputs(tmp_path)
+    data = yaml.safe_load(inputs.read_text())
+    data["input_provenance"] = {
+        "supplied_paths": [
+            "security_assessment.mode",
+            "entitlement.fit_to_entitlement",
+            "public_evidence.allowed",
+            "standards.percentile",
+        ]
+    }
+    inputs.write_text(yaml.safe_dump(data, sort_keys=False))
+
+    first = context.start(context.new_context(), inputs)
+    assert first["optional"]["items"]["2"] == "complete"
+    assert first["optional"]["items"]["5"] == "complete"
+    assert first["optional"]["items"]["8"] == "complete"
+    assert first["optional"]["items"]["9"] == "complete"
+
+    restarted = context.start(context.new_context(), inputs)
+    checklist = context.render_checklist(restarted)
+    for number in (2, 5, 8, 9):
+        assert f"[x] {number}." in checklist
+
+
+def test_filtered_add_uses_canonical_numbers_and_reopen_preserves_mapping(tmp_path):
+    inputs = write_required_inputs(tmp_path)
+    state = context.start(context.new_context(), inputs)
+
+    # A filtered display keeps labels 2 and 9; display position 1 is never
+    # reinterpreted as canonical item 2.
+    state = context.review(state, "yes 9", [2, 9])
+    assert state["optional"]["selected"] == [9]
+    state = context.record_answer(state, 9, "answered")
+    state = context.review(state, "no", [2])
+    reopened = context.reopen(state, inputs)
+    assert reopened["optional"]["items"]["9"] == "complete"
+    assert reopened["optional"]["items"]["2"] == "pending"
+    assert reopened["optional"]["offered"] == []
+
+
 def test_context_write_is_atomic_and_schema_valid(tmp_path):
     path = tmp_path / context.CONTEXT_RELATIVE_PATH
     state = context.start(context.new_context())

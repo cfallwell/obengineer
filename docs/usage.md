@@ -23,6 +23,11 @@ asks one required question for the application name, an explicit production URL 
 what source, the confirmed production surface, direct Splunk APIs, and connected MCP
 tools can measure.
 
+This five-second check covers the installed deterministic prefill/start executable
+sequence and verifies output precedes instrumented network or process discovery.
+Markdown slash-command parsing and the host model's first-token latency remain owned by
+the host and cannot be guaranteed by repository code.
+
 It then asks:
 
 ```text
@@ -43,7 +48,8 @@ Selected items are prompted one at a time. A blank skips one. The checked list u
 `[x]` for answered, `[ ]` for pending, and `[-]` for skipped. After selected answers the
 agent returns to the optional-review question. `yes 1 3` never starts analysis; only an
 explicit `no` at optional review authorizes it. The human never has to type `unknown` or
-edit YAML.
+edit YAML. Filtered suggestions retain their canonical 1–10 numbers, so a list may show
+`2` and `9` without renumbering them to `1` and `2`.
 
 Every onboarding turn atomically updates ignored local state at
 `.obengineer/run-context.json`. Allowlisted `.env` values prefill missing engagement
@@ -154,7 +160,9 @@ Run:
 
 The agent lists supplied human-editable values with redacted current values. Reply
 `yes 2 5`. Send a replacement or `clear`. Secret values display only as `configured`.
-The edit automatically creates the next immutable version.
+`clear` deterministically restores the template value and removes supplied provenance;
+the literal word is never saved. Explicit default-valued answers remain checked across
+restart. The edit automatically creates the next immutable version.
 
 Earlier versions remain selectable and read-only. The accepted version is the only
 executable work-order queue.

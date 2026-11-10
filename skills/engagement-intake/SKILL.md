@@ -81,7 +81,8 @@ Then ask:
 >
 > Suggested inputs include:
 
-Number only applicable suggestions. The canonical suggestion families are:
+Show only applicable suggestions while preserving these canonical numbers; filtered
+lists may have gaps and must never be renumbered by display position:
 
 1. diagrams or prior analysis for this application;
 2. passive or safe-active security authorization;
@@ -103,7 +104,7 @@ only after the exact response `no` produces `analysis_authorized: true` and
 
 ### Add
 
-List only useful absent inputs, renumbered from one for the current prompt. Prompt for
+List only useful absent inputs with their canonical 1–10 numbers. Prompt for
 selected items in ascending order. A blank skips the item. Save additions and
 return to the checked optional-review list. Run the next immutable analysis version only
 after an exact `no`.
@@ -117,11 +118,19 @@ For each selection:
 
 1. show the current redacted value;
 2. request the replacement;
-3. accept `clear` to remove it; and
+3. accept reserved value `clear` through
+   `prefill_engagement_inputs.py --json - --overwrite-existing`; the script restores
+   the template value, removes explicit-supply provenance, and never stores the literal;
+   and
 4. state the immediate consequence.
 
 Save edits, show the checked list, and ask again. Run the next immutable version only
 after an exact `no`.
+
+`input_provenance.supplied_paths` records dotted paths explicitly supplied through the
+allowlist. This is value-free metadata: it keeps intentional defaults such as `passive`,
+`false`, `true`, and `p90` checked across restart while ordinary start/add prefills
+continue to preserve existing human values.
 
 ## Discovery
 

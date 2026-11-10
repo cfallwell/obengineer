@@ -66,6 +66,11 @@
       "x-shape": "number",
       "x-target": "entitlement.observability_cloud.custom_mts_entitled"
     },
+    "FIT_TO_ENTITLEMENT": {
+      "type": "string",
+      "x-shape": "boolean",
+      "x-target": "entitlement.fit_to_entitlement"
+    },
     "MMS_CARDINALITY_ENTITLED": {
       "type": "string",
       "x-shape": "number",

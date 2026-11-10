@@ -16,8 +16,11 @@ Edit inputs already supplied to an obengineer engagement.
    `These inputs are already set. Would you like to edit them?`
    Accept `yes 1 3 4` or `no`.
 6. For each selection, show the current value and request the replacement.
-   `clear` removes it and returns it to the intake-recommendations page.
-   Persist replacements through `prefill_engagement_inputs.py --json - --overwrite-existing`;
+   `clear` is a reserved edit value that restores the template value, removes
+   explicit-supply provenance, and returns the field to the intake-recommendations
+   page; the prefill script never persists the literal word.
+   Persist replacements and clears through
+   `prefill_engagement_inputs.py --json - --overwrite-existing`;
    this flag is reserved for explicit edit mode.
    Then show the checked list and ask whether to edit more. A `yes` response never
    starts analysis; only a response exactly equal to `no` authorizes it.

@@ -22,6 +22,13 @@
 
 schema_version: 3
 
+# Dotted paths explicitly supplied by a human or allowlisted project context.
+# This distinguishes an intentional default-valued answer (for example passive,
+# true, or p90) from an untouched template default. Values and secrets never
+# appear here.
+input_provenance:
+  supplied_paths: []
+
 engagement:
   application: ""              # required; identifier used in every filename and heading
   customer: ""
