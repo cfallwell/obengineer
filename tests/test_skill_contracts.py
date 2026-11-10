@@ -419,10 +419,9 @@ def test_reinstall_removes_only_manifest_owned_retired_commands(tmp_path):
     replacement = commands / "ob-start.md"
     retired = commands / "ob-intake.md"
     replacement.rename(retired)
-    manifest["created"] = [
-        str(retired) if entry == str(replacement) else entry
-        for entry in manifest["created"]
-    ]
+    manifest["owned"]["commands/ob-intake.md"] = manifest["owned"].pop(
+        "commands/ob-start.md"
+    )
     manifest_path.write_text(json.dumps(manifest))
     subprocess.run(
         [str(ROOT / "install.sh"), "--cursor", "--project", str(tmp_path)],

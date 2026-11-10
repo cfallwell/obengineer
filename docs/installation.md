@@ -74,10 +74,11 @@ Project-scoped installation also creates only missing root scaffold files:
 artifacts/README.md
 ```
 
-It never overwrites an existing file. `.obengineer/scaffold-manifest.json` records a
-digest only for files the installer created. Reinstall preserves edits. After the final
-installed host is removed, uninstall removes an owned scaffold file only when its digest
-is unchanged; it never removes the `artifacts/` directory or files the user added.
+It never overwrites an existing file. `.obengineer/scaffold-manifest.json` records
+digests for files the installer created and the exact `.gitignore` lines it added.
+Reinstall preserves edits. After the final installed host is removed, uninstall removes
+only unchanged owned scaffold files and only its tracked ignore lines; it never removes
+preexisting/user ignore lines, the `artifacts/` directory, or files the user added.
 
 ### Install locations
 
@@ -88,8 +89,11 @@ is unchanged; it never removes the `artifacts/` directory or files the user adde
 | Codex | `~/.codex/skills` and `~/.codex/prompts` | `<project>/.agents/skills` and `<project>/.agents/prompts` |
 
 Each host directory receives `.obengineer-install.json`. That manifest records the
-source checkout, scope, and paths created by the installer so removal is bounded to
-those paths. The separate project scaffold manifest is local and ignored.
+source checkout, scope, and a digest or symlink target for every installer-owned path.
+Reinstall refuses untracked collisions and modified installed paths before writing
+anything. Uninstall removes only entries whose current digest still matches and
+preserves modified commands and skills. The separate project scaffold manifest is local
+and ignored.
 
 ### Installer options
 
@@ -127,10 +131,11 @@ Reinstalling this release migrates `/ob-intake`, `/ob-generate`, and `/ob-wiki` 
 only when the prior obengineer manifest proves it created them; same-named user files that
 were not installed by obengineer are left alone.
 
-The installer replaces an existing destination with the same skill or command name.
-Uninstall removes the replacement; it cannot restore content that existed before the
-install. Review a `--dry-run` before installing into a host with custom files of the
-same names.
+The installer never replaces an untracked destination with the same skill or command
+name. It reports `REFUSE` and leaves the host and project scaffold unchanged. Move or
+back up the reported user file explicitly before retrying. A reinstall replaces only
+paths whose manifest ownership record still matches; an operational failure rolls those
+changes back.
 
 Root scaffold files follow a stricter rule: existing files are never replaced, including
 files created by an earlier install. An owned file changed after installation is treated
@@ -195,9 +200,9 @@ Preview and then remove selected hosts:
 ./install.sh --cursor --project /path/to/memory-repo --uninstall
 ```
 
-Use the same toolkit checkout when possible. The manifest contains absolute paths, so
-uninstall can remove installed entries even when the source checkout has moved, but
-running from the original checkout makes the intended source and scope clear.
+Use the same toolkit checkout when possible. Manifest entries are relative to their host
+directory and digest-checked, so uninstall stays bounded and does not depend on the
+source checkout remaining at its original path.
 
 ## Installation troubleshooting
 
