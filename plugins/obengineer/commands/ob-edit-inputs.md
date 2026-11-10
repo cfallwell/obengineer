@@ -14,7 +14,9 @@ Edit inputs already supplied to an obengineer engagement.
    Accept `yes 1 3 4` or `no`.
 5. For each selection, show the current value and request the replacement.
    `clear` removes it and returns it to the intake-recommendations page.
-6. Save and validate the edits, then automatically follow
+   Then show the checked list and ask whether to edit more. A `yes` response never
+   starts analysis; only a response exactly equal to `no` authorizes it.
+6. Save and validate the edits, then follow
    `${CLAUDE_PLUGIN_ROOT}/commands/ob-analyze.md` as the next immutable `V<N>` run.
 
 The new version records each edited field and every resulting change. Open one analysis

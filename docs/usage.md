@@ -17,9 +17,11 @@ Run from the artifact repository:
 /ob-start
 ```
 
-The agent discovers what source, the production surface, direct Splunk APIs, and connected
-MCP tools can measure. It asks only for the application name, a production URL when one
-cannot be discovered, and what hurts today.
+Within five seconds, before source, network, browser, API, or MCP discovery, the agent
+asks one required question for the application name, an explicit production URL (or
+`no browser: <reason>`), and what hurts today. Only after that answer does it discover
+what source, the confirmed production surface, direct Splunk APIs, and connected MCP
+tools can measure.
 
 It then asks:
 
@@ -37,8 +39,16 @@ Example: yes 1 3 4
 Reply no to start with what I can already see.
 ```
 
-Selected items are prompted one at a time. A blank skips one. The human never has to type
-`unknown` or edit YAML.
+Selected items are prompted one at a time. A blank skips one. The checked list uses
+`[x]` for answered, `[ ]` for pending, and `[-]` for skipped. After selected answers the
+agent returns to the optional-review question. `yes 1 3` never starts analysis; only an
+explicit `no` at optional review authorizes it. The human never has to type `unknown` or
+edit YAML.
+
+Every onboarding turn atomically updates ignored local state at
+`.obengineer/run-context.json`. Allowlisted `.env` values prefill missing engagement
+inputs. Raw token values and passwords are never copied; dummy access uses a
+`${VAR}` password reference.
 
 For optional read-only API access:
 
@@ -50,8 +60,9 @@ The script prompts in the terminal, writes local `.env`, and never prints the to
 
 ## Analysis
 
-`/ob-start` automatically runs analysis V1. Independent evidence sources run with maximum
-safe sub-agent parallelism. Naming and schema reconciliation happen after evidence returns.
+After the explicit `no`, `/ob-start` automatically runs analysis V1. Independent
+evidence sources run with maximum safe sub-agent parallelism. Naming and schema
+reconciliation happen after evidence returns.
 
 The analysis PR contains:
 
@@ -127,7 +138,7 @@ Run:
 ```
 
 The agent lists only useful unanswered inputs. Reply `yes 1 3`, answer each selected
-prompt, and the agent automatically creates V2 and its PR.
+prompt, review the checked list, then reply `no` to authorize V2 and its PR.
 
 Run:
 

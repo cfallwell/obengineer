@@ -25,7 +25,7 @@ gives the engagement an artifact that outlives the chat.
 |---|---|---|
 | `engagement` | Filenames, document title, version on the deliverable | The run invents a name, and the next run invents a different one |
 | `initial_scope` | What engineering has authorized to instrument, after the contract exists: the full scope, repository-qualified repositories or parent folders, and optional per-repository branches. Intake does not ask for it | Instrumentation stops and asks. An empty authorization is not permission to scan every project a host can see. An empty branch mapping means each current checkout, including an unmerged pull request |
-| `artifacts` | Whether the backend map starts from a diagram the human already has; whether an existing taxonomy of **this** application is extended; which earlier scans of **this** site to compare | Journeys get named from a product playbook instead of this application. A file from a different site is not this row |
+| `artifacts` | The project-scaffolded artifact location; whether the backend map starts from a diagram the human already has; whether an existing taxonomy of **this** application is extended; which earlier scans of **this** site to compare | Journeys get named from a product playbook instead of this application. A file from a different site is not this row |
 | `cloud_diagrams` | Whether the run may draw production architecture from a cloud inventory MCP already connected for this site. Test and QA inventories are not the diagram | No generated diagram. The human's own diagrams still count. Any cloud |
 | `surfaces` | The live production site scan. Required for whatever site this engagement names, unless `front_end_scan_notes` is `no browser: <reason>`. Test and QA URLs are not the scan | The run stops and asks for the production URL. It does not invent a site and it does not substitute a test or QA environment |
 | `security_assessment` | Whether security screening is passive, explicitly safe-active, or opted out; and the origins, exclusions, and request limits for safe-active checks | Passive source/runtime review only. No mutation, brute force, load, destructive fuzzing, or cross-tenant access |
@@ -220,12 +220,14 @@ A token, an API key, or a login may be submitted so the analysis can see
 authenticated surfaces. Without one, checkout, subscription, and account
 journeys stay closed, and the scan records that limit.
 
-`analysis_access` stores a **reference**: `${ENV_VAR}` or the name of a secret.
-Never the token, the key, or the password. A value written here gets committed.
+`analysis_access` stores a **reference**, never the token, key, or password. Token and
+API-key references may use the existing named-secret convention. `password_ref` is
+stricter: it must be exactly `${ENV_VAR}`. A value written here gets committed.
 
 `login_id` and `password_ref` are a **dummy account used for testing only**.
 A production login is not an input. `login_id` names that dummy account.
 `password_ref` points at its password and does not contain it.
+The two fields must be supplied together.
 
 When any of `token_ref`, `api_key_ref`, `login_id`, or `password_ref` is
 supplied, `rotate_on_completion` is `true`. The token, the API key, the login

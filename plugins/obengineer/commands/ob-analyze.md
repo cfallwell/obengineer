@@ -3,27 +3,35 @@ description: Analyze — publish a versioned linked analysis with its wiki and w
 ---
 
 Run an obengineer analysis version. `/ob-start`, `/ob-add-inputs`, and
-`/ob-edit-inputs` normally dispatch here; direct invocation reruns current inputs.
+`/ob-edit-inputs` normally dispatch here. Direct invocation does not bypass intake
+authorization.
 
-1. Adopt `${CLAUDE_PLUGIN_ROOT}/agents/instrumentation-architect.agent.md`.
-2. Load `docs/observability/engagement-inputs.yaml`. If absent, follow
+1. Run
+   `python3 "${CLAUDE_PLUGIN_ROOT}/skills/engagement-intake/scripts/manage_run_context.py" show --project-root .`.
+   Continue only when it reports `Analysis authorized: yes (explicit no recorded)` and
+   the context contains `analysis_authorized: true` and `last_event: review-no`.
+   Otherwise follow
+   `${CLAUDE_PLUGIN_ROOT}/commands/ob-start.md`. Neither direct invocation nor a
+   `yes <numbers>` response authorizes analysis.
+2. Adopt `${CLAUDE_PLUGIN_ROOT}/agents/instrumentation-architect.agent.md`.
+3. Load `docs/observability/engagement-inputs.yaml`. If absent, follow
    `${CLAUDE_PLUGIN_ROOT}/commands/ob-start.md`. Missing optional answers never block
    analysis; put useful gaps on the intake-recommendations page.
-3. Determine the next immutable `V<N>`. Read accepted names and finding ids from the
+4. Determine the next immutable `V<N>`. Read accepted names and finding ids from the
    latest version before scanning. Reuse them and report changes under
    `${CLAUDE_PLUGIN_ROOT}/skills/references/incremental-runs.md`.
-4. Follow `${CLAUDE_PLUGIN_ROOT}/prompts/01-analyze-application.md`.
-5. During the same run, follow
+5. Follow `${CLAUDE_PLUGIN_ROOT}/prompts/01-analyze-application.md`.
+6. During the same run, follow
    `${CLAUDE_PLUGIN_ROOT}/prompts/02-build-instrumentation-wiki.md` to create the
    versioned wiki and every proposed work order.
-6. Use `$instrumentation-analyze`, `$instrumentation-wiki`,
+7. Use `$instrumentation-analyze`, `$instrumentation-wiki`,
    `$baggage-propagation`, `$cardinality-budget`, and `$deliverable-review`.
    Use `$customer-doc-render` only when the human requested the optional short Word
    summary.
-7. Follow `${CLAUDE_PLUGIN_ROOT}/skills/references/analysis-run-lifecycle.md`: include
+8. Follow `${CLAUDE_PLUGIN_ROOT}/skills/references/analysis-run-lifecycle.md`: include
    inputs, the analysis site, wiki, and work orders in one PR and process review
    comments.
-8. Validate the provenance ledger and read-only verification plan.
+9. Validate the provenance ledger and read-only verification plan.
 
 The review surface is owned by
 `${CLAUDE_PLUGIN_ROOT}/skills/references/analysis-site.md`: linked Markdown opened in

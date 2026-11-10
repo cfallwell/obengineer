@@ -21,6 +21,13 @@ Run `/path/to/obengineer/scripts/setup-splunk-access.sh` from the artifact repos
 It creates or updates `.env` interactively, never prints a token, and ensures the file is
 ignored. Analysis reads `.env` or the process environment.
 
+Project install also creates a committed `.env.template` whose first names are
+`PRODUCTION_URL`, `TEST_LOGIN_ID`, and `PASSWORD_REF`. The allowlisted prefill schema
+maps required and optional onboarding names into missing engagement-input fields.
+`PASSWORD_REF` must be `${VAR}`. Raw Splunk token values are used only to establish that
+access is configured; committed inputs receive `${SPLUNK_ACCESS_TOKEN}` and
+`${SPLUNK_TOKEN}` references, never their values.
+
 | Variable | Used for | Effect when absent |
 |---|---|---|
 | `SPLUNK_REALM` | Observability Cloud realm; resource and `https://stream.<realm>.observability.splunkcloud.com` SignalFlow hosts are derived from it. | Observability inventory cannot run. |
@@ -262,10 +269,10 @@ Installed commands append free-form invocation text to their run contract:
 
 | Command | Useful argument |
 |---|---|
-| `/ob-start` | Optional application context; starts the guided selection and V1. |
-| `/ob-add-inputs` | Optional context for an unanswered suggestion; automatically runs the next version. |
-| `/ob-edit-inputs` | Optional name of a supplied value to change; automatically runs the next version. |
-| `/ob-analyze` | Direct rerun of current inputs, normally dispatched by the three guided commands. |
+| `/ob-start` | Optional application context; asks the required question immediately and starts V1 only after explicit `no`. |
+| `/ob-add-inputs` | Optional context for an unanswered suggestion; selected answers return to review, where explicit `no` starts the next version. |
+| `/ob-edit-inputs` | Optional name of a supplied value to change; edits return to review, where explicit `no` starts the next version. |
+| `/ob-analyze` | Direct rerun of current inputs only when run context already records explicit-`no` authorization. |
 | `/ob-implement` | Optional bounded selector: work order, BT, workflow, use case, detector, objective, or config target. It must resolve to one Ready work order in the accepted version. |
 | `/ob-terraform` | Application or environment focus already authorized by the accepted contract. |
 | `/ob-verify` | Optional criterion or cohort focus from the accepted verification plan; never grants mutation or remediation authority. |

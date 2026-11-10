@@ -7,6 +7,7 @@ import argparse
 import re
 import sys
 from pathlib import Path
+from urllib.parse import urlparse
 
 try:
     import yaml
@@ -29,6 +30,18 @@ SECRET = re.compile(
     r"|-----BEGIN [A-Z ]*PRIVATE KEY-----"
     r"|\bgh[posur]_[A-Za-z0-9]{20,}\b)"
 )
+PASSWORD_REFERENCE = re.compile(r"^\$\{[A-Za-z_][A-Za-z0-9_]*\}$")
+
+
+def supplied(value) -> bool:
+    return value not in (None, "", "unknown", [])
+
+
+def absolute_http_url(value) -> bool:
+    if not isinstance(value, str):
+        return False
+    parsed = urlparse(value)
+    return parsed.scheme in {"http", "https"} and bool(parsed.netloc)
 
 
 def migrate_v2(text: str) -> str:
@@ -84,6 +97,65 @@ def verify_text(text: str) -> list[str]:
         return ["engagement inputs top level must be an object"]
     if data.get("schema_version") != 3:
         failures.append("schema_version must be 3")
+    engagement = data.get("engagement")
+    if not isinstance(engagement, dict) or not supplied(
+        engagement.get("application")
+    ):
+        failures.append("engagement.application is required")
+    surfaces = data.get("surfaces")
+    if not isinstance(surfaces, dict):
+        failures.append("surfaces must be an object")
+        surfaces = {}
+    production_urls = surfaces.get("production_urls")
+    valid_urls = (
+        isinstance(production_urls, list)
+        and bool(production_urls)
+        and all(absolute_http_url(url) for url in production_urls)
+    )
+    artifacts = data.get("artifacts")
+    if not isinstance(artifacts, dict):
+        failures.append("artifacts must be an object")
+        artifacts = {}
+    no_browser = artifacts.get("front_end_scan_notes")
+    valid_no_browser = (
+        isinstance(no_browser, str)
+        and bool(re.fullmatch(r"no browser:\s*\S.*", no_browser.strip(), re.I))
+    )
+    if valid_urls == valid_no_browser:
+        failures.append(
+            "provide production_urls or front_end_scan_notes as "
+            "'no browser: <reason>', but not both"
+        )
+    business_context = data.get("business_context")
+    if not isinstance(business_context, dict) or not supplied(
+        business_context.get("commentary")
+    ):
+        failures.append("business_context.commentary (what hurts today) is required")
+    access = data.get("analysis_access")
+    if not isinstance(access, dict):
+        failures.append("analysis_access must be an object")
+        access = {}
+    login_set = supplied(access.get("login_id"))
+    password = access.get("password_ref")
+    password_set = supplied(password)
+    if login_set != password_set:
+        failures.append(
+            "analysis_access.login_id and password_ref must be supplied together"
+        )
+    if password_set and (
+        not isinstance(password, str) or not PASSWORD_REFERENCE.fullmatch(password)
+    ):
+        failures.append(
+            "analysis_access.password_ref must be a ${VAR} reference"
+        )
+    access_supplied = any(
+        supplied(access.get(field))
+        for field in ("token_ref", "api_key_ref", "login_id", "password_ref")
+    )
+    if access_supplied and access.get("rotate_on_completion") is not True:
+        failures.append(
+            "analysis_access.rotate_on_completion must be true when access is supplied"
+        )
     entitlement = data.get("entitlement")
     if not isinstance(entitlement, dict):
         failures.append("entitlement must be an object")

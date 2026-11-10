@@ -1,0 +1,171 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://obengineer.dev/schemas/env-prefill.schema.json",
+  "title": "Allowlisted environment-to-engagement-input mappings",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "PRODUCTION_URL": {
+      "type": "string",
+      "format": "uri",
+      "x-target": "surfaces.production_urls",
+      "x-shape": "single-list"
+    },
+    "TEST_LOGIN_ID": {
+      "type": "string",
+      "x-target": "analysis_access.login_id"
+    },
+    "PASSWORD_REF": {
+      "type": "string",
+      "pattern": "^\\$\\{[A-Za-z_][A-Za-z0-9_]*\\}$",
+      "x-target": "analysis_access.password_ref"
+    },
+    "APPLICATION": {
+      "type": "string",
+      "x-target": "engagement.application"
+    },
+    "NO_BROWSER_REASON": {
+      "type": "string",
+      "x-prefix": "no browser: ",
+      "x-target": "artifacts.front_end_scan_notes"
+    },
+    "WHAT_HURTS": {
+      "type": "string",
+      "x-target": "business_context.commentary"
+    },
+    "ARTIFACTS_DIR": {
+      "type": "string",
+      "x-target": "artifacts.location"
+    },
+    "SECURITY_ASSESSMENT_MODE": {
+      "type": "string",
+      "enum": ["passive", "safe-active", "none"],
+      "x-target": "security_assessment.mode"
+    },
+    "SECURITY_AUTHORIZED_ORIGINS": {
+      "type": "string",
+      "x-shape": "csv-list",
+      "x-target": "security_assessment.authorized_origins"
+    },
+    "SECURITY_EXCLUDED_PATHS": {
+      "type": "string",
+      "x-shape": "csv-list",
+      "x-target": "security_assessment.excluded_paths"
+    },
+    "SPLUNK_REALM": {
+      "type": "string",
+      "x-target": "tenancy.o11y_realm"
+    },
+    "DEPLOYMENT_ENVIRONMENTS": {
+      "type": "string",
+      "x-shape": "csv-list",
+      "x-target": "tenancy.environments"
+    },
+    "CUSTOM_MTS_ENTITLED": {
+      "type": "string",
+      "x-shape": "number",
+      "x-target": "entitlement.observability_cloud.custom_mts_entitled"
+    },
+    "MMS_CARDINALITY_ENTITLED": {
+      "type": "string",
+      "x-shape": "number",
+      "x-target": "entitlement.observability_cloud.mms_cardinality_entitled"
+    },
+    "RUM_SESSIONS_PER_DAY_AVG": {
+      "type": "string",
+      "x-shape": "number",
+      "x-target": "traffic_baseline.rum.sessions_per_day_avg"
+    },
+    "APM_REQUESTS_PER_MINUTE_AVG": {
+      "type": "string",
+      "x-shape": "number",
+      "x-target": "traffic_baseline.apm.requests_per_minute_avg"
+    },
+    "LOG_GB_PER_HOUR_AVG": {
+      "type": "string",
+      "x-shape": "number",
+      "x-target": "traffic_baseline.logs.gb_per_hour_avg"
+    },
+    "PRIVACY_REGIMES": {
+      "type": "string",
+      "x-shape": "csv-list",
+      "x-target": "constraints.privacy_regimes"
+    },
+    "DATA_RESIDENCY": {
+      "type": "string",
+      "x-target": "constraints.data_residency"
+    },
+    "CONSENT_PLATFORM": {
+      "type": "string",
+      "x-target": "constraints.consent_platform"
+    },
+    "CHANGE_WINDOWS": {
+      "type": "string",
+      "x-target": "constraints.change_windows"
+    },
+    "MTTD_MINUTES": {
+      "type": "string",
+      "x-shape": "number",
+      "x-target": "business_context.incident_experience.mttd_minutes"
+    },
+    "MTTA_MINUTES": {
+      "type": "string",
+      "x-shape": "number",
+      "x-target": "business_context.incident_experience.mtta_minutes"
+    },
+    "MTTR_MINUTES": {
+      "type": "string",
+      "x-shape": "number",
+      "x-target": "business_context.incident_experience.mttr_minutes"
+    },
+    "INCIDENTS_PER_MONTH": {
+      "type": "string",
+      "x-shape": "number",
+      "x-target": "business_context.incident_experience.incidents_per_month"
+    },
+    "ENGINEERING_HOURS_PER_MONTH_ON_TRIAGE": {
+      "type": "string",
+      "x-shape": "number",
+      "x-target": "business_context.operating_cost.engineering_hours_per_month_on_triage"
+    },
+    "REVENUE_PER_HOUR_ONLINE": {
+      "type": "string",
+      "x-shape": "number",
+      "x-target": "business_context.revenue_context.revenue_per_hour_online"
+    },
+    "PUBLIC_RESEARCH_ALLOWED": {
+      "type": "string",
+      "x-shape": "boolean",
+      "x-target": "public_evidence.allowed"
+    },
+    "PUBLIC_BRAND_TERMS": {
+      "type": "string",
+      "x-shape": "csv-list",
+      "x-target": "public_evidence.brand_terms"
+    },
+    "ANALYSIS_PERCENTILE": {
+      "type": "string",
+      "pattern": "^p(?:[1-9][0-9]?|100)$",
+      "x-target": "standards.percentile"
+    },
+    "FIRST_JOURNEY": {
+      "type": "string",
+      "x-target": "outcomes.first_journey"
+    },
+    "SPLUNK_HOST": {
+      "type": "string",
+      "format": "uri",
+      "x-target": "tenancy.splunk_platform_host"
+    },
+    "SPLUNK_ACCESS_TOKEN": {
+      "type": "string",
+      "x-reference-if-set": "${SPLUNK_ACCESS_TOKEN}",
+      "x-target": "analysis_access.api_key_ref"
+    },
+    "SPLUNK_TOKEN": {
+      "type": "string",
+      "x-reference-if-set": "${SPLUNK_TOKEN}",
+      "x-target": "analysis_access.token_ref"
+    }
+  }
+}

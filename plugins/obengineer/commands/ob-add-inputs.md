@@ -14,7 +14,10 @@ Add inputs to an existing obengineer engagement.
    materially improve the analysis. Accept `yes 1 3 4` or `no`.
 4. Prompt once for each selected item, in order. A blank skips that item and keeps
    it on the intake-recommendations page. Never ask the human to type `unknown`.
-5. Save and validate the added inputs, then automatically follow
+   Show the checked `[x]`, `[ ]`, and `[-]` list, then ask the review question again.
+   A `yes` response never starts analysis; only a response exactly equal to `no`
+   authorizes it.
+5. Save and validate the added inputs, then follow
    `${CLAUDE_PLUGIN_ROOT}/commands/ob-analyze.md` as the next immutable `V<N>` run.
 
 The new version records the added inputs and every resulting change. Open one analysis
