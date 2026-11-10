@@ -6,6 +6,7 @@ from __future__ import annotations
 import json
 import re
 from datetime import datetime
+from functools import lru_cache
 from pathlib import Path
 from typing import Any, Iterable
 
@@ -55,6 +56,140 @@ PLACEHOLDER = re.compile(
     r"\bplaceholder\b|<(?!(?:https?://|/?[a-z][a-z0-9-]*>))[A-Za-z][^>\n]{0,50}>)",
     re.IGNORECASE,
 )
+CONTRACT_SCHEMA = (
+    Path(__file__).resolve().parent.parent / "schemas" /
+    "analysis-contract.schema.json"
+)
+
+
+@lru_cache(maxsize=1)
+def _contract_schema() -> dict[str, Any]:
+    return load_json(CONTRACT_SCHEMA)
+
+
+def _json_equal(left: Any, right: Any) -> bool:
+    return json.dumps(left, sort_keys=True, separators=(",", ":")) == json.dumps(
+        right, sort_keys=True, separators=(",", ":")
+    )
+
+
+def _schema_type_matches(value: Any, expected: str) -> bool:
+    return {
+        "array": lambda: isinstance(value, list),
+        "boolean": lambda: isinstance(value, bool),
+        "integer": lambda: isinstance(value, int) and not isinstance(value, bool),
+        "null": lambda: value is None,
+        "number": lambda: (
+            isinstance(value, (int, float)) and not isinstance(value, bool)
+        ),
+        "object": lambda: isinstance(value, dict),
+        "string": lambda: isinstance(value, str),
+    }[expected]()
+
+
+def _resolve_schema_ref(root: dict[str, Any], reference: str) -> dict[str, Any]:
+    if not reference.startswith("#/"):
+        raise ValueError(f"unsupported non-local schema reference {reference}")
+    value: Any = root
+    for part in reference[2:].split("/"):
+        key = part.replace("~1", "/").replace("~0", "~")
+        value = value[key]
+    if not isinstance(value, dict):
+        raise ValueError(f"schema reference {reference} does not resolve to an object")
+    return value
+
+
+def _validate_schema_node(
+    value: Any,
+    schema: dict[str, Any],
+    root: dict[str, Any],
+    path: str,
+    failures: list[str],
+) -> None:
+    if "$ref" in schema:
+        _validate_schema_node(
+            value, _resolve_schema_ref(root, schema["$ref"]), root, path, failures
+        )
+
+    expected = schema.get("type")
+    if expected is not None:
+        expected_types = [expected] if isinstance(expected, str) else expected
+        if not any(_schema_type_matches(value, item) for item in expected_types):
+            failures.append(f"{path}: expected {' or '.join(expected_types)}")
+            return
+
+    if "const" in schema and not _json_equal(value, schema["const"]):
+        failures.append(f"{path}: expected constant {schema['const']!r}")
+    if "enum" in schema and not any(
+        _json_equal(value, option) for option in schema["enum"]
+    ):
+        failures.append(f"{path}: value is not one of {schema['enum']!r}")
+
+    if isinstance(value, dict):
+        for field in schema.get("required", []):
+            if field not in value:
+                failures.append(f"{path}: missing required field {field}")
+        properties = schema.get("properties", {})
+        for field in sorted(value):
+            child_path = f"{path}.{field}"
+            if field in properties:
+                _validate_schema_node(
+                    value[field], properties[field], root, child_path, failures
+                )
+            elif schema.get("additionalProperties") is False:
+                failures.append(f"{child_path}: additional property is not allowed")
+            elif isinstance(schema.get("additionalProperties"), dict):
+                _validate_schema_node(
+                    value[field],
+                    schema["additionalProperties"],
+                    root,
+                    child_path,
+                    failures,
+                )
+
+    if isinstance(value, list):
+        if "minItems" in schema and len(value) < schema["minItems"]:
+            failures.append(
+                f"{path}: expected at least {schema['minItems']} item(s)"
+            )
+        if "maxItems" in schema and len(value) > schema["maxItems"]:
+            failures.append(
+                f"{path}: expected at most {schema['maxItems']} item(s)"
+            )
+        if schema.get("uniqueItems"):
+            for index, item in enumerate(value):
+                if any(_json_equal(item, prior) for prior in value[:index]):
+                    failures.append(f"{path}[{index}]: duplicate array item")
+        item_schema = schema.get("items")
+        if isinstance(item_schema, dict):
+            for index, item in enumerate(value):
+                _validate_schema_node(
+                    item, item_schema, root, f"{path}[{index}]", failures
+                )
+
+    if isinstance(value, str):
+        if "minLength" in schema and len(value) < schema["minLength"]:
+            failures.append(
+                f"{path}: expected at least {schema['minLength']} characters"
+            )
+        if "pattern" in schema and re.search(schema["pattern"], value) is None:
+            failures.append(
+                f"{path}: value does not match pattern {schema['pattern']}"
+            )
+
+    if isinstance(value, (int, float)) and not isinstance(value, bool):
+        if "minimum" in schema and value < schema["minimum"]:
+            failures.append(f"{path}: expected value >= {schema['minimum']}")
+        if "exclusiveMinimum" in schema and value <= schema["exclusiveMinimum"]:
+            failures.append(f"{path}: expected value > {schema['exclusiveMinimum']}")
+
+
+def validate_contract_schema(contract: Any) -> list[str]:
+    """Validate against every assertion used by the published 2020-12 schema."""
+    failures: list[str] = []
+    schema = _contract_schema()
+    _validate_schema_node(contract, schema, schema, "contract", failures)
+    return sorted(set(failures))
 
 
 def load_json(path: Path) -> Any:
@@ -380,7 +515,9 @@ def validate_worker_results(manifest: Any, results: list[Any]) -> list[str]:
 
 
 def validate_contract(contract: Any) -> list[str]:
-    failures: list[str] = []
+    failures = validate_contract_schema(contract)
+    if failures:
+        return failures
     if not _require(contract, TOP_LEVEL_KEYS, "contract", failures):
         return failures
     if contract.get("schemaVersion") != 1:

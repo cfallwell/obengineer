@@ -6,6 +6,8 @@ import json
 import sys
 from pathlib import Path
 
+import pytest
+
 SKILL = Path(__file__).resolve().parent.parent
 SCRIPTS = SKILL / "scripts"
 FIXTURE = Path(__file__).resolve().parent / "fixtures" / "representative"
@@ -100,13 +102,54 @@ def test_runnable_job_failure_is_not_a_green_audit():
     )
 
 
-def test_semantic_gate_rejects_missing_detector_fields_and_placeholders():
+def test_schema_gate_runs_before_semantic_placeholder_checks():
     value = contract()
     del value["operations"]["detectors"][0]["threshold"]
     value["summaries"]["strategy"] = "TBD " + value["summaries"]["strategy"]
     failures = validate_contract(value)
     assert any("missing required field threshold" in failure for failure in failures)
-    assert any("placeholder" in failure for failure in failures)
+    assert not any("placeholder" in failure for failure in failures)
+
+    value = contract()
+    value["summaries"]["strategy"] = "TBD " + value["summaries"]["strategy"]
+    assert any(
+        "placeholder" in failure for failure in validate_contract(value)
+    )
+
+
+def test_published_schema_rejects_unknown_properties_before_semantics():
+    value = contract()
+    value["unknown"] = "must not be ignored"
+    failures = validate_contract(value)
+    assert failures == ["contract.unknown: additional property is not allowed"]
+
+
+def test_published_schema_rejects_path_traversal_ids():
+    value = contract()
+    value["findings"][0]["id"] = "../../escaped-finding"
+    failures = validate_contract(value)
+    assert any(
+        failure.startswith("contract.findings[0].id: value does not match pattern")
+        for failure in failures
+    )
+
+
+def test_renderer_refuses_to_write_outside_version_root(tmp_path):
+    output = tmp_path / "docs" / "observability" / "analysis" / "app" / "V1"
+    renderer = Renderer(contract(), output)
+    with pytest.raises(ValueError, match="outside version root"):
+        renderer.write("findings/../../escaped-finding.md", "escaped")
+    assert not (output.parent / "escaped-finding.md").exists()
+
+
+def test_invalid_path_id_cannot_render_any_output(tmp_path):
+    value = contract()
+    value["findings"][0]["id"] = "../../escaped-finding"
+    output = tmp_path / "docs" / "observability" / "analysis" / "app" / "V1"
+    with pytest.raises(ValueError, match="invalid contract"):
+        Renderer(value, output).render()
+    assert not output.exists()
+    assert not (output.parent / "escaped-finding.md").exists()
 
 
 def test_semantic_gate_rejects_malformed_conditional_operations():

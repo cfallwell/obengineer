@@ -26,6 +26,16 @@ def git(repo: Path, *args: str) -> str:
     ).stdout.strip()
 
 
+def detached_commit(repo: Path, tree: str, message: str) -> str:
+    return subprocess.run(
+        ["git", "-C", str(repo), "commit-tree", tree],
+        check=True,
+        capture_output=True,
+        text=True,
+        input=message,
+    ).stdout.strip()
+
+
 def accepted_repo(tmp_path: Path) -> tuple[Path, Path, Path, str, str]:
     git(tmp_path, "init", "-q")
     git(tmp_path, "config", "user.email", "test@example.invalid")
@@ -109,6 +119,55 @@ def accepted_repo(tmp_path: Path) -> tuple[Path, Path, Path, str, str]:
     return tmp_path, analysis, record, commit, digest
 
 
+def add_v2(repo: Path) -> tuple[Path, Path, str, str]:
+    docs = repo / "docs" / "observability"
+    analysis = docs / "analysis" / "app" / "V2" / "index.md"
+    analysis.parent.mkdir(parents=True)
+    analysis.write_text("[V1] **[V2]**\n\n# Analysis V2\n")
+    wiki = repo / "wiki" / "apps" / "app"
+    version = wiki / "versions" / "V2"
+    work_orders = version / "implementation" / "work-orders"
+    work_orders.mkdir(parents=True)
+    (version / "index.md").write_text("# Wiki V2\n")
+    (work_orders / "WO-001.md").write_text("# Ready V2 work\n")
+    (wiki / "index.md").write_text(
+        "# App versions\n\nAccepted version: [V2](versions/V2/index.md)\n"
+    )
+    (docs / "attribute-schema.json").write_text('{"version":"V2"}\n')
+    (docs / "analysis-contract.json").write_text('{"schema_version":2,"version":"V2"}\n')
+    git(repo, "add", ".")
+    git(repo, "commit", "-qm", "analysis V2")
+    commit = git(repo, "rev-parse", "HEAD")
+    paths, failures = verify_acceptance.artifact_paths(repo, analysis, "V2")
+    assert failures == []
+    digest = verify_acceptance.content_digest(repo, paths)
+    record = analysis.parent / "acceptance.yaml"
+    v1_record = docs / "analysis" / "app" / "V1" / "acceptance.yaml"
+    record.write_text(
+        v1_record.read_text()
+        .replace("version: V1", "version: V2")
+        .replace(
+            "analysis: docs/observability/analysis/app/V1/index.md",
+            "analysis: docs/observability/analysis/app/V2/index.md",
+        )
+        .replace(
+            next(
+                line for line in v1_record.read_text().splitlines()
+                if line.startswith("analysis_content_commit:")
+            ),
+            f"analysis_content_commit: {commit}",
+        )
+        .replace(
+            next(
+                line for line in v1_record.read_text().splitlines()
+                if line.startswith("analysis_content_digest:")
+            ),
+            f"analysis_content_digest: {digest}",
+        )
+    )
+    return analysis, record, commit, digest
+
+
 def test_content_bound_artifacts_pass(tmp_path):
     repo, analysis, _, commit, digest = accepted_repo(tmp_path)
     assert verify_acceptance.verify(repo, analysis, "V1", digest, commit) == []
@@ -123,6 +182,27 @@ def test_changed_artifact_fails(tmp_path):
     )
 
 
+def test_analysis_commit_must_contain_the_accepted_artifact_tree(tmp_path):
+    repo, analysis, _, _, digest = accepted_repo(tmp_path)
+    empty_tree = git(repo, "hash-object", "-t", "tree", "/dev/null")
+    unrelated = detached_commit(repo, empty_tree, "unrelated\n")
+    failures = verify_acceptance.verify(
+        repo, analysis, "V1", digest, unrelated
+    )
+    assert any(
+        "has no analysis tree" in failure for failure in failures
+    )
+
+
+def test_content_equivalent_rewritten_commit_remains_valid(tmp_path):
+    repo, analysis, _, commit, digest = accepted_repo(tmp_path)
+    tree = git(repo, "rev-parse", f"{commit}^{{tree}}")
+    rewritten = detached_commit(repo, tree, "rewritten without ancestry\n")
+    assert verify_acceptance.verify(
+        repo, analysis, "V1", digest, rewritten
+    ) == []
+
+
 def test_legacy_digest_survives_later_analysis_contract(tmp_path):
     repo, analysis, _, commit, _ = accepted_repo(tmp_path)
     paths, failures = verify_acceptance.artifact_paths(
@@ -133,6 +213,36 @@ def test_legacy_digest_survives_later_analysis_contract(tmp_path):
         path for path in paths if path.name != "analysis-contract.json"
     ]
     legacy_digest = verify_acceptance.content_digest(repo, legacy_paths)
+    assert verify_acceptance.verify(
+        repo, analysis, "V1", legacy_digest, commit, schema_version=1
+    ) == []
+
+
+def test_selected_v2_discovery_and_historical_v1_are_both_verifiable(tmp_path):
+    repo, v1_analysis, _, v1_commit, v1_digest = accepted_repo(tmp_path)
+    v2_analysis, v2_record, v2_commit, v2_digest = add_v2(repo)
+
+    discovered, failures = verify_acceptance.discover_acceptance(repo)
+    assert failures == []
+    assert discovered == v2_record
+    assert verify_acceptance.verify(
+        repo, v2_analysis, "V2", v2_digest, v2_commit
+    ) == []
+    assert verify_acceptance.verify(
+        repo, v1_analysis, "V1", v1_digest, v1_commit
+    ) == []
+
+
+def test_legacy_v1_uses_commit_companions_after_v2_changes(tmp_path):
+    repo, analysis, _, commit, _ = accepted_repo(tmp_path)
+    committed, failures = verify_acceptance.commit_artifacts(
+        repo, analysis, "V1", commit, schema_version=1
+    )
+    assert failures == []
+    committed.pop("docs/observability/analysis-contract.json", None)
+    legacy_digest = verify_acceptance.bytes_digest(committed)
+    add_v2(repo)
+
     assert verify_acceptance.verify(
         repo, analysis, "V1", legacy_digest, commit, schema_version=1
     ) == []

@@ -98,9 +98,11 @@ The human never copies a path or commit SHA. An explicit `yes` after review auth
 2. compute a deterministic SHA-256 digest over the version's analysis index, linked pages,
    analysis contract, schema, implementation map, ledger seal, verification plan, and
    final versioned wiki;
-3. write `docs/observability/analysis/<app>/V<N>/acceptance.yaml`;
-4. commit and push that acceptance change to the same PR; and
-5. merge the PR using the repository's configured merge strategy.
+3. verify that the same artifact paths and bytes exist in the Git tree named by
+   `analysis_content_commit`;
+4. write `docs/observability/analysis/<app>/V<N>/acceptance.yaml`;
+5. commit and push that acceptance change to the same PR; and
+6. merge the PR using the repository's configured merge strategy.
 
 The record is:
 
@@ -125,8 +127,18 @@ New records are schema version 2 and use only `analysis_content_commit` plus
 artifact set. Legacy accepted versions do not gain that requirement retroactively.
 
 No accepter name, engineer name, or named owner is required. The digest survives merge,
-squash, and rebase strategies; verification recomputes it from the accepted files.
+squash, and rebase strategies because commit ancestry is not part of content identity.
+Verification reads the recorded commit's Git tree and requires both its digest and the
+current selected version to match. A content-equivalent rewritten commit is valid, but the
+commit object named by the record must remain available; repositories that delete PR
+objects after squash or rebase must preserve that object through an archival ref.
 Changing any accepted file requires a new version and a new explicit acceptance.
+
+When more than one immutable acceptance record exists, the app wiki index explicitly
+marks one version accepted and active. Discovery follows that pointer rather than treating
+normal `[V1] [V2] ...` history as ambiguous. Historical verification reads unversioned
+companions such as the schema, implementation map, ledger, and verification plan from
+that version's accepted commit tree; it never substitutes the newer mutable companions.
 
 Finding risk acceptance is separate and may require the organization's own decision
 record; it does not imply analysis acceptance.
