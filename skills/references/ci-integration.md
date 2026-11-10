@@ -35,7 +35,7 @@ something a human review did not.
 
 | Check | Fails when |
 |---|---|
-| **Schema agreement** | An attribute is emitted in code that is absent from `contract/attribute-schema.json`, or the document appendix and the schema disagree |
+| **Schema agreement** | An attribute is emitted in code that is absent from `docs/observability/attribute-schema.json`, or the document appendix and the schema disagree |
 | **Workflow registry** | A `workflow.name` literal appears in code and is not in the wiki's workflow list |
 | **Dimension budget** | A metric is created with a dimension the schema marks attribute-only, or the promoted set exceeds the recorded MTS budget |
 | **Single init** | More than one artifact calls the provider `init`, which is the defect that silently halves RUM data |
@@ -60,7 +60,7 @@ reviewable and to keep it from becoming the thing everyone disables:
 a reviewable proposal, and a bot with merge rights is a bot nobody reads.
 
 **One unified work order per invocation**, from
-`wiki/apps/<app>/implementation/work-orders/`. A work order can cross frontend, SSR,
+`wiki/apps/<app>/versions/V<N>/implementation/work-orders/`. A work order can cross frontend, SSR,
 GraphQL, backend, and configuration repositories. It produces at most one linked PR per
 repository plus a coordination PR in the artifact repository. Every PR names the work-order
 id and links its siblings; no agent merges any of them.
@@ -153,7 +153,7 @@ hosted service:
 
 ```
 application repo
-  ├─ layer 1 checks ──────────── read contract/attribute-schema.json + workflow list
+  ├─ layer 1 checks ──────────── read docs/observability/attribute-schema.json + workflow list
   ├─ layer 2 agent ───────────── reads implementation/work-orders/, writes code + updates notes
   └─ wiki/ (committed here, or a submodule)
                 │

@@ -41,6 +41,7 @@ def accepted_repo(tmp_path: Path) -> tuple[Path, Path, Path, str, str]:
     (wiki / "index.md").write_text("# Wiki V1\n")
     (work_orders / "WO-001.md").write_text("# Ready work\n")
     (docs / "attribute-schema.json").write_text("{}\n")
+    (docs / "analysis-contract.json").write_text('{"schema_version":2}\n')
     (docs / "implementation-map.json").write_text(json.dumps({
         "schema_version": 1,
         "repositories": [{
@@ -68,10 +69,10 @@ def accepted_repo(tmp_path: Path) -> tuple[Path, Path, Path, str, str]:
         "seals": {"analysis": {"ids": [], "digest": seal}},
     }))
     (docs / "verification-plan.json").write_text(json.dumps({
-        "schema_version": 1,
+        "schema_version": 2,
         "criteria": [{
             "id": "VC-001",
-            "source_section": 1,
+            "source_ref": "operations/verification#VC-001",
             "system": "repository",
             "query": {"kind": "contract-check", "reference": "SRC-account-route"},
             "expected": {"operator": "equals", "value": True},
@@ -92,6 +93,7 @@ def accepted_repo(tmp_path: Path) -> tuple[Path, Path, Path, str, str]:
     digest = verify_acceptance.content_digest(tmp_path, paths)
     record = version / "acceptance.yaml"
     record.write_text(
+        "schema_version: 2\n"
         "status: accepted\n"
         "version: V1\n"
         "analysis: docs/observability/analysis/app/V1/index.md\n"
@@ -121,6 +123,21 @@ def test_changed_artifact_fails(tmp_path):
     )
 
 
+def test_legacy_digest_survives_later_analysis_contract(tmp_path):
+    repo, analysis, _, commit, _ = accepted_repo(tmp_path)
+    paths, failures = verify_acceptance.artifact_paths(
+        repo, analysis, "V1", schema_version=1
+    )
+    assert failures == []
+    legacy_paths = [
+        path for path in paths if path.name != "analysis-contract.json"
+    ]
+    legacy_digest = verify_acceptance.content_digest(repo, legacy_paths)
+    assert verify_acceptance.verify(
+        repo, analysis, "V1", legacy_digest, commit, schema_version=1
+    ) == []
+
+
 def test_acceptance_record_cli_is_supported(tmp_path):
     repo, _, record, _, _ = accepted_repo(tmp_path)
     assert verify_acceptance.main([
@@ -128,12 +145,56 @@ def test_acceptance_record_cli_is_supported(tmp_path):
     ]) == 0
 
 
+def test_acceptance_record_is_discovered_at_version_path(tmp_path):
+    repo, _, _, _, _ = accepted_repo(tmp_path)
+    assert verify_acceptance.main(["--repo", str(repo)]) == 0
+
+
+def test_acceptance_discovery_rejects_ambiguity(tmp_path):
+    repo, _, record, _, _ = accepted_repo(tmp_path)
+    other = record.parents[2] / "other" / "V1"
+    other.mkdir(parents=True)
+    (other / "acceptance.yaml").write_text(record.read_text())
+    _, failures = verify_acceptance.discover_acceptance(repo)
+    assert any("ambiguous" in failure for failure in failures)
+
+
 def test_record_requires_digest_and_no_person_name(tmp_path):
     record = tmp_path / "acceptance.yaml"
-    record.write_text("status: accepted\nversion: V1\n")
+    record.write_text("schema_version: 2\nstatus: accepted\nversion: V1\n")
     _, failures = verify_acceptance.parse_record(record)
     assert "acceptance record has no analysis_content_digest" in failures
     assert not any("accepted_by" in failure for failure in failures)
+
+
+def test_legacy_record_migrates_analysis_commit_without_v2_artifacts(tmp_path):
+    record = tmp_path / "acceptance.yaml"
+    record.write_text(
+        "status: accepted\n"
+        "version: V1\n"
+        "analysis: docs/observability/analysis/app/V1/index.md\n"
+        f"analysis_commit: {'a' * 40}\n"
+        "analysis_pr: https://example.invalid/pr/1\n"
+        "accepted_via: explicit-human-confirmation\n"
+        "accepted_at: 2026-01-01T00:00:00Z\n"
+        "qualifications: []\n"
+        "rejected_decisions: []\n"
+    )
+    fields, failures = verify_acceptance.parse_record(record)
+    assert failures == []
+    assert fields["schema_version"] == 1
+    assert fields["analysis_content_commit"] == "a" * 40
+
+
+def test_v2_rejects_legacy_commit_name(tmp_path):
+    _, _, record, _, _ = accepted_repo(tmp_path)
+    record.write_text(
+        record.read_text().replace(
+            "analysis_content_commit:", "analysis_commit:"
+        )
+    )
+    _, failures = verify_acceptance.parse_record(record)
+    assert any("uses analysis_content_commit" in failure for failure in failures)
 
 
 def test_acceptance_timestamp_must_be_rfc3339(tmp_path):

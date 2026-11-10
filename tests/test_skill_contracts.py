@@ -197,6 +197,8 @@ def test_acceptance_is_easy_content_bound_and_has_no_person_name():
     lifecycle = (SKILLS / "references" / "analysis-run-lifecycle.md").read_text()
     assert "reply `yes`" in lifecycle
     assert "analysis_content_digest" in lifecycle
+    assert "schema_version: 2" in lifecycle
+    assert "analysis-contract.json" in lifecycle
     assert "manual SHA" in lifecycle
     assert "No accepter name" in lifecycle
     assert "accepted_by:" not in lifecycle
@@ -206,6 +208,18 @@ def test_acceptance_is_easy_content_bound_and_has_no_person_name():
     ).read_text()
     assert "analysis_content_digest" in verifier
     assert "accepted_by" not in verifier
+
+
+def test_verification_and_wiki_generation_use_current_versioned_contracts():
+    verification = (SKILLS / "references" / "verification-run.md").read_text()
+    wiki = (SKILLS / "references" / "agent-wiki.md").read_text()
+    analyze = (PROMPTS / "01-analyze-application.md").read_text()
+    assert '"schema_version": 2' in verification
+    assert '"source_ref"' in verification
+    assert "source_section" in verification  # documented v1 read compatibility
+    assert "versions/V<N>/meta/" in wiki
+    assert "lists, including when empty" in wiki
+    assert "analysis-contract.json" in analyze
 
 
 def test_ready_for_review_comments_are_processed_before_merge():

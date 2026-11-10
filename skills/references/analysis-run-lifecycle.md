@@ -71,7 +71,8 @@ The human never copies a path or commit SHA. An explicit `yes` after review auth
 
 1. change dependency-free work orders from `proposed` to `ready`;
 2. compute a deterministic SHA-256 digest over the version's analysis index, linked pages,
-   schema, implementation map, ledger seal, verification plan, and final versioned wiki;
+   analysis contract, schema, implementation map, ledger seal, verification plan, and
+   final versioned wiki;
 3. write `docs/observability/analysis/<app>/V<N>/acceptance.yaml`;
 4. commit and push that acceptance change to the same PR; and
 5. merge the PR using the repository's configured merge strategy.
@@ -79,6 +80,7 @@ The human never copies a path or commit SHA. An explicit `yes` after review auth
 The record is:
 
 ```yaml
+schema_version: 2
 status: accepted
 version: V<N>
 analysis: docs/observability/analysis/<app>/V<N>/index.md
@@ -91,6 +93,11 @@ qualifications: []
 rejected_decisions: []
 provenance_seal_digest: <sha256 of the sealed ledger projection>
 ```
+
+Schema version 1 records that use `analysis_commit` remain readable for migration.
+New records are schema version 2 and use only `analysis_content_commit` plus
+`analysis_content_digest`; `analysis-contract.json` is required in their accepted
+artifact set. Legacy accepted versions do not gain that requirement retroactively.
 
 No accepter name, engineer name, or named owner is required. The digest survives merge,
 squash, and rebase strategies; verification recomputes it from the accepted files.

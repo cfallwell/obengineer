@@ -27,6 +27,7 @@ marks exactly one accepted version as active.
 Create:
 
 - `index.md` with a breadcrumb back to the analysis landing page;
+- one shared `meta/` directory for version, run, and decision metadata;
 - `services/<service>/` notes for architecture, findings, contracts, business
   transactions, workflows, use cases, metrics, detectors, objectives, business
   workings, enforcement, and as-code inventory;
@@ -70,4 +71,6 @@ The landing page links these authorities; it does not restate them.
 
 Run `verify_wiki.py` against every service in the version. Verify links, frontmatter,
 version breadcrumbs, work-order dependencies, reverse links, pointers, provenance, and
-credential-shaped values. The analysis PR is incomplete until the wiki passes.
+credential-shaped values by passing `wiki/apps/<app>/versions/V<N>` once. Do not create
+duplicate service-level metadata or attribute schemas. The analysis PR is incomplete
+until the wiki passes.

@@ -45,6 +45,7 @@ Always:
 
 ```text
 docs/observability/analysis/<app>/V<N>/
+docs/observability/analysis-contract.json
 docs/observability/attribute-schema.json
 docs/observability/implementation-map.json
 docs/observability/provenance-ledger.json
@@ -151,8 +152,10 @@ allowlist, and deny-list checks before journey code.
 Validate:
 
 - provenance ledger and analysis seal;
+- schema version 2 analysis contract and content-bound acceptance inputs;
 - schema and implementation map;
-- verification plan with actionable `VC-*` criteria;
+- verification plan schema version 2 with stable `source_ref` values and actionable
+  `VC-*` criteria;
 - landing-page links and breadcrumbs;
 - wiki links, frontmatter, work-order dependency graph, and reverse links;
 - no credential-shaped values; and

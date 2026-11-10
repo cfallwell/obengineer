@@ -64,6 +64,7 @@ Create:
 
 ```text
 docs/observability/analysis/<app>/V<N>/
+docs/observability/analysis-contract.json
 docs/observability/attribute-schema.json
 docs/observability/implementation-map.json
 docs/observability/provenance-ledger.json
@@ -77,7 +78,8 @@ matching wiki/work-order snapshot. Word is optional; when requested it is a summ
 
 ## Review and handoff
 
-Validate links, breadcrumbs, schema, map, ledger, verification plan, wiki, work-order
+Validate links, breadcrumbs, analysis contract, schema, map, ledger, verification plan
+schema version 2 with stable `source_ref` values, wiki, work-order
 dependencies, reverse links, and credential scanning. Open one analysis PR.
 
 When ready for review, ask the human to review the linked PR. Process review comments and

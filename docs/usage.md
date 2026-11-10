@@ -57,6 +57,7 @@ The analysis PR contains:
 
 ```text
 docs/observability/analysis/<app>/V1/
+docs/observability/analysis-contract.json
 docs/observability/attribute-schema.json
 docs/observability/implementation-map.json
 docs/observability/provenance-ledger.json

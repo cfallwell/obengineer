@@ -40,6 +40,17 @@ def ledger_verifier():
     return module.verify
 
 
+def acceptance_verifier():
+    path = Path(__file__).parents[2] / "instrumentation-wiki" / "scripts" / (
+        "verify_analysis_acceptance.py"
+    )
+    spec = importlib.util.spec_from_file_location("verify_analysis_acceptance", path)
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = module
+    spec.loader.exec_module(module)
+    return module
+
+
 def read(path: Path, label: str) -> tuple[dict | None, list[str]]:
     try:
         data = json.loads(path.read_text())
@@ -50,6 +61,30 @@ def read(path: Path, label: str) -> tuple[dict | None, list[str]]:
     return data, []
 
 
+def content_commit(data: dict, label: str) -> tuple[str, list[str]]:
+    schema_version = data.get("schema_version")
+    failures: list[str] = []
+    if schema_version == 1:
+        commit = data.get("analysis_commit", "")
+        if "analysis_content_commit" in data:
+            failures.append(
+                f"{label} schema_version 1 uses analysis_commit, "
+                "not analysis_content_commit"
+            )
+    elif schema_version == 2:
+        commit = data.get("analysis_content_commit", "")
+        if "analysis_commit" in data:
+            failures.append(
+                f"{label} schema_version 2 uses analysis_content_commit, "
+                "not analysis_commit"
+            )
+    else:
+        return "", [f"{label} schema_version must be 1 or 2"]
+    if not isinstance(commit, str) or not FULL_SHA.fullmatch(commit):
+        failures.append(f"{label} needs a full accepted content commit SHA")
+    return commit, failures
+
+
 def exclusions(path: Path | None, commit: str, plan_ids: set[str],
                ledger_ids: set[str] | None) -> tuple[set[str], list[str]]:
     if path is None:
@@ -57,9 +92,11 @@ def exclusions(path: Path | None, commit: str, plan_ids: set[str],
     data, failures = read(path, "verification exclusions")
     if data is None:
         return set(), failures
-    if data.get("schema_version") != 1:
-        failures.append("verification exclusions schema_version must be 1")
-    if data.get("analysis_commit") != commit or not FULL_SHA.fullmatch(commit):
+    exclusion_commit, commit_failures = content_commit(
+        data, "verification exclusions"
+    )
+    failures.extend(commit_failures)
+    if exclusion_commit != commit:
         failures.append("verification exclusions must match the full accepted commit")
     result: set[str] = set()
     for item in data.get("exclusions", []):
@@ -108,25 +145,20 @@ def verify(plan_path: Path, results_path: Path, exclusions_path: Path | None = N
     failures.extend(result_failures)
     if plan is None or results is None:
         return failures
-    if results.get("schema_version") != 1:
-        failures.append("verification results schema_version must be 1")
-    commit = results.get("analysis_commit", "")
-    if not isinstance(commit, str) or not FULL_SHA.fullmatch(commit):
-        failures.append("verification results need a full analysis_commit SHA")
+    commit, commit_failures = content_commit(results, "verification results")
+    failures.extend(commit_failures)
     if acceptance_path is not None:
-        try:
-            acceptance_text = acceptance_path.read_text()
-        except OSError as exc:
-            failures.append(f"cannot read acceptance record: {exc}")
-        else:
-            match = re.search(
-                r"^analysis_commit:\s*([0-9a-f]{40})\s*$",
-                acceptance_text, re.M,
+        acceptance, acceptance_failures = acceptance_verifier().parse_record(
+            acceptance_path
+        )
+        failures.extend(
+            f"acceptance: {failure}" for failure in acceptance_failures
+        )
+        if not acceptance_failures and \
+                acceptance.get("analysis_content_commit") != commit:
+            failures.append(
+                "verification results commit does not match acceptance record"
             )
-            if not match or match.group(1) != commit:
-                failures.append(
-                    "verification results commit does not match acceptance record"
-                )
     ledger_ids: set[str] | None = None
     if ledger_path is not None:
         failures.extend(
@@ -222,10 +254,21 @@ def main(argv=None) -> int:
     parser.add_argument("results", type=Path)
     parser.add_argument("--exclusions", type=Path)
     parser.add_argument("--ledger", type=Path, required=True)
-    parser.add_argument("--acceptance", type=Path, required=True)
+    parser.add_argument("--acceptance", type=Path)
+    parser.add_argument("--repo", type=Path, default=Path("."))
     args = parser.parse_args(argv)
+    acceptance = args.acceptance
+    discovery_failures: list[str] = []
+    if acceptance is None:
+        acceptance, discovery_failures = acceptance_verifier().discover_acceptance(
+            args.repo
+        )
+    if discovery_failures:
+        for failure in discovery_failures:
+            print(f"FAIL — {failure}")
+        return 1
     failures = verify(
-        args.plan, args.results, args.exclusions, args.ledger, args.acceptance
+        args.plan, args.results, args.exclusions, args.ledger, acceptance
     )
     if failures:
         for failure in failures:

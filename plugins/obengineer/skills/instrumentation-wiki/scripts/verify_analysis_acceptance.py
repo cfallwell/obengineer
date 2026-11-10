@@ -10,7 +10,13 @@ import json
 import re
 import subprocess
 import sys
+from datetime import datetime, timezone
 from pathlib import Path
+
+try:
+    import yaml
+except ImportError:
+    sys.exit("PyYAML is required: pip install PyYAML==6.0.3")
 
 FULL_SHA = re.compile(r"^[0-9a-f]{40}$")
 SHA256 = re.compile(r"^[0-9a-f]{64}$")
@@ -25,6 +31,7 @@ COMPANIONS = (
     "provenance-ledger.json",
     "verification-plan.json",
 )
+V2_COMPANIONS = (*COMPANIONS, "analysis-contract.json")
 
 
 def _load_verifier(name: str, path: Path):
@@ -57,47 +64,87 @@ def verification_plan_verifier():
     )
 
 
-def parse_record(path: Path) -> tuple[dict[str, str], list[str]]:
+def parse_record(path: Path) -> tuple[dict, list[str]]:
     try:
-        text = path.read_text()
-    except OSError as exc:
+        data = yaml.safe_load(path.read_text())
+    except (OSError, yaml.YAMLError) as exc:
         return {}, [f"cannot read acceptance record: {exc}"]
-    fields = {
-        match.group(1): match.group(2).strip()
-        for match in re.finditer(r"^([a-z_]+):\s*([^#\n]+?)\s*$", text, re.M)
-    }
+    if not isinstance(data, dict):
+        return {}, ["acceptance record top level must be a mapping"]
+    fields = dict(data)
     failures: list[str] = []
+    accepted_at = fields.get("accepted_at")
+    if isinstance(accepted_at, datetime):
+        if accepted_at.tzinfo == timezone.utc:
+            fields["accepted_at"] = accepted_at.isoformat().replace("+00:00", "Z")
+        else:
+            fields["accepted_at"] = accepted_at.isoformat()
+    schema_version = fields.get("schema_version", 1)
+    if schema_version not in (1, 2):
+        failures.append("acceptance schema_version must be 1 or 2")
+        return fields, failures
+    fields["schema_version"] = schema_version
     if fields.get("status") != "accepted":
         failures.append("acceptance record status must be accepted")
-    required = (
-        "version", "analysis", "analysis_content_commit",
-        "analysis_content_digest", "analysis_pr", "accepted_via", "accepted_at",
-        "provenance_seal_digest",
-    )
+    required = ["version", "analysis", "analysis_pr", "accepted_via", "accepted_at"]
+    if schema_version == 2:
+        required.extend((
+            "analysis_content_commit", "analysis_content_digest",
+            "provenance_seal_digest",
+        ))
+        if "analysis_commit" in fields:
+            failures.append(
+                "acceptance schema_version 2 uses analysis_content_commit, "
+                "not analysis_commit"
+            )
+    else:
+        legacy_commit = fields.get("analysis_commit")
+        content_commit = fields.get("analysis_content_commit")
+        if legacy_commit and content_commit and legacy_commit != content_commit:
+            failures.append(
+                "legacy acceptance commit fields disagree; migrate to schema_version 2"
+            )
+        fields["analysis_content_commit"] = content_commit or legacy_commit
+        if not fields["analysis_content_commit"]:
+            failures.append(
+                "legacy acceptance record has no analysis_commit; "
+                "migrate to schema_version 2"
+            )
     for field in required:
         if not fields.get(field):
             failures.append(f"acceptance record has no {field}")
-    if fields.get("version") and not VERSION.fullmatch(fields["version"]):
+    if fields.get("version") and (
+        not isinstance(fields["version"], str)
+        or not VERSION.fullmatch(fields["version"])
+    ):
         failures.append("acceptance record version must be uppercase V<N>")
-    if fields.get("analysis_content_commit") and not FULL_SHA.fullmatch(
-        fields["analysis_content_commit"]
+    if fields.get("analysis_content_commit") and (
+        not isinstance(fields["analysis_content_commit"], str)
+        or not FULL_SHA.fullmatch(fields["analysis_content_commit"])
     ):
         failures.append("analysis_content_commit must be a full lowercase SHA")
-    if fields.get("analysis_content_digest") and not SHA256.fullmatch(
-        fields["analysis_content_digest"]
+    if fields.get("analysis_content_digest") and (
+        not isinstance(fields["analysis_content_digest"], str)
+        or not SHA256.fullmatch(fields["analysis_content_digest"])
     ):
         failures.append("analysis_content_digest must be SHA-256")
     if fields.get("accepted_via") != "explicit-human-confirmation":
         failures.append("accepted_via must be explicit-human-confirmation")
-    if fields.get("accepted_at") and not RFC3339.fullmatch(fields["accepted_at"]):
+    if fields.get("accepted_at") and (
+        not isinstance(fields["accepted_at"], str)
+        or not RFC3339.fullmatch(fields["accepted_at"])
+    ):
         failures.append("accepted_at must be RFC3339")
-    if fields.get("provenance_seal_digest") and not SHA256.fullmatch(
-        fields["provenance_seal_digest"]
+    if fields.get("provenance_seal_digest") and (
+        not isinstance(fields["provenance_seal_digest"], str)
+        or not SHA256.fullmatch(fields["provenance_seal_digest"])
     ):
         failures.append("provenance_seal_digest must be SHA-256")
     for field in ("qualifications", "rejected_decisions"):
-        if not re.search(rf"^{field}:\s*(?:.*)?$", text, re.M):
+        if field not in fields:
             failures.append(f"acceptance record has no {field}")
+        elif not isinstance(fields[field], list):
+            failures.append(f"acceptance record {field} must be a list")
     return fields, failures
 
 
@@ -113,7 +160,8 @@ def git(repo: Path, *args: str) -> bytes:
     return result.stdout
 
 
-def artifact_paths(repo: Path, analysis: Path, version: str) -> tuple[list[Path], list[str]]:
+def artifact_paths(repo: Path, analysis: Path, version: str,
+                   schema_version: int = 2) -> tuple[list[Path], list[str]]:
     failures: list[str] = []
     candidate = analysis if analysis.is_absolute() else repo / analysis
     candidate = candidate.resolve()
@@ -139,12 +187,16 @@ def artifact_paths(repo: Path, analysis: Path, version: str) -> tuple[list[Path]
         path for path in candidate.parent.rglob("*")
         if path.is_file() and path.name != "acceptance.yaml"
     ]
-    for name in COMPANIONS:
+    companions = V2_COMPANIONS if schema_version == 2 else COMPANIONS
+    for name in companions:
         path = docs / name
         if path.is_file():
             paths.append(path)
         else:
             failures.append(f"missing current artifact: {path.relative_to(repo)}")
+    optional_contract = docs / "analysis-contract.json"
+    if schema_version == 1 and optional_contract.is_file():
+        paths.append(optional_contract)
     if wiki.is_dir():
         paths.extend(path for path in wiki.rglob("*") if path.is_file())
     else:
@@ -163,14 +215,24 @@ def content_digest(repo: Path, paths: list[Path]) -> str:
     return digest.hexdigest()
 
 
-def verify(repo: Path, analysis: Path, version: str, expected_digest: str,
-           commit: str | None = None) -> list[str]:
+def verify(repo: Path, analysis: Path, version: str, expected_digest: str | None,
+           commit: str | None = None, schema_version: int = 2) -> list[str]:
     repo = repo.resolve()
     failures: list[str] = []
-    paths, path_failures = artifact_paths(repo, analysis, version)
+    paths, path_failures = artifact_paths(
+        repo, analysis, version, schema_version=schema_version
+    )
     failures.extend(path_failures)
     if expected_digest and paths:
         actual = content_digest(repo, paths)
+        # Some schema v1 acceptances predate analysis-contract.json. Once that
+        # file appears for a newer run, preserve their original digest while
+        # allowing later v1 records that included it to remain verifiable.
+        contract = repo / "docs" / "observability" / "analysis-contract.json"
+        if actual != expected_digest and schema_version == 1 and contract in paths:
+            legacy_paths = [path for path in paths if path != contract]
+            if content_digest(repo, legacy_paths) == expected_digest:
+                actual = expected_digest
         if actual != expected_digest:
             failures.append(
                 f"accepted content digest differs: expected {expected_digest}, got {actual}"
@@ -205,21 +267,55 @@ def verify(repo: Path, analysis: Path, version: str, expected_digest: str,
     return failures
 
 
+def discover_acceptance(repo: Path) -> tuple[Path | None, list[str]]:
+    root = repo / "docs" / "observability" / "analysis"
+    candidates = sorted(
+        path for path in root.glob("*/V*/acceptance.yaml")
+        if VERSION.fullmatch(path.parent.name)
+    )
+    if not candidates:
+        return None, [
+            "no acceptance record found at "
+            "docs/observability/analysis/<app>/V<N>/acceptance.yaml"
+        ]
+    if len(candidates) > 1:
+        rendered = [str(path.relative_to(repo)) for path in candidates]
+        return None, [f"acceptance record is ambiguous: {rendered}"]
+    return candidates[0], []
+
+
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--record", type=Path, required=True)
+    parser.add_argument("--record", type=Path)
     parser.add_argument("--repo", type=Path, default=Path("."))
     args = parser.parse_args(argv)
 
-    fields, failures = parse_record(args.record)
+    record = args.record
+    failures: list[str] = []
+    if record is None:
+        record, failures = discover_acceptance(args.repo)
+    fields: dict = {}
+    if record is not None:
+        fields, record_failures = parse_record(record)
+        failures.extend(record_failures)
+    if not failures:
+        expected_record = (
+            args.repo / Path(fields["analysis"]).parent / "acceptance.yaml"
+        ).resolve()
+        if record.resolve() != expected_record:
+            failures.append(
+                "acceptance record must be beside its analysis index at "
+                "docs/observability/analysis/<app>/V<N>/acceptance.yaml"
+            )
     if not failures:
         failures.extend(
             verify(
                 args.repo,
                 Path(fields["analysis"]),
                 fields["version"],
-                fields["analysis_content_digest"],
+                fields.get("analysis_content_digest"),
                 fields["analysis_content_commit"],
+                fields["schema_version"],
             )
         )
         ledger = args.repo / "docs" / "observability" / "provenance-ledger.json"
@@ -227,7 +323,8 @@ def main(argv=None) -> int:
             actual = json.loads(ledger.read_text()).get("seals", {}).get(
                 "analysis", {}
             ).get("digest")
-            if actual != fields["provenance_seal_digest"]:
+            if fields.get("provenance_seal_digest") and \
+                    actual != fields["provenance_seal_digest"]:
                 failures.append(
                     "acceptance provenance_seal_digest does not match ledger"
                 )

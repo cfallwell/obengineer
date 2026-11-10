@@ -58,10 +58,10 @@ render: ## Render a Markdown deliverable to .docx and verify the result
 	  $(PY) skills/customer-doc-render/scripts/render_customer_doc.py "$$src" -o "$$out" && \
 	  $(PY) skills/customer-doc-render/scripts/verify_render.py "$$src" "$$out"
 
-# make verify-wiki WIKI="wiki/apps/<app>/services/<service>" OB_PROJECT=<repo>
+# make verify-wiki WIKI="wiki/apps/<app>/versions/V<N>" OB_PROJECT=<repo>
 .PHONY: verify-wiki
 verify-wiki: ## Verify an agent wiki: links, frontmatter, counts, pointers, secrets
-	@test -n "$(WIKI)" || { echo "usage: make verify-wiki WIKI=<wiki/apps/<app>/services/<service>> [OB_PROJECT=<repo>] [REPO_ROOT=<repo>]"; exit 2; }
+	@test -n "$(WIKI)" || { echo "usage: make verify-wiki WIKI=<wiki/apps/<app>/versions/V<N>> [OB_PROJECT=<repo>] [REPO_ROOT=<repo>]"; exit 2; }
 	@root="$(REPO_ROOT)"; [[ -n "$$root" ]] || root="$(OB_PROJECT)"; \
 	  $(PY) skills/instrumentation-wiki/scripts/verify_wiki.py "$(call at,$(WIKI))" \
 	    $${root:+--repo-root "$$root"}
@@ -91,10 +91,10 @@ verify-results: ## Validate read-only verification results against the accepted 
 	  ledger="$(call at,$(or $(LEDGER),docs/observability/provenance-ledger.json))"; \
 	  acceptance="$(call at,$(ACCEPTANCE))"; base="$(OB_PROJECT)"; \
 	  [[ -n "$$base" ]] || base="."; \
-	  [[ -n "$(ACCEPTANCE)" ]] || acceptance=$$(ls "$$base"/docs/observability/analysis-*.acceptance.yaml 2>/dev/null | sort | tail -1); \
 	  exclusions=""; [[ -z "$(EXCLUSIONS)" ]] || exclusions="$(call at,$(EXCLUSIONS))"; \
 	  $(PY) skills/instrumentation-verify/scripts/verify_results.py "$$plan" "$$results" \
-	    --ledger "$$ledger" --acceptance "$$acceptance" \
+	    --ledger "$$ledger" --repo "$$base" \
+	    $${acceptance:+--acceptance "$$acceptance"} \
 	    $${exclusions:+--exclusions "$$exclusions"}
 
 # make preview DOCX=docs/observability/Guide.docx [PAGES=4] [START=92]

@@ -32,7 +32,7 @@ You produce a **plan**. You do not run `apply`, and you do not create anything i
 | Source | Used for |
 |---|---|
 | `docs/observability/analysis/<app>/V<N>/` | Strategy, operations, use cases, implementation path, and linked work orders |
-| `wiki/apps/<app>/services/<service>/detectors/`, `slos/`, `as-code/` | Per-detector thresholds with provenance, objectives, and what the tenant already has |
+| `wiki/apps/<app>/versions/V<N>/services/<service>/detectors/`, `slos/`, `as-code/` | Per-detector thresholds with provenance, objectives, and what the tenant already has |
 | `docs/observability/attribute-schema.json` | Which keys are dimension-eligible, which are attribute-only |
 | `engagement-inputs.yaml` → `tenancy.o11y_realm`, `.environments` | Provider `api_url`, one workspace per environment |
 | `engagement-inputs.yaml` → `entitlement.synthetics` | Run frequency times locations, before proposing checks |
