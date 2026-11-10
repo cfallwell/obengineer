@@ -1,113 +1,120 @@
-# Analysis branch, commit, pull request, and acceptance lifecycle
+# Versioned analysis pull request and acceptance lifecycle
 
-This reference owns git and review behavior for intake, analysis, and generation.
-Analysis artifacts are reviewable repository changes, not files left in an agent
-workspace.
+This reference owns branches, commits, review, acceptance, and the host-native handoff.
+An analysis version is one reviewed pull request containing its inputs, linked Markdown
+site, schema, ledger, verification plan, versioned wiki, and complete work-order queue.
 
-## Intake does not create git history
+## Input management creates no standalone history
 
-`/ob-intake` writes or updates `docs/observability/engagement-inputs.yaml`. It does not
-create or switch branches, commit, push, or open a pull request. The file remains an
-uncommitted input until `/ob-analyze` validates it and includes it in the analysis PR.
+`/ob-start`, `/ob-add-inputs`, and `/ob-edit-inputs` update the working input artifact
+and immediately dispatch analysis. They do not open an input-only PR. The analysis PR
+includes and validates those changes.
 
-## One branch and PR per analysis run
+## One branch and PR per version
 
-Normalize `engagement.application` to a lowercase kebab-case slug.
+Normalize the application to lowercase kebab-case. Determine the next immutable uppercase
+version label, then create:
 
-| Run | Branch |
-|---|---|
-| First analysis, interactive or CI | `initial-<app>-analysis` |
-| Later analysis started by CI | `ci-initiated-<app>-analysis` |
+```text
+analysis-<app>-v<n>
+```
 
-These names intentionally use lowercase kebab-case. A CI run does not use the CI name
-when it is the application's first analysis. A later interactive delta must be queued
-through the same CI analysis workflow so branch ownership and collision handling remain
-single-sourced.
+Create it from the current default branch. An existing branch or open PR with that identity
+is resumed only when its ledger says the same run owns it; otherwise stop and report the
+collision. Never overwrite or force-push another run.
 
-Fetch the current default branch, require a clean working tree except for validated
-intake artifacts, and create the analysis branch from that default branch. If the branch
-or an open PR with that analysis identity already exists, stop and report the collision;
-do not overwrite, force-push, or append two runs to one PR.
+CI follows the same version and artifact rules. A runner-owned branch is reused rather
+than creating another.
 
-In CI, the workflow runner owns branch creation and passes
-`--branch-owned-by-runner` to each analysis phase; the agent must not create a second
-branch. The runner materializes the validated intake artifact from the prior intake run.
+## Parallel analysis, serialized naming
+
+Use every safe sub-agent slot available for independent evidence collection: production
+surface, source and diagrams, each connected integration, direct Splunk APIs, and public
+evidence when authorized. Naming, schema reconciliation, and the dependency graph remain
+serialized after evidence returns.
+
+Naming and schema reconciliation remain serial.
 
 ## Phase commits
 
-Commit each completed analysis phase on the same new branch:
+Commit completed phases on the same branch:
 
-1. `analysis(<app>): capture evidence and security findings`
-   - validated `engagement-inputs.yaml`;
-   - generated production diagram and evidence files;
-   - security coverage matrix and Critical Findings working artifact.
-2. `analysis(<app>): add instrumentation contract`
-   - analysis Markdown;
-   - `attribute-schema.json`;
-   - `implementation-map.json`;
-   - `provenance-ledger.json`, with analysis-owned entries sealed;
-   - `verification-plan.json`;
-   - conditional entitlement exposure.
-3. `analysis(<app>): render and verify deliverables`
-   - rendered `.docx`;
-   - review corrections and verification metadata.
+1. `analysis(<app> V<n>): capture evidence and findings`
+2. `analysis(<app> V<n>): publish strategy and contracts`
+3. `analysis(<app> V<n>): add wiki and work orders`
+4. `analysis(<app> V<n>): verify linked documentation`
+5. optional `analysis(<app> V<n>): render Word summary`
 
-Create the pull request after the first commit, then update the same PR after later phase
-commits. Only analysis-owned paths may be staged. Unrelated changes block the commit until
-the owner separates them.
+Open the PR after phase 1 and update it through the run. Stage only analysis-owned paths.
+The PR body states the version, inputs added or edited, evidence and limitations, findings,
+strategy, artifacts, work-order count, verification results, and the host-native analysis
+index path.
 
-The PR is docs-only. Its body states run type, evidence sources and limitations, security
-assessment mode, findings by severity and P0 priority, generated artifacts, unresolved
-repository/Jira mappings, and verification results. The run never merges its own PR.
+## Review loop
 
-The human reviews and merges the analysis PR before generation. Merge alone is not
-acceptance; after merge, the human invokes `/ob-generate accept … at <analysis-commit-sha>`.
-Generation fetches the updated default branch, verifies that the accepted SHA is an ancestor
-of it, and creates `generate-<app>-wiki` from that default branch. This prevents a generation
-PR from duplicating or stacking unmerged analysis commits.
+When the PR is ready, tell the human:
 
-## Acceptance is explicit and commit-bound
+```markdown
+Please review [PR #<number>](<url>).
 
-File existence, successful rendering, a generic PR approval, and merging are not contract
-acceptance.
-
-After reviewing the analysis PR, a human accepts by invoking:
-
-```text
-/ob-generate accept docs/observability/analysis-<app>-<date>.md at <analysis-commit-sha>
+When it is ready, reply `yes` to accept V<N> and merge this PR.
+Reply `no` to leave it open. Add review comments for changes.
 ```
 
-The SHA must contain the Markdown, schema, and implementation map being accepted.
-`/ob-generate` confirms those files match that commit and writes:
+When the PR state becomes ready for review, read unresolved review comments, make only
+supported corrections, commit them, and report what changed. Ask the acceptance question
+again. Do not merge, accept, or infer approval without an explicit `yes`.
 
-```text
-docs/observability/analysis-<app>-<date>.acceptance.yaml
-```
+## Acceptance is content-bound without a manual SHA
 
-Required fields:
+The human never copies a path or commit SHA. An explicit `yes` after review authorizes:
+
+1. change dependency-free work orders from `proposed` to `ready`;
+2. compute a deterministic SHA-256 digest over the version's analysis index, linked pages,
+   schema, implementation map, ledger seal, verification plan, and final versioned wiki;
+3. write `docs/observability/analysis/<app>/V<N>/acceptance.yaml`;
+4. commit and push that acceptance change to the same PR; and
+5. merge the PR using the repository's configured merge strategy.
+
+The record is:
 
 ```yaml
 status: accepted
-analysis: docs/observability/analysis-<app>-<date>.md
-analysis_commit: <full-sha>
-analysis_pr: <url-or-number>
-accepted_by: <reviewer identity>
+version: V<N>
+analysis: docs/observability/analysis/<app>/V<N>/index.md
+analysis_content_commit: <full branch commit before the acceptance commit>
+analysis_content_digest: <sha256 of the accepted artifact set>
+analysis_pr: <url>
+accepted_via: explicit-human-confirmation
 accepted_at: <RFC3339 timestamp>
 qualifications: []
 rejected_decisions: []
-provenance_seal_digest: <sha256-of-sealed-ledger-projection>
+provenance_seal_digest: <sha256 of the sealed ledger projection>
 ```
 
-If the invocation omits the path or exact SHA, `/ob-generate` stops and prints the exact
-acceptance command. If the files differ from the named commit, it stops and asks for a
-new review. The acceptance record is contract acceptance; a finding with
-`status: risk-accepted` is a different decision.
+No accepter name, engineer name, or named owner is required. The digest survives merge,
+squash, and rebase strategies; verification recomputes it from the accepted files.
+Changing any accepted file requires a new version and a new explicit acceptance.
 
-Generation commits the acceptance record and wiki on that separate branch and opens a
-documentation PR. It never modifies the accepted analysis content in that PR.
+Finding risk acceptance is separate and may require the organization's own decision
+record; it does not imply analysis acceptance.
 
-## CI analysis
+## Post-merge handoff
 
-A CI-triggered analysis follows the same artifact allowlist, phase commits, review, and
-human acceptance. CI may open the PR; it may not create the acceptance record, approve,
-or merge it. Credentials come from the CI secret store and never enter artifacts or logs.
+Do not start a server or browser. Return one host-native link to:
+
+```text
+docs/observability/analysis/<app>/V<N>/index.md
+```
+
+Do not paste the analysis into chat. Immediately below the link provide concise review,
+add/edit-input, and acceptance instructions. Once accepted, provide:
+
+- the first Ready work order and its link;
+- `/ob-implement work-order:<id>`;
+- the implementation PR review and deployment sequence;
+- the independent `/ob-terraform` plan and human-apply boundary; and
+- `/ob-verify` after deployment and apply.
+
+Earlier `[V1] [V2] ...` versions remain selectable and read-only. The accepted version is
+the only executable work-order queue.

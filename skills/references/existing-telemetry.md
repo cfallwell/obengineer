@@ -1,6 +1,10 @@
 # Existing telemetry
 
-The analyze pass that reads telemetry already in the tenant. The analyze run uses the `splunk-observability` and `splunk-platform` MCP servers and the Splunk API endpoints (Observability and Enterprise). MCP server names, and which servers are mandatory, live in [`mcp-servers.md`](mcp-servers.md). This file is the procedure. Do not copy it into an agent file.
+The analyze pass that reads telemetry already in the tenant. Direct Observability Cloud
+and Splunk Platform APIs are first-class sources. Relevant connected
+`splunk-observability` and `splunk-platform` MCP tools supplement them when available.
+MCP server discovery lives in [`mcp-servers.md`](mcp-servers.md). This file is the
+procedure. Do not copy it into an agent file.
 
 ## Credentials
 
@@ -21,7 +25,9 @@ The org id stays `tenancy.o11y_org_id` in `engagement-inputs.yaml`.
 
 `analysis_access` does not grow a second secret. When the ref is one of these API credentials, `api_key_ref` is `${SPLUNK_ACCESS_TOKEN}` and `token_ref` is `${SPLUNK_TOKEN}`. The rules for a dummy test login stay in [`engagement-inputs.md`](engagement-inputs.md).
 
-If a variable is empty, an MCP server cannot be reached, or an API endpoint cannot be reached, write **Not in evidence** for the rows that source would have filled, and label those tenant facts `stated`. Do not invent a volume.
+If a variable is empty or a source cannot be reached, state that source-specific
+limitation on the evidence page and leave its facts unmeasured. Do not invent a volume or
+create empty product pages.
 
 ## Servers and API endpoints
 
@@ -35,7 +41,9 @@ cross-product conclusion requiring both remains `Not in evidence` until both sou
   `POST https://stream.<realm>.observability.splunkcloud.com/v2/signalflow/execute`.
 - `splunk-platform` and the Splunk Enterprise API at `SPLUNK_HOST` — search and introspection, limited to `SPLUNK_ENTERPRISE_INDEXES`
 
-Copy the MCP entries from `.mcp.optional.json`. Do not guess a command. Enabling one product is not enough: Observability Cloud does not see Enterprise indexes, and Enterprise does not see spans.
+Discover connected MCP entries; do not guess a command. Direct APIs remain available
+without MCP. Evidence from one product is not enough for conclusions requiring both:
+Observability Cloud does not see Enterprise indexes, and Enterprise does not see spans.
 
 ## Entitlement and usage source matrix
 

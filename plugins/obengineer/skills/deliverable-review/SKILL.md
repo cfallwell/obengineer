@@ -1,204 +1,83 @@
 ---
 name: deliverable-review
 description: >-
-  Grade a produced instrumentation deliverable against the completeness bar and
-  the pre-delivery checklist before a human sees it — every required section
-  present, critical findings at section 4 with remediation and exposure, the
-  cross-cutting section with all five code subsections, every detector carrying a
-  threshold, every objective an error budget, every use case a narrative, no dimension
-  list without cardinality arithmetic, no baggage key without a named consumer, no
-  join without a labelled type, the dictionary agreeing with the schema, every
-  business-value figure carrying its provenance label, licensing exposure kept out
-  of the customer document, and no
-  credential anywhere. Returns a pass or a numbered list of defects with the file
-  and line for each. Use when the user types $deliverable-review, asks whether an
-  analysis document or a wiki is ready, asks what is missing from a deliverable, or at
-  the end of any run that produced one. Reads and reports; does not rewrite.
+  Review a versioned obengineer analysis site and its matching wiki before a
+  human sees it: navigation, evidence, findings, strategy, use cases, workflows,
+  transactions, signal contracts, work orders, verification, optional Word
+  summary, and credential safety. Use for $deliverable-review, /ob-review, or a
+  request to grade an analysis or wiki.
 metadata:
   author: obengineer
-  version: 0.2.0
+  version: 0.3.0
   category: observability
 ---
 
-# Deliverable Review — the checklist, executed
+# Analysis and wiki review
 
-## Overview
+Review is read-only and independent from authoring. Report every defect with page, line,
+rule, consequence, and the smallest repair. Do not silently fix it.
 
-Every run in this bundle ends with a checklist that the run itself is supposed to fill in.
-That is self-assessment by the party with the strongest incentive to pass, and it fails the
-same way every time: the checklist gets ticked from memory rather than from the document,
-and the section that is missing is the one the author forgot they were meant to write.
+## Authorities
 
-So the grader is separate from the author. This skill reads the artifacts as a reviewer
-would — no memory of writing them, no assumption that a heading exists because it was
-intended — and returns a pass or a numbered defect list.
+- [`../references/analysis-site.md`](../references/analysis-site.md)
+- [`../references/agent-wiki.md`](../references/agent-wiki.md)
+- [`../references/critical-findings.md`](../references/critical-findings.md)
+- [`../references/security-assessment.md`](../references/security-assessment.md)
+- [`../references/implementation-work-orders.md`](../references/implementation-work-orders.md)
+- [`../references/provenance-ledger.md`](../references/provenance-ledger.md)
 
-The rubric is not invented here. It is
-[`../references/document-template.md`](../references/document-template.md): the section
-order, the completeness bar, and the pre-delivery checklist. **If the rubric and this skill
-disagree, the rubric wins** and this file is what needs fixing.
+The authorities win over explanatory docs.
 
-## Why a separate grader is worth the round trip
+## Grade the analysis site
 
-| Without | With |
-|---|---|
-| The checklist is filled from intent | It is filled from the document |
-| A missing section is discovered by the customer | It is discovered before delivery, by name and line |
-| "Cardinality is important" counts as cardinality guidance | A dimension list with no MTS arithmetic is a defect with a line number |
-| Every run's quality depends on the author's attention that day | Quality has a floor that does not move |
-| Nothing is measurable across engagements | Defect counts by class accumulate, and the references get fixed where they actually fail |
+Fail when:
 
-That last row is the one that compounds. A defect class that recurs across engagements is
-not an author problem, it is a **specification problem** — the reference that was supposed to
-prevent it is unclear, and the fix belongs there.
+- `[V<N>]` labels are not uppercase or a selected old version links mutable current detail;
+- a detail page lacks a breadcrumb to Analysis and its parent index;
+- any landing-page object lacks a detail link;
+- the landing page omits next steps, architecture, findings, strategy, path, work orders,
+  use cases, workflows, transactions, contracts, operations, or reference;
+- the summary does not represent the strategy;
+- a finding lacks evidence, impact, decision, affected objects/work orders, or verification;
+- use cases do not lead workflows, or workflows do not lead transactions;
+- a conditional subject has an empty page instead of being absent;
+- useful future items are scattered instead of listed on Suggested additions;
+- missing human inputs are required as `unknown` instead of listed on Intake recommendations;
+- a web server, browser action, localhost URL, or high-port preview is required;
+- chat handoff pastes detail instead of linking the host-native side view; or
+- a credential-shaped value appears.
 
-## Process
+## Grade the strategy
 
-### Step 1 — Establish what should exist
+Check that applicable browser, backend, messaging, collector, metrics, logs, and operations
+layers are complete. Cross-Cutting Attributes and Baggage Propagation has its applicable
+provider, allowlisted `SpanProcessor.onStart`, identity write, backend propagator, and bus
+inject/extract patterns. Every baggage key has a consumer. Every metric dimension has
+cardinality arithmetic. Every detector has a threshold. Every objective has an error
+budget. Every join is continue trace, span link, or attribute pivot.
 
-Read the rubric's section list. Read `engagement-inputs.yaml` to learn which sections are
-conditional and how each condition resolved:
+## Grade the wiki and work orders
 
-| Condition | Sections it governs |
-|---|---|
-| A browser exists | RUM placement, RUM SPA / client route changes, ad attribution |
-| A client router is in evidence | RUM SPA / client route changes must carry **code**, not prose |
-| A bus exists | Messaging Observability, and one `Messaging boundary — <bus>` subsection per bus |
-| Log Observer Connect is entitled | Log Observer Connect panels; otherwise they must **not** appear |
-| Session replay accepted in writing | Always-on replay may be recommended; otherwise it must not be |
-| A wiki exists with prior runs | Section 3 must carry `Changes since v<N-1>`, and findings must be carried forward by id rather than renumbered |
-| `entitlement` was supplied, or a `traffic_baseline` factor was supplied. A factor is supplied only when it is neither `unknown` nor an empty collection (`[]` or `{}`). `infra_integrations: []` is unsupplied | The separate `entitlement-exposure-<app>-<date>.md` must exist, and the analysis must reference it in exactly one document-control line. Supplied and no exposure document is a defect. Neither supplied, and an exposure document exists, is a blocking defect, because every number in it was invented. A baseline with no entitlement is an expectation range, not an overage |
-| `entitlement.fit_to_entitlement` is true | The exposure document must carry the what-was-cut section, each cut naming the question it made unanswerable |
-| `business_context` was supplied | Section 26's stated figures and the quoted commentary must trace to it. Absent, section 26 is still required — from measured performance and the public record, with unfilled coefficients |
-| `public_evidence.allowed` is true | Section 26 must carry `What the public record shows` with cited entries, or the statement that a twelve-month search found nothing |
+Run `instrumentation-wiki/scripts/verify_wiki.py` for each service. Then judge what the
+script cannot:
 
-A conditional section that is absent is a defect. A conditional section present as
-`Not in evidence` **with the evidence that would settle it** is a pass. A conditional section
-present as `Not in evidence` with nothing else is a defect — it is a heading pretending to be
-an answer.
+- no analysis section is duplicated verbatim;
+- current statuses agree with code and deployment evidence;
+- every work order links findings, use cases, workflows, transactions, contracts,
+  repository legs, dependencies, acceptance evidence, and verification criteria;
+- every linked object points back to its work order;
+- dependency-free orders are proposed before acceptance and Ready after it;
+- dependent orders are Blocked until proof satisfies dependencies; and
+- no named engineer, owner, or accepter is required.
 
-### Step 2 — Walk the completeness bar, row by row
+## Optional Word summary
 
-Every row of the rubric's completeness bar, against the document rather than against
-recollection. For each defect record: the row, the file, the line, and the smallest change
-that fixes it.
+If no `.docx` was requested, absence passes. If requested, apply
+[`../references/document-template.md`](../references/document-template.md): generated from
+the current version, fewer than 20 pages, summary only, and verified. A long Word artifact
+or one that carries deep detail fails.
 
-Do not stop at the first defect. A review that returns one problem gets one fix and another
-review; a review that returns all of them gets one revision.
+## Result
 
-### Step 3 — Check the things only a machine will check
-
-These are the checks a human reviewer reliably skips, which makes them the most valuable
-part of the pass:
-
-- **Dictionary against schema.** Every attribute in Appendix A appears in `attribute-schema.json` and the reverse, with the same `dimension` verdict on both sides. A disagreement here means the implementer and the customer are reading different contracts.
-- **Every baggage key has a named consumer.** A dashboard variable, a detector `group by`, or a documented pivot. No consumer, no baggage — this is the check that keeps the set at six.
-- **Every dimension-eligible key has arithmetic.** Distinct values, metrics, services, MTS cost. A promotion with no number cannot be approved, only waved through.
-- **Every meter has three to six bounded dimensions**, and no identity key among them.
-- **Every use-case join carries a label**: continue trace, span link, or attribute pivot. And span links appear **only** for webhooks, batch consume, DLQ redrive, schedulers, and scatter/gather.
-- **One percentile** across the whole document. Two percentiles is two definitions of slow.
-- **Every workflow name matches `standards.workflow_naming`**, and every `workflow.step` enumeration is bounded and stated.
-- **The APM Business Transaction Global tag is named.** `<org>.bt`, its bounded values,
-  environment scope, and valid `workflow.name` pairs are explicit. A TAM cannot configure
-  a description.
-- **No credential.** Token shapes, `-----BEGIN`, long random strings, and anything the deny list names. This check fails the deliverable outright rather than adding a defect row.
-- **Cross-references resolve.** A document that cites a section number that does not exist was reorganised without being re-read.
-- **Critical findings are section 4, severity-ordered, and complete.** Each carries observation with evidence, files and surfaces, exposure, risk, remediation split into stop-the-bleeding and structural, and a runnable verification. A finding with no remediation is a complaint. Every finding at or above the agreed severity appears in the phase plan by id.
-- **Security coverage is complete and versioned.** Every OWASP Top 10:2025 and OWASP
-  API Security Top 10:2023 category appears in the section 4 coverage matrices with
-  evidence, result, and limitations. Exposed-credential and API checks are explicit.
-- **Vulnerability routing agrees.** Every confirmed or high-confidence vulnerability
-  carries severity, confidence, finding class, OWASP mapping, and priority in section 4
-  and appears by id in section 5 `P0 recommended fixes`. P0 is not observability Phase 0.
-- **Stable finding ids**, and on a repeat run the prior ids are all accounted for — fixed, open, regressed, or accepted. A finding that vanished between two versions is a blocking defect: the reader cannot tell whether it was fixed or dropped.
-- **No body content under an appendix heading.** The appendices are the dictionary, long code variants, the work-order plan, supplementary evidence, and open items. Anything the argument depends on sitting under one is a defect.
-- **Catalogue sections 19–25 present, contiguous, and in order**, with the flat BT list, the flat workflow list, and the join all present rather than one standing in for the others.
-- **Every detector has a threshold**, and that threshold is a measured baseline with its window, an agreed target traced to an objective, or a labelled placeholder with the query that will replace it. There is no fourth category, and an unlabelled invented number is indistinguishable from a tuned one once the document ships.
-- **Every objective has an error budget and a burn-rate rule**, and its user-facing statement reads as something a customer would say. An SLO expressed only as a server metric is a defect against [`../references/service-levels.md`](../references/service-levels.md).
-- **Detector thresholds and objectives agree.** They are the same commitment written twice; a disagreement means one of them is wrong.
-- **Every `Use Case:` opens with `Narrative`**, in plain language, with no attribute or span names in it.
-- **Versions recorded with provenance**, and any breaking change since the last run present as an upgrade-path entry naming affected notes, the code action, the configuration action, and their ordering.
-- **Business Value Realization is section 26, last in the body**, with all six subsections. Then read it as a sceptic would, because that is who reads it: every figure carries a `stated` / `measured` / `public` / `derived` label; every `derived` figure shows its arithmetic; every claim names a workflow, indicator, or detector **that exists in this document**; every public entry carries a URL, publication, date, and its source class; no complaint is reported as an outage; and no industry benchmark appears anywhere. A benchmark is the tell that a number could not be obtained and was substituted.
-- **The value section does not promise speed.** Instrumentation makes slowness visible, measurable, and attributable. A section implying the application gets faster is a defect against [`../references/business-value.md`](../references/business-value.md), and it costs the technical sections their credibility.
-- **No licensing, consumption, or overage figure anywhere in the customer document.** That audience is the account team, in its own file. One document-control reference line is the whole permitted footprint.
-- **Nothing was trimmed to fit the entitlement unless it was asked for.** Cross-check the cardinality section's promotions against the catalogue: a dimension that an indicator depends on and that quietly became attribute-only is a defect, not an optimisation. Under `fit_to_entitlement` it is the reverse — every cut must be recorded.
-- **Implementation mapping is complete.** `implementation-map.json` agrees with Appendix
-  C, `<org>.bt` is the bounded propagated Global tag used for Splunk APM Business
-  Transactions, and every accepted target maps to repository legs or a named ownership ask.
-
-### Step 4 — Grade the wiki, when the run produced one
-
-The wiki fails differently from the document, so it needs its own pass rather than the same
-one. Start with the mechanical half, which is a script rather than a reading:
-
-```bash
-python3 ../instrumentation-wiki/scripts/verify_wiki.py "wiki/apps/<app>/services/<service>"
-```
-
-It settles required notes, frontmatter fields and their allowed values, link resolution and
-ambiguity, index length and count agreement, stub promotion, the provenance column, the host
-pointers, and credential shapes. Report its failures as defects with the note and the field —
-then read for the half no script can reach, against
-[`../references/agent-wiki.md`](../references/agent-wiki.md):
-
-- **The index is a map, not a summary.** The script bounds its length; only a reader can tell whether what is inside it is links and entry points or a paragraph per workflow. If it summarises each workflow it has become the document again, and the whole point was that a run loads three notes.
-- **No note duplicates a document section verbatim.** Two authorities, and the wiki loses, because nobody re-renders it. Sample the longest notes — that is where a paste lands.
-- **A promotion earns more than a passing line count.** The script rejects a three-line stub; a note that carries three lines of restated name is the same defect wearing more words.
-- **The host pointers are pointers.** The script confirms they exist and carry both rules. Read them for the failure it cannot see: a pointer that has grown a copy of the contract, which is a second authority and the one that will be wrong.
-- **`status` reflects reality.** A workflow at `designed` with code in the repository that emits it is a stale wiki, and the delta run will trust it. Spot-check the notes whose work order has landed.
-- **A credential recorded as a holder rather than a value.** The script matches shapes; a secret described in prose — "the key is the one in the market config" — passes it and still tells a reader where to look.
-- **`business/` holds the workings, not a second copy of the section.** The script checks that the value model labels its figures and that cited sources carry read dates. Read for what it cannot: whether a coefficient in the wiki disagrees with the same number in the document, which means the next run will inherit the wrong one.
-
-### Step 5 — Verify the rendered artifact, not just the Markdown
-
-Run `verify_render.py`. Then confirm what it does not: the `.docx` is newer than the
-Markdown it came from, and no one has hand-edited it. A `.docx` edited after rendering is a
-second source of truth, and it will disagree with the Markdown within a week.
-
-The script proves every reference is a link and every link lands. Read for the half it
-cannot judge: a reference that names a section where the sentence meant the product, and
-its opposite — a sentence pointing a reader at "the workflow catalogue" or "the section
-above" with no link at all, which the census cannot count because it is not written as a
-reference.
-
-### Step 6 — Report
-
-```
-FAIL — 4 defects, 1 blocking
-
-BLOCKING
-  1. Credential-shaped value at analysis-<app>-2026-09-18.md:412
-     Row: "No ingest token, secret, or credential value anywhere"
-     Fix: replace with ${SPLUNK_ACCESS_TOKEN}
-
-DEFECTS
-  2. Dimension list has no MTS arithmetic (line 588)
-     Row: "A dimension list with no cardinality arithmetic"
-     Fix: add distinct values x metrics x services per row, against headroom
-  3. session.market in baggage with no named consumer (line 233)
-     ...
-```
-
-Order by blocking first, then by rubric order. Name the row, so the defect is traceable to
-the rubric rather than to the reviewer's taste — and so a recurring defect class is visible
-as a specification problem rather than an author problem.
-
-Then preview and open/update the anonymized outcome issue according to
-[`../references/outcome-issues.md`](../references/outcome-issues.md), using
-`publish_outcome_issue.py`. Repeated defect classes update one issue. If existing GitHub
-authentication is unavailable, provide the web-login handoff and retain the preview as
-pending. This record is what makes quality measurable across engagements.
-
-## Warning signs
-
-- **The review passes on the first attempt, every time.** Then it is checking presence of headings and not their content, and it has become decoration.
-- **A defect is reported without a line number.** Unactionable; the author will re-read the whole document and find nothing.
-- **The reviewer rewrites the document.** Then there is no independent grader, only a second author. Report and stop.
-- **A rubric row is skipped as "not applicable" without the input that makes it so.** Applicability comes from `engagement-inputs.yaml`, not from judgement in the moment.
-- **The same defect class appears in three engagements.** Stop fixing documents and fix the reference that was supposed to prevent it.
-
-## Non-goals
-
-- Does not rewrite, reorder, or improve the deliverable. It grades. The author fixes.
-- Does not judge whether the *design* is right for the target — only whether the contract is complete, internally consistent, and safe. A complete guide can still be the wrong guide, and that is a human's call.
-- Does not read a tenant. Whether the telemetry actually arrived is a different question from whether the document specified it.
+Return `PASS` only when there are no defects. Otherwise return a numbered defect list.
+Analysis cannot become ready for review until blocking defects are repaired.

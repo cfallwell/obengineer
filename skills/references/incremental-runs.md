@@ -14,12 +14,12 @@ actually changed.
 
 ## Establishing which kind of run this is
 
-One check, first, before any scanning: does `wiki/apps/<app>/services/<service>/index.md` exist?
+One check, first, before scanning: does `wiki/apps/<app>/index.md` list a prior version?
 
 | Answer | Run type | Behaviour |
 |---|---|---|
-| No wiki | **First run** | Full analysis. Create the wiki. Record versions. Everything is new |
-| Wiki exists, `meta/run-log.md` has entries | **Repeat run** | Delta. Read before scanning. Reuse every accepted name |
+| No version | **First run** | Full analysis. Create V1 and its wiki. Everything is new |
+| Prior version exists | **Repeat run** | Create the next immutable version. Read prior accepted state before scanning |
 | Wiki exists but is stale beyond recognition — the application has been rewritten | **Re-baseline** | Full analysis, but the old wiki is archived rather than deleted, and the document says why the baseline was reset |
 
 The third case is real and must be declared, not drifted into. A "delta" against an
@@ -53,13 +53,14 @@ cite it. This comparison runs when `artifacts.prior_scans` is non-empty and on
 every repeat run, whether or not a wiki already exists. The current scan is
 production. Test and QA scans are not a substitute: those environments vary.
 
-## What the delta document contains
+## What the next version contains
 
-Same section list as a first run — every heading stays, because a customer comparing two
-versions must find the same shape — but the content of each is scoped to change.
+The landing page begins with `Changes in V<N>` and links immutable prior versions. It
+states inputs added or edited and resulting changes to findings, strategy, use cases,
+workflows, transactions, schema, and work orders. Unchanged detail remains available in
+the prior version rather than being copied into empty pages.
 
-**Section 3 gains `### Changes since v<N-1>`**, and it is the section the reader goes to
-first on a repeat run. Four subsections, each of which may be "none":
+The changes readout covers:
 
 - **New surfaces and services** — routes, bundles, endpoints, queues, and services that did not exist at the last run. For each, whether it is instrumented, and if not, which BT and workflow it needs. **This is the highest-value output of a repeat run**: newly shipped, uninstrumented code is what the periodic cadence exists to catch, and it is invisible to anyone reading the running system's dashboards, because code nobody instrumented produces no telemetry and therefore no gap in a chart.
 - **Removed or retired** — surfaces that have gone. Their notes move to `status: retired` rather than being deleted, and their detectors and dashboards are named for removal, because an alert on a deleted service fires as a silent outage forever.
@@ -69,16 +70,15 @@ first on a repeat run. Four subsections, each of which may be "none":
 **Findings are carried forward, never renumbered.** `F-01` is `F-01` for the life of the
 application. Each prior finding appears with its current state — `fixed` (with what verified
 it), `open` (with how long, which is the number that creates urgency), `regressed` (which is
-worse than new and must say so), or `risk-accepted` (with who accepted the risk, when,
-and why). Contract acceptance is the separate exact-commit acceptance record. New
+worse than new and must say so), or `risk-accepted` (with the decision record, date,
+and rationale). Contract acceptance is the separate content-bound acceptance record. New
 findings continue the sequence. A finding that vanishes between two documents is the worst
 available outcome: the reader cannot tell whether it was fixed or dropped.
 
-**Sections with no change say so, briefly, and keep the heading.** "Unchanged since v2" with
-a wikilink is correct and useful. Silently reproducing the previous text is not: the reader
-cannot tell reviewed-and-unchanged from copied-forward-unread.
+Do not create empty pages. The landing-page change summary names unchanged catalogues when
+that fact matters; otherwise the prior version remains the record.
 
-**The catalogue sections (19–25) are additive.** New BTs, new workflows, new meters, new
+**The catalogues are additive.** New BTs, new workflows, new meters, new
 detectors, new objectives — appended, with new entries marked so a reviewer can find them
 without diffing. Existing entries are not rewritten for taste. Renaming an accepted
 `workflow.name` breaks every dashboard, detector, and MetricSet built on it, so it happens

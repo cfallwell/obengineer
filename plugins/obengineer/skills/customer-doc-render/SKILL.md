@@ -9,7 +9,7 @@ description: >-
   $customer-doc-render, asks to "make this a Word doc", "convert the guide to
   docx", "produce a customer-review document", asks for "sections on new
   pages", "a title page", or "a table of contents", or when any instrumentation
-  guide is being delivered for architecture review. Reads Markdown and writes
+  guide explicitly requests the optional Word summary. Reads Markdown and writes
   .docx only; never edits the Markdown source.
 metadata:
   author: obengineer
@@ -21,14 +21,12 @@ metadata:
 
 ## Overview
 
-Customer architecture reviews happen in Word, not in a terminal. Engineers work
-from Markdown. Maintaining both by hand guarantees they drift, and a drifted
-deliverable is worse than no deliverable because the reader cannot tell which one
-is true.
+The primary analysis is linked Markdown in the host's native side panel. Some reviews
+still request Word. Maintaining it by hand guarantees drift.
 
-This skill makes the Markdown the single source and the `.docx` a build artifact.
-Every guide delivery produces both, and the Word file is always regenerated —
-never edited.
+This skill makes the Markdown summary source authoritative and the `.docx` an optional
+build artifact. It is always regenerated, never edited, and remains under 20 pages for
+an analysis summary.
 
 The layout is not a matter of taste. It is recorded in
 [`references/document-format.json`](references/document-format.json) and described
@@ -47,7 +45,7 @@ rule 1 or rule 4, and it refuses to save one that breaks rule 3.
 
 ## When to use
 
-- Any run of `instrumentation-analyze` (the analysis is not delivered until both renderings exist).
+- An `instrumentation-analyze` run only when the human requested the optional Word summary.
 - The analysis memo from `instrumentation-analyze`, when the customer wants to review findings before the contract.
 - Any Markdown deliverable heading to a review meeting.
 
@@ -123,8 +121,9 @@ builds every entry as a link when it refreshes.
 ### Step 3 — Render
 
 ```bash
-python3 scripts/render_customer_doc.py docs/observability/analysis-<app>-<date>.md \
-    -o "docs/observability/<Customer>-<App>-Analysis-<date>.docx"
+python3 scripts/render_customer_doc.py \
+    docs/observability/analysis/<app>/V<N>/word-summary.md \
+    -o "docs/observability/analysis/<app>/V<N>/<App>-Summary.docx"
 ```
 
 Markdown `##` becomes Word `Heading 1` and starts a new page; `###` becomes
@@ -145,8 +144,9 @@ a level too deep.
 ### Step 4 — Verify, do not eyeball
 
 ```bash
-python3 scripts/verify_render.py docs/observability/analysis-<app>-<date>.md \
-    "docs/observability/<Customer>-<App>-Analysis-<date>.docx"
+python3 scripts/verify_render.py \
+    docs/observability/analysis/<app>/V<N>/word-summary.md \
+    "docs/observability/analysis/<app>/V<N>/<App>-Summary.docx"
 ```
 
 The verifier is fence-aware, so YAML and SignalFlow comments inside code blocks are

@@ -1,226 +1,195 @@
-# The agent wiki — memory that survives the session
+# Versioned agent wiki
 
-The customer document is prose for humans, read front to back, once. Agents need the
-opposite: small addressable notes, retrieved by subject, updated in place, diffable in a pull
-request. Using one artifact for both jobs is what produced a 300-kilobyte "instrumentation
-recommendations" document that no customer read and no agent could load without spending its
-whole context on material irrelevant to the task in hand.
+The analysis site is the human index. The wiki is small addressable detail that agents
+retrieve by subject. Analysis creates both in the same version and PR.
 
-So the lower layer is a **wiki**: one note per subject, cross-linked, with frontmatter that
-both a human tool (Obsidian, Foam, Dendron, a Git-backed wiki) and an agent memory feature
-can read.
+## Layout
 
-## Where it lives
-
-An app is a website. Backend services live under the app that uses them. The run creates this tree from the apps and services it finds in the analysis. A human does not create the folders first.
-
-```
+```text
 wiki/
-  README.md                       # entry point: apps, conventions, how to read this
+  README.md
   apps/
     <app>/
-      index.md                    # this website and the services it uses, as wikilinks
-      implementation/
-        work-orders/<id>.md       # unified work orders; may span services/repositories
-      services/
-        <service>/
-          index.md                # map of content for this service — the note an agent loads for the service
+      index.md                         # [V1] [V2] ... and accepted-version pointer
+      versions/
+        V<N>/
+          index.md                     # version map and analysis breadcrumb
           meta/
-            engagement-inputs.yaml    # the run's inputs, copied here on completion
-            versions.md               # tool, SDK, semconv, and provider versions this service is designed against
-            run-log.md                # one row per architect or implementer run, newest first
-            decisions.md              # accepted decisions with their date and rationale (an ADR log)
-          architecture/
-            observed.md               # the composition, as of the last run
-            surfaces.md               # bundles, routes, chunk map
-            buses.md                  # one section per bus: topics, accounts crossed, inject/extract state
-            third-parties.md          # every third party, its purpose, and its telemetry consequence
-          findings/
-            F-01-<slug>.md            # one note per finding, with status: open | fixed | regressed | risk-accepted
-          contract/
-            cross-cutting.md          # the attribute set and the five code patterns
-            baggage.md                # the budget, the allowlist, and each key's named consumer
-            collector.md              # the config and why each processor is where it is
-            mpm.md                    # dimension-eligible and attribute-only, with the arithmetic
-            attribute-schema.json     # the machine form — the same file the document appendix generates
-          business-transactions/
-            <bt>.md                   # one note per BT: surface, owning artifact, flag, workflows
-          workflows/
-            <workflow>.md             # one note per workflow: intent, spans, attributes, metrics, SLI, detectors
-          use-cases/
-            <flow>.md                 # the composite: narrative, identity, dashboard, joins
-          metrics/
-            custom-meters.md
-          detectors/
-            <detector>.md             # condition, threshold and its provenance, arm state, runbook
-          slos/
-            <sli>.md                  # user-facing statement, queries, objective, budget, burn rate
-          business/
-            value-model.md            # the value arithmetic and its coefficients, each labelled
-            public-evidence.md        # cited public sources with their read dates
-            asks.md                   # the inputs that would make the value case quantitative
-            entitlement-exposure.md   # when entitlement or a supplied baseline exists; absent when neither does
+            engagement-inputs.yaml
+            versions.md
+            run-log.md
+            decisions.md
           implementation/
-            enforcement.md            # service-local CI checks that keep the contract true
-          as-code/
-            inventory.md              # what exists in the tenant, what Terraform owns, what was imported
-            refusals.md               # what could not be generated and the missing key for each
+            work-orders/
+              index.md
+              <id>.md
+          services/
+            <service>/
+              index.md
+              architecture/
+              findings/
+              contract/
+              business-transactions/
+              workflows/
+              use-cases/
+              metrics/
+              detectors/
+              slos/
+              business/
+              implementation/
+              as-code/
 ```
 
-Three rules about the path, and they are the load-bearing ones:
+An app is the website and its participating backend services. A shared service is
+represented under each app that uses it and cross-linked. A human does not create these
+directories first.
 
-**Apps, then the services each app uses.** The path is `wiki/apps/<app>/services/<service>/`.
-The run creates `wiki/apps/<app>/` and `wiki/apps/<app>/services/<service>/` for every app
-and every backend service that app uses. A human does not create those folders first.
-Realm, entitlement, and privacy regime stay in `docs/observability/engagement-inputs.yaml`.
-Each app index links that file, so those facts have one home.
+Versions are immutable snapshots. The app index marks one accepted version as active.
+Host pointers resolve the app index and then the active version. An older `[V<N>]` never
+links into a newer wiki snapshot.
 
-**A shared service is recorded under each app and linked.** When two apps use the same
-backend service, each app has its own service note at
-`wiki/apps/<app>/services/<service>/`. Join the two notes with a path wikilink,
-`[[apps/<other-app>/services/<service>/index]]`. The service stays under each app that
-uses it. It is not moved to a single global folder that neither app owns.
+## Breadcrumbs and links
 
-**The application directory name is the `<app>` identifier used everywhere else**: in
-the document filename and in the `<org>.bt` prefix. The service directory name is the
-`<service>` identifier used for that backend. One string each, so a grep finds everything.
+Every versioned note opens with:
 
-**Work orders are app-level because end-to-end work crosses services.** A unified order
-under `wiki/apps/<app>/implementation/work-orders/` may contain frontend, SSR, GraphQL,
-backend, Collector, and configuration repository legs. Every service note links to the
-same order. The schema, selectors, linked-PR rules, and Jira/manual fallback live in
-[`implementation-work-orders.md`](implementation-work-orders.md).
+```markdown
+[Analysis](<version analysis index>) / [<Object index>](index.md) / **<Object>**
+```
+
+Use relative Markdown links from the wiki to analysis pages. Use `[[wikilinks]]` between
+wiki notes. Link every direction:
+
+- findings ↔ use cases;
+- use cases ↔ workflows and business transactions;
+- objects ↔ attributes, metrics, propagation, collector, and operations;
+- objects ↔ work orders; and
+- work orders ↔ findings, use cases, workflows, transactions, repository legs, and
+  verification criteria.
 
 ## A note earns its file
 
-One note per subject does **not** mean one note per name. A workflow or a detector gets its own
-note when it carries something beyond its name — spans, attributes, a threshold with a
-provenance, an objective, a work order that touches it. Until then it lives as a line in its
-BT note or the detector catalogue note, and it is promoted to a file the moment an agent needs
-to record something against it.
+One note per subject does not mean one note per name. A workflow, detector, or objective
+earns a file when it carries spans, attributes, a threshold, an objective, or a work order.
+Until then it remains a line in its parent BT or catalogue. The service index reports total
+names and promoted notes.
 
-This matters at real scale. An application with forty-four business transactions and four
-hundred workflows would otherwise open with four hundred files containing a name and a
-frontmatter block, which is not memory: it is a retrieval surface where every search returns
-mostly stubs, and it hides the twenty workflows that actually have a design. Promotion is
-cheap and reversible; a wall of stubs is neither.
+## Frontmatter
 
-Record the rule in `index.md` with the current counts — workflows named, workflows with notes
-— so the gap is visible rather than looking like an omission.
-
-## Note shape
-
-Every note opens with YAML frontmatter, then a single H1, then content. The frontmatter is
-what makes the wiki machine-usable:
-
-```markdown
+```yaml
 ---
 title: checkout.order.submit
-type: workflow            # workflow | bt | use-case | finding | detector | sli | reference | work-order
-customer: <Customer>
+type: workflow
 app: <app>
-status: designed          # proposed | designed | implemented | verified | retired
-updated: 2026-09-18
-run: v3
-tags: [checkout, payment, cross-account]
-bt: [checkout, express-checkout]
-sli: [checkout-success, checkout-latency]
-sources: [F-01, "analysis-<app>-2026-09-18.md#use-case-checkout"]
+version: V3
+status: proposed
+updated: 2026-11-10
+tags: [checkout, payment]
+sources: [F-01]
+work_orders: [WO-004]
 ---
-
-# checkout.order.submit
-
-...
 ```
 
-`status` is the field the CI and the delta run read, so it is not decoration: a workflow at
-`designed` with code in the repository that emits it is a wiki that has gone stale, and that
-is a detectable condition rather than a matter of opinion.
+Types include `index`, `finding`, `use-case`, `workflow`, `bt`, `metric`, `detector`,
+`sli`, `reference`, and `work-order`. Statuses include `proposed`, `ready`, `blocked`,
+`designed`, `implemented`, `verified`, `retained`, `changed`, `superseded`, and `retired`.
 
-Link between notes with `[[wikilinks]]` — `[[checkout.order.submit]]`,
-`[[F-01-boot-bundle-api-key]]`. They resolve in Obsidian and every compatible tool, they
-survive a file move, and an agent can follow them without a path. Use a relative Markdown
-link only when pointing **out** of the wiki, at a real file in the repository.
+Do not require customer, engineer, owner, or accepter names.
 
-## Making the hosts read it
+## Index notes
 
-An agent that has to be told to read the wiki will not read it. Each host has a place that
-is loaded automatically, and the wiki install writes a short pointer into it — a pointer,
-never a copy, because a copy is a second authority that drifts:
+An index is a map, not a second authority. It stays under roughly 200 lines and contains:
 
-| Host | File | Contents |
-|---|---|---|
-| Cursor | `.cursor/rules/obengineer-wiki.mdc` | `alwaysApply: true`, and the path to `wiki/apps/<app>/index.md` plus the retrieval rule below |
-| Claude Code | `CLAUDE.md` (or an `@import` from it) | the same pointer |
-| Codex / generic | `AGENTS.md` | the same pointer |
+- breadcrumb;
+- selected version and status;
+- short target description;
+- counts;
+- task-oriented entry links; and
+- next step.
 
-The retrieval rule those pointers carry, verbatim, because it is the whole discipline:
+The human-facing analysis landing page may summarize conclusions. Wiki indexes link the
+canonical object detail rather than repeating it.
 
-> Before changing instrumentation, read `wiki/apps/<app>/index.md`, then only the service
-> notes and the BT and workflow notes in scope. Do not load the whole wiki. After a change lands,
-> update the `status` and `updated` fields of the notes you touched in the same commit.
+## Work orders
 
-"Do not load the whole wiki" is the point of having a wiki. A run that reads all of it has
-rebuilt the 300-kilobyte document with extra steps.
+Work orders are app-level because end-to-end changes cross services and repositories.
+They live under the matching version:
 
-## The index note
+```text
+wiki/apps/<app>/versions/V<N>/implementation/work-orders/
+```
 
-`index.md` is a map of content, not a summary. It is the one note an agent may load
-unconditionally, so it stays under roughly 200 lines and contains links plus the few facts
-needed to choose what to load next: the application in one paragraph, counts (BTs,
-workflows, use cases, open findings), the current run version, and a table of entry points by
-task — "implementing a workflow: start at `[[<workflow>]]` and `[[cross-cutting]]`";
-"adding a dashboard: start at `[[mpm]]` and the use-case note".
+The queue index contains:
 
-A summary in the index is a fact with two homes. Link instead.
+| ID | Outcome | Depends on | Status | Unlocks | Detail |
+|---|---|---|---|---|---|
 
-## Relationship to the customer document
+Each order carries:
 
-The document and the wiki share content but not authority, and every fact has exactly one
-owner:
+- reason and outcome;
+- findings addressed;
+- use cases enabled;
+- workflows and business transactions affected;
+- target selectors;
+- repository ids and authorized paths;
+- dependencies;
+- shared contracts consumed;
+- allowed and forbidden changes;
+- linked PR coordination;
+- acceptance evidence;
+- verification criteria; and
+- copy-ready issue text when an external tracker was requested.
 
-| Fact | Authority | The other one |
-|---|---|---|
-| Narrative, findings, phasing, portfolio mapping | The document | Wiki notes link to the document section |
-| Attribute keys and dimension eligibility | `contract/attribute-schema.json` | The document appendix is generated from it |
-| Per-workflow spans, events, thresholds | The wiki note | The document use case summarises it |
-| Run history, versions, decisions | `meta/` | Document control cites it |
-| Value arithmetic, coefficients, cited sources, unfilled asks | `business/` | The document's Business Value Realization section states the case |
-| Licensed totals, consumption, projected overage | `business/entitlement-exposure.md` | The account-team document is written from it; the customer document carries none of it |
+Before acceptance, dependency-free orders are `proposed`; dependent orders are `blocked`.
+Acceptance changes eligible orders to `ready`. A later version compares the prior queue
+and marks each order retained, changed, superseded, implemented, or verified.
 
-`business/` exists so a later run updates a coefficient rather than re-researching a quarter.
-The document states the case; the wiki holds the workings, including the sources with the date
-each was read — a citation with no read date is a citation to a page that may since have
-changed.
+The first work order installs deterministic schema agreement, single-init,
+workflow-registry, baggage-allowlist, and deny-list checks.
 
-The document is regenerated per run and versioned by filename. The wiki is **updated in
-place** and versioned by Git. That difference is deliberate: a customer wants to see what
-changed between two documents, and an agent wants the current state without reconstructing it
-from a changelog.
+## Authorities
 
-## Reinforcement path
+| Fact | Authority |
+|---|---|
+| Review narrative and strategy | Versioned analysis Markdown |
+| Per-object spans, events, thresholds, and work orders | Matching versioned wiki note |
+| Attribute keys and dimension eligibility | `attribute-schema.json` |
+| Repository and path mapping | `implementation-map.json` |
+| Evidence and run state | `provenance-ledger.json` |
+| Accepted content | Version acceptance digest |
 
-The wiki is what makes learning across engagements possible, because it is the only place
-where a prediction and its outcome sit next to each other:
+Do not duplicate a document section verbatim into a note.
 
-- **`meta/decisions.md`** links the exact-commit analysis acceptance record and records
-  subsequent accepted/rejected decisions. Contract acceptance is not finding
-  `status: risk-accepted`; the latter requires accepter, date, and rationale. The diff
-  between proposals and decisions is preference data that is otherwise lost.
-- **`findings/`** with a `status` field turns findings into an outcome series: how many were fixed, how long they stayed open, which classes recur across customers. A finding class that recurs points at a reference that failed to prevent it.
-- **`detectors/`** with threshold provenance shows which placeholder thresholds were replaced and by how much, which is the only honest measure of whether the invented numbers were any good.
-- **`run-log.md`** gives the denominator for all of it.
+## Host pointers
 
-None of that requires a training loop to be useful, and all of it is a prerequisite for one.
-See [`incremental-runs.md`](incremental-runs.md) for how a later run consumes it.
+Create or update:
 
-## Warning signs
+- `.cursor/rules/obengineer-wiki.mdc`;
+- `CLAUDE.md`; and
+- `AGENTS.md`.
 
-- **A note that duplicates a document section verbatim.** Two authorities, and the wiki will lose because nobody re-renders it.
-- **The wiki updated in a separate commit from the code.** Then it is documentation, and it is wrong within a week. Same commit, or a CI check that fails the pull request.
-- **`status: designed` everywhere, months in.** Nobody is closing the loop, and the delta run has nothing to work from.
-- **An index note that has grown a summary of every workflow.** It is now the document again. Cut it back to links.
-- **Notes with no `updated` field.** The delta run cannot tell stale from current, so it will re-derive everything and produce a full rewrite.
-- **A credential in the wiki.** The same rule as the document, and more dangerous here because a wiki is loaded into agent context by default. Record who holds it, never the value.
-- **A `business/` figure with no label or no source.** The value case is only as strong as the provenance of its inputs, and the wiki is where that provenance is supposed to survive.
-- **`business/entitlement-exposure.md` present when neither entitlement nor a supplied baseline was given.** Then it was invented, and the next run will inherit it as fact. An empty integration list is not a supplied baseline.
+Each points to `wiki/apps/<app>/index.md` and carries:
+
+> Before changing instrumentation, read `wiki/apps/<app>/index.md`, resolve the accepted
+> version, then load only the service, object, contract, and work-order notes in scope.
+> Do not load every version or the whole wiki. Update touched note status in the same
+> implementation commit.
+
+No browser or localhost server is required.
+
+## Verification
+
+`verify_wiki.py` checks:
+
+- required paths and frontmatter;
+- version and analysis breadcrumbs;
+- relative links and unambiguous wikilinks;
+- index counts;
+- work-order dependency ids and reverse links;
+- accepted-version pointer;
+- schema and provenance references;
+- host pointers; and
+- credential-shaped values.
+
+Warning signs include a mutable old-version link, an index that restates every object,
+a work order with no reverse links, stale statuses, a note without `updated`, and any
+credential value.

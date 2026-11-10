@@ -43,7 +43,7 @@ sounds:
 |---|---|---|
 | **Critical** | Exploitable or exposing now, with no compensating control. Assume it is known to someone outside the team | P0 recommended fixes and the phased plan by finding id |
 | **High** | Real exposure or a materially misleading signal, but gated by something — an authenticated path, a low-traffic surface, a partial control | P0 when confirmed or high confidence; otherwise the earliest owned phase |
-| **Medium** | Wrong and worth fixing, with bounded blast radius. It will cost an investigation later | Scheduled, named owner |
+| **Medium** | Wrong and worth fixing, with bounded blast radius. It will cost an investigation later | Scheduled remediation path |
 | **Low** | Hygiene. Record it so it does not get rediscovered as new every run | Open items, section 30 |
 
 Order the section by severity descending. Never by discovery order, never grouped by the

@@ -83,7 +83,9 @@ Contains:
 
 Alerting is where this persona is actually served, and the bar is high:
 
-- Every detector is actionable, with a runbook URL and a named owner. A detector with no runbook is a notification, and notifications get filtered.
+- Every detector is actionable, with a runbook URL and existing notification routing. Do
+  not collect a named owner. A detector with no runbook is a notification, and
+  notifications get filtered.
 - **Silent-outage detection on every critical workflow.** Absence of traffic where traffic is expected, which threshold-on-error-rate alerting structurally cannot see. This is the detector most often missing and most often needed.
 - `signalfx_alert_muting_rule` for `constraints.change_windows`, so planned work does not train people to ignore alerts.
 - Severities mapped to real response: `Critical` pages, `Major` notifies, `Minor` and `Warning` are dashboard-only. If everything is `Critical`, nothing is.

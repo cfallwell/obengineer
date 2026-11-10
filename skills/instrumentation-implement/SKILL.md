@@ -1,14 +1,14 @@
 ---
 name: instrumentation-implement
 description: >-
-  Implement an accepted instrumentation guide as small reviewable pull
+  Implement one Ready work order from an accepted analysis version as reviewable pull
   requests: the shared OTel library, single provider init, the baggage stamp
   processor, identity write, backend composite propagator, bus inject and
   extract, workflow spans and span events, custom meters, Collector config,
   and the CI checks that keep the contract enforced. Use when the user types
   $instrumentation-implement, asks to "implement the guide", "Prompt 03", add
   the shared library, wire baggage, emit workflow spans, or enforce
-  instrumentation in CI. Writes application code from one exact-commit accepted,
+  instrumentation in CI. Writes application code from one content-bound accepted,
   bounded work order, with at most one linked PR per repository.
 metadata:
   author: obengineer
@@ -26,9 +26,10 @@ repository legs, without depending on telemetry that is not yet trustworthy.
 Agent definition: [`../../agents/instrumentation-implementer.agent.md`](../../agents/instrumentation-implementer.agent.md).
 Prompt: [`../../prompts/03-implement-instrumentation.md`](../../prompts/03-implement-instrumentation.md).
 
-**Precondition:** the canonical acceptance record and a passing
-`verify_analysis_acceptance.py` check for its full commit SHA. Without them, stop and run
-analysis/review/generation first. A merged file or generic approval is not acceptance.
+**Precondition:** resolve the accepted version from the app wiki index and require its
+canonical acceptance record plus a passing `verify_analysis_acceptance.py` content-digest
+check. The selected work order must be `ready`. Without those conditions, stop and return
+to analysis review. An older-version, proposed, blocked, or superseded order cannot run.
 
 **Scope, before any code.** Engineering authorizes `initial_scope` after the
 contract exists: `full`, `repositories`, or `parent_folders`. `unknown` means
@@ -45,7 +46,7 @@ Generating linked issues is engineering's option and only when they ask. The rul
 ## Target and work-order boundary
 
 Read [`../references/implementation-work-orders.md`](../references/implementation-work-orders.md).
-Resolve one bounded selector to exactly one accepted app-level work order and validate every
+Resolve one bounded selector to exactly one Ready versioned app-level work order and validate every
 repository leg against `implementation-map.json` and repository-qualified `initial_scope`.
 One invocation may produce one linked PR per repository plus a coordination PR. This is
 still one concern: the unified accepted work order.

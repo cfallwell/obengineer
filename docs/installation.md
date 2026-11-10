@@ -1,8 +1,8 @@
 # Installation and lifecycle
 
 obengineer installs Markdown command entry points and skill directories into an agent
-host. The installer does not install Python, configure MCP server commands, create a
-Git repository, or copy the memory-repository templates.
+host. The installer does not install Python, create a Git repository, or write a
+credential. The guided setup script creates local `.env` without displaying values.
 
 ## 1. Choose where generated artifacts will live
 
@@ -36,14 +36,15 @@ git -C /path/to/memory-repo commit --allow-empty -m "Initial commit"
 ```bash
 git clone https://github.com/cfallwell/obengineer.git
 cd obengineer
-python3 -m pip install python-docx markdown-it-py==4.2.0 PyYAML==6.0.3
+python3 -m pip install PyYAML==6.0.3
 ```
 
-`python-docx` writes/verifies `.docx`, `markdown-it-py==4.2.0` parses CommonMark, and
-`PyYAML==6.0.3` validates/migrates engagement inputs. `make deps` adds `pytest`.
+`PyYAML==6.0.3` validates/migrates engagement inputs. Install `python-docx` and
+`markdown-it-py==4.2.0` only when rendering the optional Word summary. `make deps`
+installs development and renderer dependencies.
 
-Install the Terraform CLI when using `/ob-terraform`; analysis, generation, review,
-rendering, and application implementation do not require it.
+Install the Terraform CLI when using `/ob-terraform`; analysis, review, and application
+implementation do not require it.
 
 ## 3. Install into one or more hosts
 
@@ -107,7 +108,8 @@ Re-run installation after:
   absolute path; or
 - receiving skill changes when the original install used `--copy`.
 
-Reinstalling this release migrates `/ob-wiki` to `/ob-generate` and
+Reinstalling this release migrates `/ob-intake`, `/ob-generate`, and `/ob-wiki` to
+`/ob-start`, and
 `/ob-build-terraform` to `/ob-terraform`. The installer removes retired command files
 only when the prior obengineer manifest proves it created them; same-named user files that
 were not installed by obengineer are left alone.
@@ -117,18 +119,18 @@ Uninstall removes the replacement; it cannot restore content that existed before
 install. Review a `--dry-run` before installing into a host with custom files of the
 same names.
 
-## 4. Add the memory-repository templates
+## 4. Configure optional read-only Splunk access
 
-The installer deliberately does not copy environment files. Copy them manually:
+No manual file editing or template copying is required. From the memory repository run:
 
 ```bash
-cp templates/memory-repo/.env.template /path/to/memory-repo/.env.template
-cp templates/memory-repo/.gitignore /path/to/memory-repo/.gitignore
-cp /path/to/memory-repo/.env.template /path/to/memory-repo/.env
+/path/to/obengineer/scripts/setup-splunk-access.sh
 ```
 
-Fill `.env` locally. Keep `.env.template` committed and `.env` ignored. See
-[Configuration and behavior controls](configuration.md) for every variable.
+The script explains where to create least-privilege credentials, prompts in the terminal,
+writes `.env` with restrictive permissions, and ensures `.env` is ignored. It never prints
+tokens. Existing relevant MCP integrations are discovered by `/ob-start`; direct APIs
+remain available when an MCP server is absent or incomplete.
 
 ## Claude Code plugin installation
 

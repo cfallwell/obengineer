@@ -1,6 +1,6 @@
 # Implementation mapping and unified work orders
 
-This reference owns how accepted contract subjects map to code, repositories, pull
+This reference owns how versioned analysis subjects map to code, repositories, pull
 requests, and optional engineering tickets.
 
 ## Bounded target selectors
@@ -17,9 +17,10 @@ objective:<id>
 config:<id>
 ```
 
-The selector must resolve to exactly one accepted work order. Zero matches stop with the
-missing mapping. Multiple matches stop and list candidates. If omitted, the accepted phase
-plan selects one work order. One invocation executes one unified work order.
+The selector must resolve to exactly one Ready work order in the accepted version. Zero
+matches stop with the missing mapping. Multiple matches stop and list candidates. If
+omitted, the first Ready dependency-ordered work order is selected. One invocation executes
+one unified work order.
 
 ## Business transactions in Splunk APM
 
@@ -40,7 +41,7 @@ repositories. The contract registers valid `<org>.bt` / `workflow.name` pairs.
 
 ## Implementation map
 
-Analysis emits `docs/observability/implementation-map.json`. It maps every accepted
+Analysis emits `docs/observability/implementation-map.json`. It maps every proposed
 business transaction, workflow, use case, detector, objective, and configuration slice to
 the repositories and optional Jira projects that own its implementation.
 Every `evidence` value is a stable ID from `provenance-ledger.json`, never a free-form path.
@@ -74,11 +75,10 @@ Repository IDs are stable within the application. `authorized_paths` must agree 
 `initial_scope`; the map cannot grant scope. Jira project keys are recorded only from
 engineering or a named-and-connected Jira integration.
 
-After analysis, ask engineering once for every `mapping_status: incomplete` row:
+List every `mapping_status: incomplete` row on Intake recommendations:
 
 - the repository remote and authorized parent paths;
-- the Jira project, only if Jira is the named issue tool; and
-- the owning team when neither can be inferred from evidence.
+- the Jira project, only if Jira is the configured issue tool.
 
 A missing repository mapping blocks generation of an executable work order. A missing
 Jira mapping does not: the work order remains the manual queue.
@@ -88,16 +88,17 @@ Jira mapping does not: the work order remains the manual queue.
 Work orders live at:
 
 ```text
-wiki/apps/<app>/implementation/work-orders/<id>.md
+wiki/apps/<app>/versions/V<N>/implementation/work-orders/<id>.md
 ```
 
-Their status is one of `proposed`, `accepted`, `in-progress`, `blocked`,
-`implemented`, `verified`, or `retired`. Only `accepted` or `in-progress` orders execute.
+Their status is one of `proposed`, `ready`, `in-progress`, `blocked`, `retained`,
+`changed`, `superseded`, `implemented`, `verified`, or `retired`. Only `ready` or
+`in-progress` orders in the accepted version execute.
 This status is work authorization, not analysis acceptance and not finding risk acceptance.
 
 Service notes link to app-level work orders. Each work order contains:
 
-- accepted target selectors and contract commit;
+- target selectors, accepted version, and content digest;
 - repository legs with repository ID, paths, changes, tests, and dependency order;
 - the registered `<org>.bt` / `workflow.name` pairs affected;
 - one pull request per repository, at most;
@@ -107,8 +108,8 @@ Service notes link to app-level work orders. Each work order contains:
 
 One work order can produce several pull requests. Every PR title and body includes the
 work-order ID and reciprocal links to the coordination PR and sibling PRs. The artifact
-repository gets a coordination PR recording all legs and their states. No PR is merged by
-the agent, and no repository leg is declared complete until its siblings and end-to-end
+repository gets a coordination PR recording all legs and their states. No PR is merged
+without explicit human authorization, and no repository leg is declared complete until its siblings and end-to-end
 verification are visible.
 
 ## Jira and other issue tools

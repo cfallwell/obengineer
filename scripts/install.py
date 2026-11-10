@@ -13,15 +13,15 @@ reinstalling. `--copy` writes copies instead, for a host that cannot follow link
 bundle that will be distributed.
 
 Commands are always written as files, because each one carries this bundle's resolved
-path. They are what makes the runs invokable — `/ob-analyze` instead of pasting
+path. They are what makes the guided flow invokable — `/ob-start` instead of pasting
 a prompt into the chat.
 
 Every install writes a manifest next to what it created, so `--uninstall` removes what
 this script put there and nothing else.
 
-A memory repository keeps its API keys in `.env`. The committed template is
-`templates/memory-repo/` in this toolkit. Copy `.env.template` to `.env` and fill it.
-This script does not copy that directory and does not write `.env`.
+A memory repository keeps its API keys in `.env`. The guided setup script creates or
+updates that file without printing a credential:
+`scripts/setup-splunk-access.sh`. The installer never writes a credential.
 """
 
 from __future__ import annotations
@@ -39,8 +39,12 @@ CANONICAL_SKILLS = ROOT / "skills"
 COMMANDS = ROOT / "commands"
 MANIFEST_NAME = ".obengineer-install.json"
 ROOT_TOKEN = "{{OBENGINEER_ROOT}}"
+COMMAND_ORDER = (
+    "ob-start", "ob-add-inputs", "ob-edit-inputs", "ob-analyze",
+    "ob-review", "ob-implement", "ob-terraform", "ob-verify", "ob-render",
+)
 LEGACY_COMMAND_STEMS = {
-    "ob-generate": ("ob-wiki",),
+    "ob-start": ("ob-intake", "ob-generate", "ob-wiki"),
     "ob-terraform": ("ob-build-terraform",),
 }
 
@@ -80,7 +84,7 @@ HOSTS: dict[str, Host] = {
         label="Cursor",
         user_dir=".cursor",
         project_dir=".cursor",
-        notes=("Type /ob to list /ob-intake, /ob-analyze, /ob-generate, /ob-implement, /ob-terraform, /ob-verify, /ob-review, and /ob-render.",),
+        notes=("Type /ob to list /ob-start, /ob-add-inputs, /ob-edit-inputs, /ob-analyze, /ob-implement, /ob-terraform, /ob-verify, /ob-review, and /ob-render.",),
     ),
     "claude": Host(
         key="claude",
@@ -120,7 +124,11 @@ def shared_reference_dirs() -> list[str]:
 
 
 def command_files() -> list[Path]:
-    return sorted(COMMANDS.glob("*.md"))
+    order = {name: index for index, name in enumerate(COMMAND_ORDER)}
+    return sorted(
+        COMMANDS.glob("*.md"),
+        key=lambda path: (order.get(path.stem, len(order)), path.name),
+    )
 
 
 class Planner:
@@ -316,9 +324,10 @@ def main(argv=None) -> int:
     print("\nOr name a skill directly: $engagement-intake, $baggage-propagation, "
           "$cardinality-budget, ...")
     if project:
-        print("\nMemory-repo env template: templates/memory-repo/ in this toolkit.")
-        print("Copy .env.template to .env in the memory repository and fill it.")
-        print(".env is gitignored. This install does not write .env.")
+        print("\nOptional read-only Splunk access setup:")
+        print(f"  {ROOT / 'scripts' / 'setup-splunk-access.sh'}")
+        print("Run it from the memory repository. It writes local .env without "
+              "printing credentials.")
     if args.dry_run:
         print("\n(dry run — nothing was written)")
     return 0

@@ -1,0 +1,11 @@
+# Filled secrets for this memory repository.
+# Commit .env.template. Do not commit .env.
+.env
+.env.local
+!.env.template
+
+# Other local secret files.
+*.pem
+*.key
+credentials.json
+secrets.json

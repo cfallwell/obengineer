@@ -4,7 +4,7 @@ obengineer has four configuration layers:
 
 1. installer flags decide host, scope, and link-versus-copy behavior;
 2. environment variables provide tenant endpoints and secret values at run time;
-3. MCP configuration decides which external systems the agent can inspect; and
+3. direct APIs and already-connected MCP tools decide which external systems can be inspected; and
 4. `docs/observability/engagement-inputs.yaml` controls engagement-specific behavior.
 
 Command arguments can narrow a single invocation, but they do not replace the accepted
@@ -13,13 +13,13 @@ contract or engagement inputs.
 `docs/observability/provenance-ledger.json` is the machine authority for evidence and run
 state. `verification-plan.json` defines read-only exit criteria; optional
 `verification-exclusions.json` contains only human-approved unremediable criteria bound to
-the accepted commit.
+the accepted version.
 
 ## Environment variables
 
-Copy [`templates/memory-repo/.env.template`](../templates/memory-repo/.env.template)
-to `.env` in the artifact repository. The analyze run reads `.env` or the process
-environment.
+Run `/path/to/obengineer/scripts/setup-splunk-access.sh` from the artifact repository.
+It creates or updates `.env` interactively, never prints a token, and ensures the file is
+ignored. Analysis reads `.env` or the process environment.
 
 | Variable | Used for | Effect when absent |
 |---|---|---|
@@ -39,15 +39,21 @@ Keep values in `.env`, a host secret store, or the process environment. Put only
 references such as `${SPLUNK_ACCESS_TOKEN}` in committed files. The `.env.template`
 contains names and comments, never values.
 
-## MCP integrations
+## Direct APIs and MCP integrations
+
+Direct Observability Cloud and Splunk Platform APIs are first-class evidence sources and
+often expose more than an MCP server. `/ob-start` uses configured API access and discovers
+relevant MCP tools already connected to Cursor, Claude, or Codex. It combines the sources;
+neither is a universal replacement for the other.
 
 The plugin's committed
 [`plugins/obengineer/.mcp.json`](../plugins/obengineer/.mcp.json) contains an empty
 `mcpServers` object. This prevents an unconfigured placeholder command from failing
 every host session.
 
-Use [`plugins/obengineer/.mcp.optional.json`](../plugins/obengineer/.mcp.optional.json)
-as a template:
+When an organization wants another MCP integration, use
+[`plugins/obengineer/.mcp.optional.json`](../plugins/obengineer/.mcp.optional.json)
+as a reference:
 
 1. copy only the required server entry into the active MCP configuration;
 2. replace its placeholder command or URL with the command your organization operates;
@@ -60,20 +66,20 @@ Do not copy the `$comment` array into hosts that reject non-server keys.
 
 | Class | Integration | Behavior |
 |---|---|---|
-| Required for measured tenant inventory | `splunk-observability` | Reads MetricSets, APM workflows, Tag Spotlight, RUM, Synthetics, and subscription usage. |
-| Required for measured tenant inventory | `splunk-platform` | Reads approved indexes, sourcetypes, trace linking, Log Observer Connect configuration, and ITSI when present. |
+| Use when already connected | `splunk-observability` | Supplements direct API inventory for MetricSets, APM, RUM, Synthetics, and usage. |
+| Use when already connected | `splunk-platform` | Supplements direct API search across approved indexes and configuration. |
 | Recommended when applicable | `local-otel-tools` | Audits local SDK or Collector configuration when the organization provides such a server. |
 | Recommended when applicable | `thousandeyes` | Inventories off-box path tests and agent locations. |
 | Recommended when applicable | a cloud inventory MCP already connected for the target cloud | Supports production architecture diagrams. obengineer does not install one or guess a provider. |
 | Use only if already connected | Jira and repository hosts | Matches developer tools during intake and supports explicitly requested work-order flow. obengineer does not add or authenticate these servers. |
 
-Analysis can continue without required tenant integrations: it scans supplied source and
-production surfaces, uses stated inputs, labels unavailable tenant evidence, and records
-open items. It must not relabel stated information as measured.
+Analysis can continue without tenant access: it scans source and production surfaces,
+uses supplied facts, states the limitation on the evidence page, and lists useful access
+under Intake recommendations. It must not relabel stated information as measured.
 
 ## Engagement inputs
 
-`/ob-intake` creates:
+`/ob-start` creates and manages:
 
 ```text
 docs/observability/engagement-inputs.yaml
@@ -89,8 +95,9 @@ python3 /path/to/obengineer/skills/engagement-intake/scripts/verify_engagement_i
   docs/observability/engagement-inputs.yaml --migrate
 ```
 
-Do not delete unknown fields. Set them to `unknown`, an empty string, or the documented
-empty collection so later runs can distinguish an explicit gap from an outdated schema.
+Humans never need to type `unknown` or edit this file. `/ob-add-inputs` and
+`/ob-edit-inputs` manage supplied values. Validators retain schema-compatible empty
+representations and unknown extension fields.
 
 ### Evidence precedence
 
@@ -255,14 +262,15 @@ Installed commands append free-form invocation text to their run contract:
 
 | Command | Useful argument |
 |---|---|
-| `/ob-intake` | An alternate output path or relevant context not already represented in the workspace. |
-| `/ob-analyze` | The application or service focus when the inputs file covers several supplied artifacts. |
-| `/ob-generate` | Required `accept <analysis-path> at <analysis-commit-sha>`; verifies and records exact-commit acceptance before generating the wiki. |
-| `/ob-implement` | Optional bounded selector: work order, BT, workflow, use case, detector, objective, or config target. It must resolve to one accepted unified work order; if omitted, the accepted phase plan selects one. |
+| `/ob-start` | Optional application context; starts the guided selection and V1. |
+| `/ob-add-inputs` | Optional context for an unanswered suggestion; automatically runs the next version. |
+| `/ob-edit-inputs` | Optional name of a supplied value to change; automatically runs the next version. |
+| `/ob-analyze` | Direct rerun of current inputs, normally dispatched by the three guided commands. |
+| `/ob-implement` | Optional bounded selector: work order, BT, workflow, use case, detector, objective, or config target. It must resolve to one Ready work order in the accepted version. |
 | `/ob-terraform` | Application or environment focus already authorized by the accepted contract. |
 | `/ob-verify` | Optional criterion or cohort focus from the accepted verification plan; never grants mutation or remediation authority. |
-| `/ob-review` | Deliverable path; defaults to the analysis under `docs/observability/`. |
-| `/ob-render` | Markdown source path; defaults to the analysis under `docs/observability/`. |
+| `/ob-review` | Version path; defaults to the latest linked analysis and matching wiki. |
+| `/ob-render` | Version path; builds the optional Word summary under 20 pages. |
 
 Arguments cannot waive acceptance gates, widen `initial_scope`, introduce attributes
 outside `attribute-schema.json`, authorize Terraform apply, or override credential and

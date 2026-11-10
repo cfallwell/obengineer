@@ -1,16 +1,15 @@
 ---
-description: Render — rebuild the Word file from Markdown and verify it
+description: Render — build and verify an optional Word summary under 20 pages
 ---
 
-Render a deliverable for customer review.
+Render the optional Word summary for an analysis version.
 
-Read `{{OBENGINEER_ROOT}}/skills/customer-doc-render/SKILL.md` and follow it.
+Read `{{OBENGINEER_ROOT}}/skills/customer-doc-render/SKILL.md` and
+`{{OBENGINEER_ROOT}}/skills/references/document-template.md`.
 
-The source Markdown is the argument below; default to
-the analysis document under `docs/observability/` if none was given.
-
-The render is not done until `verify_render.py` exits 0. Never hand-edit the `.docx` —
-it is a build artifact, and an edited one is a second source of truth that will disagree
-with the Markdown within a week.
+Resolve the selected version, generate its temporary summary Markdown from the analysis
+index, findings, path, work-order summary, and use-case summaries, then render and verify
+the `.docx`. It must remain under 20 pages. Do not include deep contracts, code, complete
+catalogues, or raw evidence. Never edit Word directly.
 
 $ARGUMENTS

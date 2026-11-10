@@ -2,7 +2,7 @@
 
 **Agent:** [`../agents/observability-as-code.agent.md`](../agents/observability-as-code.agent.md)  
 **Skills:** `observability-as-code`, `cardinality-budget`  
-**Inputs:** exact-commit acceptance record, analysis, schema, implementation map, and engagement inputs
+**Inputs:** accepted analysis version, content-bound acceptance record, schema, implementation map, and engagement inputs
 **Depends on:** a passing `verify_analysis_acceptance.py` check. Runs in parallel with Prompt 03 — configuration and instrumentation do not block each other.
 **Output:** `terraform/apps/<app>/` (one directory per application, so a later apply does not include the others), a `terraform plan`, and a handover. **No `apply`.** The directory shape is Step 3 of `skills/observability-as-code/SKILL.md`.
 
@@ -13,7 +13,7 @@
 ## System reminder
 
 Follow `observability-as-code.agent.md`. Before generating, run
-`python3 <obengineer-root>/skills/instrumentation-wiki/scripts/verify_analysis_acceptance.py --record docs/observability/analysis-<app>-<date>.acceptance.yaml --repo .`.
+`python3 <obengineer-root>/skills/instrumentation-wiki/scripts/verify_analysis_acceptance.py --record docs/observability/analysis/<app>/V<N>/acceptance.yaml --repo .`.
 The contract is the source: every dashboard,
 detector, SLO, and check traces to a named section of the accepted guide and to a key in
 `attribute-schema.json`. A panel with no origin in the contract is scope you invented.
@@ -31,7 +31,7 @@ You produce a **plan**. You do not run `apply`, and you do not create anything i
 
 | Source | Used for |
 |---|---|
-| `docs/observability/analysis-<app>-<date>.md` | Dashboards Overview, Detectors and Thresholds, SLIs and SLOs, use cases, phase plan |
+| `docs/observability/analysis/<app>/V<N>/` | Strategy, operations, use cases, implementation path, and linked work orders |
 | `wiki/apps/<app>/services/<service>/detectors/`, `slos/`, `as-code/` | Per-detector thresholds with provenance, objectives, and what the tenant already has |
 | `docs/observability/attribute-schema.json` | Which keys are dimension-eligible, which are attribute-only |
 | `engagement-inputs.yaml` → `tenancy.o11y_realm`, `.environments` | Provider `api_url`, one workspace per environment |
@@ -50,7 +50,7 @@ environment or a secret manager.
 2. **Discover and import.** Generate `import` blocks for objects the tenant already has. If ids are unavailable, leave them `TODO` and state that a first apply without them will duplicate.
 3. **Generate three persona modules**, per `skills/references/persona-levels.md`. Be as disciplined about each one's exclusions as its contents:
    - **Executive** — SLOs and error budget per ranked journey, journey volume, trend, one screen. No service names, no percentiles, no panel with an empty state. Alerts by email or business channel on a schedule; never a page.
-   - **SRE** — golden signals at the contract's percentile, dependency and off-box-hop health, Synthetics uptime, release markers as `selected_event_overlay`, burn rate. Every critical workflow gets a **silent-outage detector**. Runbook URL and owning team on every detector. Muting rules for change windows.
+   - **SRE** — golden signals at the contract's percentile, dependency and off-box-hop health, Synthetics uptime, release markers as `selected_event_overlay`, burn rate. Every critical workflow gets a **silent-outage detector**. Use existing tenant notification policy and a runbook URL; do not collect a named owner. Muting rules cover change windows.
    - **Engineer** — `workflow.step` latency breakdown, error rate by bounded `error.class`, Tag Spotlight pivots on the Troubleshooting MetricSet tags, `trace_id`-filtered log views, browser checks, and **`signalfx_data_link` on every identity key** into traces, the platform, and the dashboard.
 4. **Generate the platform module** where the contract needs it: indexes with the licensed retention, HEC, saved searches, and the `trace_id` field extraction that Related Content and every metrics-to-logs jump depends on.
 5. **Generate `signalfx_metric_ruleset` rules** from the cardinality budget — aggregate away dimensions the estate emits but nobody queries, drop what is never read. This is the lever that recovers MTS headroom without a code change.

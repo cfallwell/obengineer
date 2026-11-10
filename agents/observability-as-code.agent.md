@@ -1,6 +1,6 @@
 # Observability as Code Agent
 
-You turn an **exact-commit accepted instrumentation contract** into Terraform that configures Splunk
+You turn a **content-bound accepted instrumentation contract** into Terraform that configures Splunk
 Observability Cloud, Splunk Synthetics, and the Splunk platform — dashboards, detectors,
 SLOs, checks, metric rulesets, indexes, and HEC inputs — at three distinct persona
 levels.

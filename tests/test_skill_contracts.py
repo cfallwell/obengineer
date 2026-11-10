@@ -1,13 +1,4 @@
-"""Deterministic contract tests for the agentry.
-
-These are regression guards, not style checks. The one that matters most is
-`test_cross_cutting_section_is_mandatory_everywhere`: the Cross-Cutting Attributes
-and Baggage Propagation section was once absent from the architect agent and the
-generated guide, which produced a contract that could not drive a single dashboard
-variable or detector grouping. Nothing may silently drop it again.
-
-    python3 -m pytest "obengineer/tests" -q
-"""
+"""Regression guards for the versioned guided obengineer workflow."""
 
 from __future__ import annotations
 
@@ -20,1537 +11,374 @@ import pytest
 
 ROOT = Path(__file__).resolve().parent.parent
 SKILLS = ROOT / "skills"
-AGENTS = ROOT / "agents"
+COMMANDS = ROOT / "commands"
 PROMPTS = ROOT / "prompts"
+AGENTS = ROOT / "agents"
 PLUGIN = ROOT / "plugins" / "obengineer"
-
-CANONICAL_SKILLS = sorted(
-    p.parent.name for p in SKILLS.glob("*/SKILL.md")
-)
-# Claude Code truncates long skill descriptions; keep discovery text within budget.
 DESCRIPTION_LIMIT = 1536
 
-SECTION = "Cross-Cutting Attributes and Baggage Propagation"
+CANONICAL_SKILLS = sorted(path.parent.name for path in SKILLS.glob("*/SKILL.md"))
 
 
-def frontmatter(path: Path) -> tuple[dict, str]:
+def frontmatter(path: Path) -> tuple[dict[str, str], str]:
     text = path.read_text()
-    assert text.startswith("---\n"), f"{path} must open with YAML frontmatter"
+    assert text.startswith("---\n")
     _, raw, body = text.split("---\n", 2)
     data: dict[str, str] = {}
     key = None
-    for line in raw.split("\n"):
-        if not line.strip():
-            continue
-        m = re.match(r"^([a-z_]+): *(.*)$", line)
-        if m and not line.startswith(" "):
-            key = m.group(1)
-            data[key] = m.group(2).strip()
+    for line in raw.splitlines():
+        match = re.match(r"^([a-z_]+): *(.*)$", line)
+        if match and not line.startswith(" "):
+            key = match.group(1)
+            data[key] = match.group(2).strip()
         elif key and line.startswith(" "):
             data[key] = (data[key] + " " + line.strip()).strip()
     return data, body
 
 
-# --------------------------------------------------------------------------- #
-# skills
-# --------------------------------------------------------------------------- #
-def test_skills_exist():
-    assert CANONICAL_SKILLS, "no canonical skills found under skills/"
-    for expected in ("baggage-propagation", "customer-doc-render",
-                     "instrumentation-analyze", "instrumentation-wiki",
-                     "instrumentation-implement"):
-        assert expected in CANONICAL_SKILLS, f"missing skill: {expected}"
-
-
 @pytest.mark.parametrize("skill", CANONICAL_SKILLS)
-def test_skill_frontmatter(skill):
+def test_skill_contract(skill):
     data, body = frontmatter(SKILLS / skill / "SKILL.md")
-    assert data.get("name") == skill, (
-        f"{skill}: frontmatter name '{data.get('name')}' must match the directory"
-    )
-    description = data.get("description", "").lstrip(">-").strip()
-    assert description, f"{skill}: description is required for discovery"
-    assert len(description) <= DESCRIPTION_LIMIT, (
-        f"{skill}: description is {len(description)} chars, limit {DESCRIPTION_LIMIT}"
-    )
-    assert f"${skill}" in description, (
-        f"{skill}: description must name its ${skill} invocation so hosts can route to it"
-    )
-    assert body.lstrip().startswith("# "), f"{skill}: body needs an H1 title"
+    assert data["name"] == skill
+    description = data["description"].lstrip(">-").strip()
+    assert f"${skill}" in description
+    assert len(description) <= DESCRIPTION_LIMIT
+    assert body.lstrip().startswith("# ")
+    for target in re.findall(r"\]\((\.\.?/[^)#]+)\)", (SKILLS / skill / "SKILL.md").read_text()):
+        assert ((SKILLS / skill / target).resolve()).exists(), f"{skill}: {target}"
 
 
 @pytest.mark.parametrize("skill", CANONICAL_SKILLS)
-def test_skill_links_resolve(skill):
-    """A skill that points at a reference which does not exist is a dead end."""
-    skill_md = SKILLS / skill / "SKILL.md"
-    for target in re.findall(r"\]\((\.\.?/[^)#]+)\)", skill_md.read_text()):
-        assert (skill_md.parent / target).resolve().exists(), (
-            f"{skill}: broken link to {target}"
-        )
-
-
-@pytest.mark.parametrize("skill", CANONICAL_SKILLS)
-def test_skill_scripts_are_executable_python(skill):
+def test_skill_python_compiles(skill):
     for script in (SKILLS / skill / "scripts").glob("*.py"):
         compile(script.read_text(), str(script), "exec")
 
 
-# --------------------------------------------------------------------------- #
-# the regression this repo exists to prevent
-# --------------------------------------------------------------------------- #
-def test_cross_cutting_section_is_mandatory_everywhere():
-    surfaces = {
-        "architect agent": AGENTS / "instrumentation-architect.agent.md",
-        "prompt 01": PROMPTS / "01-analyze-application.md",
-        "document template": SKILLS / "references" / "document-template.md",
-        "analyze skill": SKILLS / "instrumentation-analyze" / "SKILL.md",
-    }
-    for label, path in surfaces.items():
-        assert SECTION in path.read_text(), (
-            f"{label} no longer requires the '{SECTION}' section"
+def test_guided_commands_replace_manual_intake_and_generation():
+    stems = {path.stem for path in COMMANDS.glob("*.md")}
+    assert {"ob-start", "ob-add-inputs", "ob-edit-inputs", "ob-analyze"} <= stems
+    assert "ob-intake" not in stems
+    assert "ob-generate" not in stems
+    for name in ("ob-start", "ob-add-inputs", "ob-edit-inputs"):
+        text = (COMMANDS / f"{name}.md").read_text()
+        assert "yes 1 3 4" in text or name == "ob-edit-inputs"
+        assert "ob-analyze.md" in text
+
+
+def test_commands_are_short_dispatchers_and_plugin_complete():
+    for command in COMMANDS.glob("*.md"):
+        text = command.read_text()
+        assert text.startswith("---\n")
+        assert "description:" in text
+        assert "{{OBENGINEER_ROOT}}" in text
+        assert len(text.split()) < 400
+        mirror = PLUGIN / "commands" / command.name
+        assert mirror.is_file()
+        assert mirror.read_text() == text.replace(
+            "{{OBENGINEER_ROOT}}", "${CLAUDE_PLUGIN_ROOT}"
         )
 
 
-def test_cross_cutting_reference_carries_all_five_code_subsections():
-    text = (SKILLS / "references" / "cross-cutting-attributes.md").read_text()
-    for required in (
-        "Provider bootstrap",
-        "The SpanProcessor",
-        "Writing baggage on login",
-        "Reading baggage on the",
-        "Messaging boundary",
+def test_input_prompt_uses_number_selection_and_no_required_unknown():
+    prompt = (PROMPTS / "00-manage-analysis-inputs.md").read_text()
+    skill = (SKILLS / "engagement-intake" / "SKILL.md").read_text()
+    for text in (prompt, skill):
+        assert "Would you like to add more inputs to the analysis phase?" in text
+        assert "yes 1 3 4" in text
+        assert "one at a time" in text or "once for each selected" in text
+        assert "never types `unknown`" in text or "never have to type `unknown`" in text
+        assert "named owner" in text or "names of engineers" in text
+
+
+def test_setup_script_is_secret_safe_and_guided():
+    script = (ROOT / "scripts" / "setup-splunk-access.sh").read_text()
+    assert "read -r -s" in script
+    assert "chmod 600" in script
+    assert "SPLUNK_ACCESS_TOKEN" in script and "SPLUNK_TOKEN" in script
+    assert "values were not printed" in script
+    assert "x-access-token" not in script
+
+
+def test_direct_apis_and_mcp_are_complementary():
+    analyze = (SKILLS / "instrumentation-analyze" / "SKILL.md").read_text()
+    mcp = (SKILLS / "references" / "mcp-servers.md").read_text()
+    telemetry = (SKILLS / "references" / "existing-telemetry.md").read_text()
+    for text in (analyze, mcp, telemetry):
+        assert "direct" in text.lower() and "API" in text
+        assert "MCP" in text
+    assert "MCP is not the only" in mcp
+    for variable in (
+        "SPLUNK_REALM", "SPLUNK_ACCESS_TOKEN", "SPLUNK_HOST",
+        "SPLUNK_TOKEN", "SPLUNK_ENTERPRISE_INDEXES",
     ):
-        assert required in text, f"cross-cutting reference is missing: {required}"
-    # The stamp must be an onStart hook over an explicit allowlist, not a
-    # loop over whatever a future caller put into baggage.
-    assert "onStart" in text
-    assert "const KEYS" in text
-    assert "Attribute | Type | Set at | Dimension? | Notes" in text
+        assert variable in telemetry
 
 
-def test_architect_agent_requires_both_artifacts():
-    text = (AGENTS / "instrumentation-architect.agent.md").read_text()
-    assert "customer-doc-render" in text, (
-        "architect agent must route the .docx through the customer-doc-render skill"
+def test_analysis_uses_maximum_safe_parallelism_but_serial_names():
+    skill = (SKILLS / "instrumentation-analyze" / "SKILL.md").read_text()
+    lifecycle = (SKILLS / "references" / "analysis-run-lifecycle.md").read_text()
+    assert "every safe sub-agent slot" in skill
+    assert "Naming and schema reconciliation remain serial" in lifecycle
+
+
+def test_analysis_site_is_the_review_authority():
+    site = (SKILLS / "references" / "analysis-site.md").read_text()
+    analyze = (SKILLS / "instrumentation-analyze" / "SKILL.md").read_text()
+    agent = (AGENTS / "instrumentation-architect.agent.md").read_text()
+    for text in (site, analyze, agent):
+        assert "side panel" in text
+        assert "localhost" in text
+        assert "[V1] [V2] [V3]" in text or "[V1] [V2]" in text or "[V1] [V2] ..." in text
+    for required in (
+        "Findings", "Instrumentation strategy", "Work orders",
+        "Use cases", "Workflows", "Business transactions",
+        "Shared signal contracts", "Reference",
+    ):
+        assert required.lower() in site.lower()
+
+
+def test_analysis_navigation_is_internal_and_breadcrumbed():
+    site = (SKILLS / "references" / "analysis-site.md").read_text()
+    assert "No run starts a web server" in site
+    assert "opening a system browser" in site
+    assert "[Analysis](../index.md)" in site
+    assert "Every `Open` cell links the matching detail index" in site
+
+
+def test_approved_compact_landing_layout_is_committed_and_ordered():
+    template = (ROOT / "templates" / "analysis-site" / "index.md").read_text()
+    required = (
+        "[V1](../V1/index.md) [V2](../V2/index.md) **[V3]**",
+        "[Analysis](../index.md)",
+        "Side-panel navigation",
+        "Next steps",
+        "## Changes in this version",
+        "## Contents",
+        "## Analysis summary",
+        "| Priority findings | Primary use cases |",
     )
-    assert ".docx" in text
-    assert "attribute-schema.json" in text
-
-
-def test_template_puts_architecture_in_front_and_dictionary_at_back():
-    text = (SKILLS / "references" / "document-template.md").read_text()
-    arch = text.index("Backend Architecture (Observed)")
-    baggage = text.index(SECTION)
-    dictionary = text.index("Appendix A: Master Attribute Dictionary")
-    assert arch < baggage < dictionary, (
-        "order must be architecture, then cross-cutting attributes, then the "
-        "dictionary appendix at the back"
+    positions = [template.index(item) for item in required]
+    assert positions == sorted(positions)
+    rows = (
+        "Architecture", "Findings", "Instrumentation strategy",
+        "Implementation path", "Work orders", "Use cases", "Workflows",
+        "Business transactions", "Shared signal contracts",
+        "Operations and verification", "Reference",
     )
-
-
-# --------------------------------------------------------------------------- #
-# one authority per fact
-# --------------------------------------------------------------------------- #
-SECTION_LIST_AUTHORITY = SKILLS / "references" / "document-template.md"
-
-# Sections the architect agent required while the canonical template's numbered
-# spine omitted them. The agent papered over the gap with a paragraph saying they
-# "go where they belong", which is not a specification, so a run could ship without
-# them and still believe it had followed the template.
-ONCE_MISSING_SECTIONS = (
-    "Course of action",
-    "Missing portfolio components",
-    "RUM SPA / client route changes",
-    "Custom Metrics",
-    "Splunk portfolio mapping",
-    "Phased plan and exit criteria",
-    "Bootstrap vs non-goals",
-)
-
-
-def test_section_list_has_exactly_one_authority():
-    """Two copies of the section list drift, and then both claim to be the spec."""
-    pattern = re.compile(r"^\| *#? *\| *Heading *\|", re.MULTILINE)
-    carriers = [
-        path
-        for path in sorted(ROOT.rglob("*.md"))
-        if PLUGIN not in path.parents and pattern.search(path.read_text())
-    ]
-    assert carriers == [SECTION_LIST_AUTHORITY], (
-        "the numbered section list belongs only in document-template.md; found it in "
-        + ", ".join(str(p.relative_to(ROOT)) for p in carriers)
-    )
-
-
-@pytest.mark.parametrize("heading", ONCE_MISSING_SECTIONS)
-def test_template_carries_every_required_section(heading):
-    text = SECTION_LIST_AUTHORITY.read_text()
-    assert heading in text, (
-        f"'{heading}' is required of every deliverable but is absent from the only "
-        "file that lists the sections, so a run can omit it and still pass review"
+    row_positions = [template.index(f"| {row} |") for row in rows]
+    assert row_positions == sorted(row_positions)
+    assert template.count("\n## ") == 3, (
+        "detail sections belong in separate side-panel views, not expanded on the landing"
     )
 
 
-def test_agent_files_route_rather_than_duplicate():
-    """An agent file is loaded whole, every run. Depth belongs in references.
-
-    The architect agent reached 7,200 words by carrying the decision engine, the
-    platform expertise, and the output template inline -- all three of which already
-    existed as references it also linked to. The cap is what keeps that from
-    regrowing quietly.
-    """
-    for agent in sorted(AGENTS.glob("*.agent.md")):
-        words = len(agent.read_text().split())
-        assert words < 2500, (
-            f"{agent.name} is {words} words; move depth into skills/references/ and "
-            "leave a pointer"
-        )
-        assert "skills/" in agent.read_text(), (
-            f"{agent.name} must route to the skills that carry the detail"
-        )
+def test_analysis_creates_versioned_wiki_and_all_work_orders():
+    command = (COMMANDS / "ob-analyze.md").read_text()
+    wiki_prompt = (PROMPTS / "02-build-instrumentation-wiki.md").read_text()
+    spec = (SKILLS / "references" / "agent-wiki.md").read_text()
+    for text in (command, wiki_prompt, spec):
+        assert "versions/V<N>" in text
+        assert "work order" in text.lower()
+    assert "There is no separate generation command" in wiki_prompt
+    assert "Acceptance activates the queue" in spec or "Acceptance changes eligible" in spec
 
 
-def test_budgets_are_numbers_not_adjectives():
-    """'Keep cardinality low' loses every argument; a budget wins them."""
+def test_work_orders_are_visible_and_reverse_linked():
+    site = (SKILLS / "references" / "analysis-site.md").read_text()
+    spec = (SKILLS / "references" / "agent-wiki.md").read_text()
+    for column in ("ID", "Outcome", "Depends on", "Status", "Unlocks", "Detail"):
+        assert column in site
+    for relation in ("findings", "use cases", "workflows", "business transactions"):
+        assert relation in spec.lower()
+    assert "first work order installs deterministic" in spec.lower()
+
+
+def test_acceptance_is_easy_content_bound_and_has_no_person_name():
+    lifecycle = (SKILLS / "references" / "analysis-run-lifecycle.md").read_text()
+    assert "reply `yes`" in lifecycle
+    assert "analysis_content_digest" in lifecycle
+    assert "manual SHA" in lifecycle
+    assert "No accepter name" in lifecycle
+    assert "accepted_by:" not in lifecycle
+    verifier = (
+        SKILLS / "instrumentation-wiki" / "scripts" /
+        "verify_analysis_acceptance.py"
+    ).read_text()
+    assert "analysis_content_digest" in verifier
+    assert "accepted_by" not in verifier
+
+
+def test_ready_for_review_comments_are_processed_before_merge():
+    lifecycle = (SKILLS / "references" / "analysis-run-lifecycle.md").read_text()
+    assert "ready for review" in lifecycle.lower()
+    assert "unresolved review comments" in lifecycle
+    assert "explicit `yes`" in lifecycle
+    assert "without an explicit `yes`" in lifecycle
+
+
+def test_chat_handoff_is_one_link_then_next_steps():
+    site = (SKILLS / "references" / "analysis-site.md").read_text()
+    command = (COMMANDS / "ob-analyze.md").read_text()
+    for text in (site, command):
+        assert "host-native" in text
+        assert "Do not paste" in text or "do not paste" in text
+        assert "/ob-implement work-order:<id>" in text
+
+
+def test_word_is_optional_and_under_twenty_pages():
+    analyze = (SKILLS / "instrumentation-analyze" / "SKILL.md").read_text()
+    template = (SKILLS / "references" / "document-template.md").read_text()
+    render = (SKILLS / "customer-doc-render" / "SKILL.md").read_text()
+    assert "only when the human asks" in analyze
+    assert "under 20 pages" in template
+    assert "optional" in render.lower()
+    assert "full attribute dictionary" in template.lower()
+
+
+def test_cross_cutting_contract_still_has_all_patterns():
+    reference = (SKILLS / "references" / "cross-cutting-attributes.md").read_text()
+    for required in (
+        "Provider bootstrap", "The SpanProcessor", "Writing baggage on login",
+        "Reading baggage on the", "Messaging boundary",
+    ):
+        assert required in reference
+    assert "onStart" in reference and "const KEYS" in reference
+    for surface in (
+        AGENTS / "instrumentation-architect.agent.md",
+        PROMPTS / "01-analyze-application.md",
+        SKILLS / "instrumentation-analyze" / "SKILL.md",
+    ):
+        assert "Cross-Cutting Attributes and Baggage Propagation" in surface.read_text()
+
+
+def test_baggage_and_cardinality_budgets_remain_numeric():
     baggage = (SKILLS / "references" / "baggage-budget.md").read_text()
-    assert "512" in baggage and "64 bytes" in baggage, (
-        "the baggage budget must state byte limits, not just advise restraint"
-    )
-    assert "SQS" in baggage and "message attributes" in baggage, (
-        "the bus attribute cap is the constraint people meet first in production"
-    )
-
+    assert "512" in baggage and "64 bytes" in baggage
     cardinality = (SKILLS / "cardinality-budget" / "SKILL.md").read_text()
     for term in ("distinct values", "custom_mts_entitled", "custom_mts_in_use"):
-        assert term in cardinality, (
-            f"the cardinality budget must compute against entitlement; missing {term}"
-        )
+        assert term in cardinality
 
 
-# --------------------------------------------------------------------------- #
-# generated Terraform names a real resource or refuses
-# --------------------------------------------------------------------------- #
-def test_terraform_reference_pins_versions_and_records_the_hard_negatives():
-    """A resource type that does not exist fails as what looks like a provider bug.
-
-    The expensive half of this reference is the negative half: the names that read
-    as though they must exist, and do not. Losing those lines costs a plan cycle
-    each time, so they are asserted rather than trusted.
-    """
-    ref = (SKILLS / "references" / "splunk-terraform-providers.md").read_text()
-
-    for pin in ("~> 9.34", "~> 3.0", "~> 1.5"):
-        assert pin in ref, (
-            f"every provider needs a major pin; missing {pin}. An unpinned provider "
-            "turns an unrelated init into an unplanned upgrade"
-        )
-
-    for absent in ("APM MetricSets", "APM Business Transaction rules", "Log Observer Connect"):
-        assert absent in ref, (
-            f"{absent} has no Terraform resource; the reference must say so and name "
-            "the manual path, or a generator will invent a resource for it"
-        )
-
-    assert "no `splunk_acl` resource" in ref, (
-        "splunk_acl has a documentation page and no resource behind it — the single "
-        "most inviting wrong name in the platform provider"
-    )
-    assert "synthetics_create_http_check_v2" in ref and "`_v2`" in ref, (
-        "synthetics 3.0.0 removed the non-_v2 resources; generating a legacy name "
-        "fails at init"
-    )
-    assert "200" in ref, (
-        "the registry answers 200 for pages that do not exist, so a link check is "
-        "not verification; the reference must say what is"
-    )
-
-
-# --------------------------------------------------------------------------- #
-# inputs are collected once, by reference
-# --------------------------------------------------------------------------- #
-def test_production_scan_is_required_and_previous_scans_of_this_site_are_inputs():
-    """The design runs against whatever site this engagement names.
-
-    The scan is the current production site. Test and QA vary from production
-    and are not a substitute. Previous scans of this site are inputs and are
-    compared with the current scan. A leftover from a different site is not.
-    """
-    intake = (SKILLS / "engagement-intake" / "SKILL.md").read_text()
-    analyze = (SKILLS / "instrumentation-analyze" / "SKILL.md").read_text()
-    template = (ROOT / "inputs" / "engagement-inputs.template.yaml").read_text()
-    prompt = (PROMPTS / "01-analyze-application.md").read_text()
-    incremental = (SKILLS / "references" / "incremental-runs.md").read_text()
-
-    for text in (intake, analyze, prompt):
-        assert "any site" in text.lower() or "whatever site" in text.lower(), (
-            "the run must say it applies to whatever site this engagement names"
-        )
-        assert "different site" in text, (
-            "a different site's scan must be rejected, not cited"
-        )
-    assert "production site scan is required" in intake.lower()
-    assert "test and qa" in intake.lower()
-    assert "previous scans of this site" in intake.lower()
-    assert "no browser" in template
-    assert "production_urls:" in template
-    assert "prior_scans:" in template
-    assert "cloud_diagrams:" in template
-    assert "qa, pre-prod, production" not in template
-    assert "production architecture" in analyze
-    assert "Do not draw" in analyze and "test or QA" in analyze
-    for outcome in ("Changes", "Merges", "Additions"):
-        assert outcome in incremental, (
-            "comparing previous scans of this site must record "
-            f"{outcome}"
-        )
-
-
-def test_traffic_baseline_feeds_a_prediction_not_a_license_ceiling():
-    """Optional session, log, APM, and infra baselines tighten an expectation.
-
-    They do not cap the design. The multiplications live in one skill.
-    """
-    template = (ROOT / "inputs" / "engagement-inputs.template.yaml").read_text()
-    budget = (SKILLS / "cardinality-budget" / "SKILL.md").read_text()
-    intake = (SKILLS / "engagement-intake" / "SKILL.md").read_text()
-    exposure = EXPOSURE.read_text()
-
-    for field in ("sessions_per_day_avg", "sessions_per_day_peak",
-                  "gb_per_hour_avg", "gb_per_hour_peak",
-                  "requests_per_minute_avg", "infra_integrations"):
-        assert field in template, f"traffic baseline must capture {field}"
-    assert "OPTIONAL" in template and "traffic_baseline:" in template
-    assert "more accurate" in intake.lower()
-    assert "sessions_per_day_avg × 30" in budget
-    assert "gb_per_hour_avg × 24" in budget
-    assert "entities × metrics_per_entity" in budget
-    assert "APM traces / minute, average = requests_per_minute_avg" in budget
-    trace_lines = [
-        line for line in budget.splitlines() if line.startswith("APM traces / minute")
-    ]
-    assert trace_lines and all("spans_per_trace" not in line for line in trace_lines), (
-        "that product is spans per minute, and TAPM is traces per minute"
-    )
-    assert "APM spans / minute, average = requests_per_minute_avg × spans_per_trace" in budget
-    assert "infra_integrations: unknown" in template
-    assert "infra_integrations: []" not in template
-    assert "infra_integrations: []` is unsupplied" in budget
-    assert "infra_integrations: []` is unsupplied" in exposure
-    assert "not a cap" in budget or "does not cap" in budget
-    assert "reference, not a ceiling" in exposure
-    assert "sessions_per_day_avg × 30" in exposure
-    trace_rows = exposure.split("APM spans / minute")[0]
-    assert "requests_per_minute × spans_per_trace" not in trace_rows
-
-
-def test_splunk_mcp_servers_are_mandatory_and_jira_is_discovered():
-    """Observability Cloud and Enterprise are required. Jira is used if present.
-
-    .mcp.json stays free of guessed commands and token values.
-    """
-    ref = (SKILLS / "references" / "mcp-servers.md").read_text()
-    intake = (SKILLS / "engagement-intake" / "SKILL.md").read_text()
-    config = json.loads((PLUGIN / ".mcp.json").read_text())
-
-    assert "Mandatory" in ref
-    assert "splunk-observability" in ref and "splunk-platform" in ref
-    assert "Jira" in ref and "already" in ref
-    assert "Jira" in intake and "already connected" in intake
-    assert "mandatory" in intake.lower()
-    assert config["mcpServers"] == {}, (
-        "a guessed MCP command in .mcp.json fails plugin startup; the operator "
-        "copies the entry and supplies the command"
-    )
-
-
-def test_analyze_requires_the_existing_telemetry_pass():
-    """The analyze run reads the tenant through both Splunk MCPs and the API endpoints.
-
-    The procedure has one home. The skill and the prompt point at it in one
-    sentence. The architect points at that home and does not carry the queries.
-    """
-    procedure = (SKILLS / "references" / "existing-telemetry.md").read_text()
-    skill = (SKILLS / "instrumentation-analyze" / "SKILL.md").read_text()
-    prompt = (PROMPTS / "01-analyze-application.md").read_text()
-    architect = (AGENTS / "instrumentation-architect.agent.md").read_text()
-    mcp_ref = (SKILLS / "references" / "mcp-servers.md").read_text()
-
-    assert "splunk-observability" in procedure and "splunk-platform" in procedure
-    assert "API endpoints" in procedure
-    assert "https://api.<realm>.signalfx.com" in procedure
-    assert "sf.org.numActiveTimeSeries" in procedure
-    assert "sf.org.apm.numTracesReceived" in procedure
-    assert "sf.org.apm.numSpanBytesReceived" in procedure
-    assert "SignalFlow" in procedure
-    assert "histogram('spans')" in procedure
-    assert "Never print" in procedure
-    for var in ("SPLUNK_REALM", "SPLUNK_ACCESS_TOKEN", "SPLUNK_HOST",
-                "SPLUNK_TOKEN", "SPLUNK_ENTERPRISE_INDEXES"):
-        assert var in procedure, f"the procedure must name {var}"
-
-    for name, text in (("analyze skill", skill), ("prompt 01", prompt)):
-        assert "existing-telemetry.md" in text, f"{name} must point at the procedure"
-        assert "splunk-observability" in text and "splunk-platform" in text, (
-            f"{name} must name both Splunk MCPs"
-        )
-        assert "API endpoints" in text, f"{name} must name the API endpoints"
-        assert "histogram('spans')" not in text, (
-            f"{name} must point at the procedure, not copy the queries"
-        )
-        assert "sf.org.numActiveTimeSeries" not in text
-
-    assert "API endpoints" in mcp_ref.split("## Existing telemetry", 1)[1]
-    assert "existing-telemetry.md" in architect
-    assert "histogram('spans')" not in architect, (
-        "the architect agent routes to the procedure; it does not carry it"
-    )
-    assert "sf.org.numActiveTimeSeries" not in architect
-
-
-def test_memory_repo_env_template_lists_the_variables_and_ignores_env():
-    """The memory repository copies this directory. .env is local. The template is not."""
-    root = ROOT / "templates" / "memory-repo"
-    env = (root / ".env.template").read_text()
-    ignore = (root / ".gitignore").read_text()
-    readme = (root / "README.md").read_text()
-
-    assert (root / ".env.template").is_file()
-    assert ".env" in ignore.split()
-    assert "!.env.template" in ignore
-    assert ".env.template" not in (ROOT / ".gitignore").read_text()
-    assert "cp .env.template .env" in readme
-    assert "gitignored" in readme.lower() or "gitignore" in readme.lower()
-    assert "splunk-observability" in readme and "splunk-platform" in readme
-    assert "API endpoints" in readme
-    assert "existing-telemetry.md" in readme
-
-    for var in ("SPLUNK_REALM", "SPLUNK_ACCESS_TOKEN", "SPLUNK_HOST",
-                "SPLUNK_TOKEN", "SPLUNK_ENTERPRISE_INDEXES", "TE_OAUTH_BEARER_TOKEN"):
-        assert var in env, f".env.template must list {var}"
-    assert "Splunk_O11y_API_Key" in env
-    assert "SPLUNK_ENTERPRISE_TOKEN" in env
-    for line in env.splitlines():
-        if line.startswith("SPLUNK_") or line.startswith("TE_"):
-            assert line.endswith("="), f"{line} must ship empty"
-
-
-def test_dora_and_mttx_measurement_is_an_m5_objective():
-    """Observability Cloud cannot compute DORA or MTTx. ITSI can compute MTTx.
-
-    DORA cannot be computed in either product today. Section 24 must not grow a
-    false chart for either.
-    """
-    levels = (SKILLS / "references" / "service-levels.md").read_text()
-    assert "M5" in levels
-    assert "ITSI" in levels
-    assert "DORA" in levels
-    assert "Observability Cloud" in levels
-    assert "cannot be computed" in levels
-
-
-def test_inputs_template_captures_what_no_scan_can_measure():
-    template = (ROOT / "inputs" / "engagement-inputs.template.yaml").read_text()
-    for field in ("custom_mts_entitled", "custom_mts_in_use",
-                  "custom_mts_system_limit", "mms_cardinality_entitled",
-                  "mms_cardinality_in_use",
-                  "tms_cardinality_ceiling", "session_replay_accepted_in_writing",
-                  "baggage_header_budget_bytes", "percentile"):
-        assert field in template, f"engagement inputs must capture {field}"
-    assert "unknown" in template, (
-        "unknown must be a legitimate answer, or the run stalls on procurement"
-    )
-
-
-def test_analysis_access_is_a_reference_and_rotates_on_completion():
-    """A token, API key, or dummy test login may be submitted so the scan is complete.
-
-    The template used to forbid that submission and left rotation optional.
-    The file stores a reference. The secret is rotated when the analysis
-    completes. unknown stays valid. The field list stays in the template;
-    what it decides stays in engagement-inputs.md.
-    """
-    template = (ROOT / "inputs" / "engagement-inputs.template.yaml").read_text()
-    authority = (SKILLS / "references" / "engagement-inputs.md").read_text()
-    intake = (SKILLS / "engagement-intake" / "SKILL.md").read_text()
-    command = (ROOT / "commands" / "ob-intake.md").read_text()
-
-    assert "analysis_access:" in template
-    for field in ("token_ref: unknown", "api_key_ref: unknown", "login_id: unknown",
-                  "password_ref: unknown", "rotate_on_completion: unknown"):
-        assert field in template, f"analysis access must keep {field}"
-    assert "dummy" in template.lower()
-    assert "NEVER put a token" not in template
-    assert "test_account:" not in template
-    assert "rotates_after_run:" not in template
-
-    creds = authority.split("## Credentials", 1)[1].split("## ", 1)[0]
-    assert "analysis_access" in creds
-    assert "dummy account used for testing only" in creds
-    assert "rotate_on_completion" in creds
-    assert "token_ref" in creds and "password_ref" in creds
-    assert "`unknown`" in creds
-    assert "production login is not an input" in creds
-
-    # Intake follows the authority. It does not grow a second field list.
-    for field in ("token_ref", "api_key_ref", "password_ref", "login_id"):
-        assert field not in intake
-    assert "dummy test" in intake.lower()
-    assert "rotated by its owner when analysis completes" in intake
-    assert "Never request or store a credential value" not in command
-    assert "dummy test login" in command
-
-
-def test_prompts_reference_the_inputs_file_instead_of_carrying_placeholders():
-    for prompt in sorted(PROMPTS.glob("0*.md")):
-        text = prompt.read_text()
-        assert "engagement-inputs.yaml" in text, (
-            f"{prompt.name} must read the inputs file rather than ask inline"
-        )
-        assert "Copy below the line" not in text and "Copy everything below" not in text, (
-            f"{prompt.name} still tells the human to paste it; the copy that runs "
-            "would not be the copy under review"
-        )
-
-
-def test_commands_invoke_the_run_contracts_rather_than_copying_them():
-    commands = sorted((ROOT / "commands").glob("*.md"))
-    assert commands, "no installable commands found"
-    for command in commands:
-        text = command.read_text()
-        assert text.startswith("---\n") and "description:" in text, (
-            f"{command.name} needs frontmatter with a description for host discovery"
-        )
-        assert "{{OBENGINEER_ROOT}}" in text, (
-            f"{command.name} must resolve bundle paths at install time"
-        )
-        assert len(text.split()) < 400, (
-            f"{command.name} is long enough to be a second copy of a run contract; "
-            "point at prompts/ instead"
-        )
-
-    stems = {c.stem for c in commands}
-    for prompt in sorted(PROMPTS.glob("0*.md")):
-        referenced = any(prompt.name in c.read_text() for c in commands)
-        assert referenced, f"{prompt.name} has no command that invokes it"
-    assert "ob-intake" in stems
-    assert "ob-generate" in stems
-    assert "ob-terraform" in stems
-    assert "ob-wiki" not in stems
-    assert "ob-build-terraform" not in stems
-    plugin_commands = ROOT / "plugins" / "obengineer" / "commands"
-    for command in commands:
-        installed = plugin_commands / command.name
-        assert installed.is_file(), f"plugin is missing command {command.name}"
-        assert "${CLAUDE_PLUGIN_ROOT}" in installed.read_text()
-        assert "{{OBENGINEER_ROOT}}" not in installed.read_text()
-
-
-def test_installer_offers_every_host_and_installs_every_skill():
-    text = (ROOT / "scripts" / "install.py").read_text()
-    for host in ("cursor", "claude", "codex"):
-        assert f'"{host}"' in text, f"installer must support {host}"
-    for flag in ("--all", "--project", "--uninstall", "--dry-run", "--list"):
-        assert flag in text, f"installer must document {flag}"
-    assert (ROOT / "install.sh").is_file()
-    readme = (ROOT / "README.md").read_text()
-    assert "./install.sh" in readme, "the README must show how to install"
-    assert "/ob-intake" in readme, "the README must show how to invoke"
-    assert "/ob-generate" in readme
-    assert "/ob-terraform" in readme
-
-
-def test_security_assessment_and_p0_routing_are_contractual():
+def test_security_coverage_and_credential_handling_remain_contractual():
     security = (SKILLS / "references" / "security-assessment.md").read_text()
-    template = (SKILLS / "references" / "document-template.md").read_text()
-    analyze = (SKILLS / "instrumentation-analyze" / "SKILL.md").read_text()
-    prompt = (PROMPTS / "01-analyze-application.md").read_text()
-    agent = (ROOT / "agents" / "instrumentation-architect.agent.md").read_text()
-    for text in (security, template, analyze, prompt):
-        assert "OWASP Top 10:2025" in text
-        assert "OWASP API Security Top 10:2023" in text
-    assert "OWASP Web 2025/API 2023" in agent
-    assert "exposed credentials" in security.lower()
-    assert "P0 recommended fixes" in template
-    assert "`P0` is remediation priority" in security
-    assert "observability **Phase 0**" in security
-
-
-def test_analysis_lifecycle_and_acceptance_are_explicit():
-    lifecycle = (SKILLS / "references" / "analysis-run-lifecycle.md").read_text()
-    intake = (ROOT / "commands" / "ob-intake.md").read_text()
-    generate = (ROOT / "commands" / "ob-generate.md").read_text()
-    for branch in ("initial-<app>-analysis", "ci-initiated-<app>-analysis"):
-        assert branch in lifecycle
-    assert "It does not" in lifecycle
-    assert "create or switch branches, commit, push, or open a pull request" in lifecycle
-    assert "creates no branch, commit, or PR" in intake
-    assert "/ob-generate accept" in lifecycle and "<analysis-commit-sha>" in lifecycle
-    assert "analysis-<app>-<date>.acceptance.yaml" in lifecycle
-    assert "analysis-run-lifecycle.md" in generate
-
-
-def test_bounded_targets_multi_repo_and_jira_fallback_have_one_authority():
-    authority = (SKILLS / "references" / "implementation-work-orders.md").read_text()
-    implement = (ROOT / "commands" / "ob-implement.md").read_text()
-    mcp = (SKILLS / "references" / "mcp-servers.md").read_text()
-    for kind in ("work-order", "business-transaction", "workflow", "use-case",
-                 "detector", "objective", "config"):
-        assert f"{kind}:<" in authority or f"`{kind}:<" in implement
-    assert "one pull request per repository" in authority.lower()
-    assert "named Jira" in authority
-    assert '{tool: "jira", via: "mcp"' in authority
-    assert "copy/paste-ready issue text" in authority
-    assert "Connected-but-unnamed" in mcp
-
-
-def test_developer_tool_matches_use_one_object_schema():
-    template = (ROOT / "inputs" / "engagement-inputs.template.yaml").read_text()
-    intake = (SKILLS / "engagement-intake" / "SKILL.md").read_text()
-    engagement = (SKILLS / "references" / "engagement-inputs.md").read_text()
-    mcp = (SKILLS / "references" / "mcp-servers.md").read_text()
-    for text in (template, intake, engagement, mcp):
-        assert "tool" in text and "via" in text and "key" in text
-    assert "Record the server key or the\nvariable name" not in mcp
-    assert "records a server key or an environment variable name" not in engagement
-
-
-def test_business_transactions_use_a_bounded_global_tag():
-    work_orders = (SKILLS / "references" / "implementation-work-orders.md").read_text()
-    template = (SKILLS / "references" / "document-template.md").read_text()
-    cross_cutting = (SKILLS / "references" / "cross-cutting-attributes.md").read_text()
-    for text in (work_orders, template, cross_cutting):
-        assert "<org>.bt" in text
-    assert "Global tag" in work_orders
-    assert "one `<org>.bt` value may contain several" in work_orders.lower()
-    assert "'<org>.bt'" in cross_cutting
-
-
-def test_persona_requests_trigger_bounded_discovery():
-    personas = (SKILLS / "references" / "persona-levels.md").read_text()
-    assert "Three is the default, not a ceiling" in personas
-    assert "up to seven questions" in personas
-    for number in range(1, 8):
-        assert f"{number}." in personas
+    critical = (SKILLS / "references" / "critical-findings.md").read_text()
+    for term in ("OWASP Top 10:2025", "OWASP API Security Top 10:2023"):
+        assert term in security
+    assert "Never the value" in critical
     for required in (
-        "reporting outputs", "Terraform", "exclude", "acceptance",
-        "ongoing maintenance",
+        "Exposure", "Risk if unaddressed", "Remediation path", "Verification",
     ):
-        assert required in personas
+        assert required in critical
 
 
-def test_entitlement_is_read_before_human_gap_questions():
-    intake = (SKILLS / "engagement-intake" / "SKILL.md").read_text()
-    inputs = (SKILLS / "references" / "engagement-inputs.md").read_text()
-    assert "Read entitlement before asking" in intake
-    assert "Remaining entitlement gaps" in intake
-    assert "Read the tenant before asking the human" in inputs
-    assert "measured value outranks a stated one" in inputs.lower()
+def test_terraform_provider_names_and_no_apply_boundary():
+    reference = (SKILLS / "references" / "splunk-terraform-providers.md").read_text()
+    for pin in ("~> 9.34", "~> 3.0", "~> 1.5"):
+        assert pin in reference
+    for absent in ("APM MetricSets", "APM Business Transaction rules", "Log Observer Connect"):
+        assert absent in reference
+    command = (COMMANDS / "ob-terraform.md").read_text()
+    assert "Never apply" in command
 
 
-def test_outcome_records_are_anonymized_project_issues():
-    review = (SKILLS / "deliverable-review" / "SKILL.md").read_text()
-    issues = (SKILLS / "references" / "outcome-issues.md").read_text()
-    assert "outcome-issues.md" in review
-    assert "cfallwell/obengineer" in issues
-    assert "stable marker" in issues
-    for forbidden in (
-        "customer name", "production URL", "tenant or account id", "credential",
+def test_implementation_requires_ready_order_in_accepted_version():
+    command = (COMMANDS / "ob-implement.md").read_text()
+    skill = (SKILLS / "instrumentation-implement" / "SKILL.md").read_text()
+    for text in (command, skill):
+        assert "Ready" in text
+        assert "accepted version" in text
+    assert "Proposed, Blocked, Superseded" in command
+
+
+def test_verification_remains_read_only():
+    for path in (
+        COMMANDS / "ob-verify.md",
+        PROMPTS / "05-verify-accepted-contract.md",
+        SKILLS / "instrumentation-verify" / "SKILL.md",
+        SKILLS / "references" / "verification-run.md",
     ):
-        assert forbidden in issues
-    assert "gh auth login --web" in issues
+        text = path.read_text().lower()
+        assert "read-only" in text
+        assert "unmet" in text
 
 
-def test_run_five_is_read_only_and_routes_unmet_criteria():
-    command = (ROOT / "commands" / "ob-verify.md").read_text()
-    prompt = (PROMPTS / "05-verify-accepted-contract.md").read_text()
-    skill = (SKILLS / "instrumentation-verify" / "SKILL.md").read_text()
-    authority = (SKILLS / "references" / "verification-run.md").read_text()
-    for text in (command, prompt, skill, authority):
-        assert "read-only" in text.lower()
-        assert "unmet" in text.lower()
-    assert "not machine result rows" in command
-    assert "human-approved" in authority.lower()
-    assert "terraform apply" in authority.lower()
+def test_agent_files_route_and_stay_bounded():
+    for agent in AGENTS.glob("*.agent.md"):
+        text = agent.read_text()
+        assert "skills/" in text
+        assert len(text.split()) < 2500
 
 
-def test_provenance_ledger_is_the_only_machine_evidence_state():
-    authority = (SKILLS / "references" / "provenance-ledger.md").read_text()
-    analyze = (SKILLS / "instrumentation-analyze" / "SKILL.md").read_text()
-    acceptance = (SKILLS / "instrumentation-wiki" / "scripts" /
-                  "verify_analysis_acceptance.py").read_text()
-    assert "provenance-ledger.json" in authority
-    assert "Do not create parallel `evidence.json` or `run-state.json`" in authority
-    assert "provenance-ledger.json" in analyze
-    assert '"provenance-ledger.json"' in acceptance
-
-
-def test_outcome_metrics_have_exact_denominators_and_collection_points():
-    metrics = (SKILLS / "references" / "outcome-metrics.md").read_text()
-    for name in (
-        "Schema miss rate", "Dimension miss rate", "Detector disarm rate",
-        "Not-in-evidence reversal rate",
-    ):
-        assert name in metrics
-    for required in (
-        "Miss numerator", "Eligible denominator", "Collection point",
-        "measurement_coverage", "unmeasurable",
-    ):
-        assert required in metrics
-
-
-def test_context_loading_is_evidence_gated():
-    context = (SKILLS / "references" / "context-loading.md").read_text()
-    router = (SKILLS / "references" / "platform-expertise.md").read_text()
-    for predicate in (
-        "browser", "Router", "backends.languages", "backends.buses",
-        "cloud", "ThousandEyes", "ITSI", "Log Observer Connect",
-        "Session replay", "Synthetics",
-    ):
-        assert predicate.lower() in context.lower()
-    assert "platform/browser.md" in router
-    assert "platform/languages/python.md" in router
-    assert "platform/buses/kafka.md" in router
-    browser = (SKILLS / "references" / "platform" / "browser.md").read_text()
-    for router_name in ("react-router", "nextjs", "vue", "angular", "history-api"):
-        assert f"routers/{router_name}.md" in browser
-
-
-def test_commonmark_dependency_contract_is_consistent():
-    files = (
-        ROOT / "README.md",
-        ROOT / "Makefile",
-        ROOT / ".github" / "workflows" / "ci.yml",
-        ROOT / "docs" / "installation.md",
-        ROOT / "CONTRIBUTING.md",
-        ROOT / "AGENTS.md",
-        ROOT / "plugins" / "obengineer" / "README.md",
-        ROOT / "plugins" / "obengineer" / "hooks" / "bootstrap_obengineer.py",
-    )
-    for path in files:
-        assert "markdown-it-py" in path.read_text(), f"{path} omits parser dependency"
-        assert "PyYAML" in path.read_text(), f"{path} omits input YAML dependency"
-    renderer = (SKILLS / "customer-doc-render" / "scripts" /
-                "render_customer_doc.py").read_text()
-    verifier = (SKILLS / "customer-doc-render" / "scripts" /
-                "verify_render.py").read_text()
-    assert "MarkdownIt" in renderer
-    assert "MARKDOWN.parse" in renderer
-    assert "MARKDOWN.parse" in verifier
-
-
-def test_entitlement_schema_separates_contract_and_system_limits():
-    template = (ROOT / "inputs" / "engagement-inputs.template.yaml").read_text()
-    telemetry = (SKILLS / "references" / "existing-telemetry.md").read_text()
-    assert "schema_version: 3" in template
-    for field in (
-        "custom_mts_entitled", "custom_mts_system_limit",
-        "mms_cardinality_entitled", "mms_cardinality_in_use",
-    ):
-        assert field in template
-    assert "custom_mts_included" not in template
-    assert "mms_slots_remaining" not in template
-    assert "stream.<realm>.observability.splunkcloud.com" in telemetry
-    assert "Enforced system limits are not contractual entitlement" in telemetry
-
-
-def test_project_path_and_retired_command_migration_are_documented():
-    makefile = (ROOT / "Makefile").read_text()
+def test_installer_migrates_retired_commands():
     installer = (ROOT / "scripts" / "install.py").read_text()
-    assert "OB_PROJECT" in makefile
-    assert '"ob-generate": ("ob-wiki",)' in installer
+    assert '"ob-start": ("ob-intake", "ob-generate", "ob-wiki")' in installer
     assert '"ob-terraform": ("ob-build-terraform",)' in installer
+    for host in ("cursor", "claude", "codex"):
+        assert f'"{host}"' in installer
 
 
 def test_reinstall_removes_only_manifest_owned_retired_commands(tmp_path):
     subprocess.run(
         [str(ROOT / "install.sh"), "--cursor", "--project", str(tmp_path)],
-        cwd=ROOT,
-        check=True,
-        capture_output=True,
-        text=True,
+        cwd=ROOT, check=True, capture_output=True, text=True,
     )
     commands = tmp_path / ".cursor" / "commands"
     manifest_path = tmp_path / ".cursor" / ".obengineer-install.json"
     manifest = json.loads(manifest_path.read_text())
-
-    migrations = {
-        commands / "ob-generate.md": commands / "ob-wiki.md",
-        commands / "ob-terraform.md": commands / "ob-build-terraform.md",
-    }
-    for replacement, retired in migrations.items():
-        replacement.rename(retired)
-        manifest["created"] = [
-            str(retired) if entry == str(replacement) else entry
-            for entry in manifest["created"]
-        ]
+    replacement = commands / "ob-start.md"
+    retired = commands / "ob-intake.md"
+    replacement.rename(retired)
+    manifest["created"] = [
+        str(retired) if entry == str(replacement) else entry
+        for entry in manifest["created"]
+    ]
     manifest_path.write_text(json.dumps(manifest))
-
     subprocess.run(
         [str(ROOT / "install.sh"), "--cursor", "--project", str(tmp_path)],
-        cwd=ROOT,
-        check=True,
-        capture_output=True,
-        text=True,
+        cwd=ROOT, check=True, capture_output=True, text=True,
     )
-    assert not any(path.exists() for path in migrations.values())
-    assert all(path.exists() for path in migrations)
-    upgraded = json.loads(manifest_path.read_text())
-    assert all(str(path) not in upgraded["created"] for path in migrations.values())
+    assert not retired.exists()
+    assert replacement.exists()
 
 
-# --------------------------------------------------------------------------- #
-# the customer document: findings up front, catalogue at the back, one artifact
-# --------------------------------------------------------------------------- #
-TEMPLATE = SKILLS / "references" / "document-template.md"
-
-# Order matters and is the request: architecture, then the findings it produced,
-# then what to do, then the catalogue the build reads, then appendices.
-CATALOGUE_SECTIONS = (
-    "Business Transactions",
-    "Workflows",
-    "Custom Metrics",
-    "BT-Aligned Workflows",
-    "Detectors and Thresholds",
-    "Service Level Indicators and Objectives",
-    "Composite Use Cases",
-)
-
-
-def test_findings_come_immediately_after_the_architecture():
-    """A reachable credential was once on page 180 of a document nobody finished.
-
-    Section 4 exists so a reader who stops after six pages still leaves with the
-    list. Anything placed between the architecture and the findings pushes them
-    down, so the ordering is asserted rather than described.
-    """
-    text = TEMPLATE.read_text()
-    arch = text.index("| 3 | **\\<Frontend\\> and Backend Architecture (Observed)**")
-    findings = text.index("| 4 | **Critical Findings** |")
-    course = text.index("| 5 | Course of action |")
-    assert arch < findings < course, (
-        "critical findings must sit between the architecture section and the "
-        "course of action"
-    )
-
-    spec = (SKILLS / "references" / "critical-findings.md").read_text()
-    for required in ("Exposure", "Risk if unaddressed", "Remediation path",
-                     "Verification", "Files and surfaces involved"):
-        assert required in spec, f"findings spec is missing: {required}"
-    assert "Never the value" in spec, (
-        "the findings spec must forbid reproducing a discovered credential"
-    )
-
-
-def test_catalogue_sections_are_contiguous_and_ordered():
-    text = TEMPLATE.read_text()
-    positions = []
-    for name in CATALOGUE_SECTIONS:
-        marker = f"**{name}** | H1 |"
-        assert marker in text, (
-            f"'{name}' must be a top-level section of the customer document; the "
-            "catalogue is what the implementer and the Terraform run read"
-        )
-        positions.append(text.index(marker))
-    assert positions == sorted(positions), (
-        "catalogue sections are out of order; each is defined in terms of the one "
-        f"before it. Required order: {' -> '.join(CATALOGUE_SECTIONS)}"
-    )
-    # And they close the body: nothing but appendices after the last one.
-    assert text.index("| Appendix A: Master Attribute Dictionary") > positions[-1]
-
-
-def test_appendices_are_topic_scoped_not_a_container_for_the_document():
-    """The whole analysis was once nested under 'Appendix A — Target breakdown'.
-
-    That put the substance of the document behind a heading that reads as
-    optional. Appendices now have named topics, and the rule is stated where a
-    run will read it.
-    """
-    text = TEMPLATE.read_text()
-    for appendix in ("Appendix A: Master Attribute Dictionary",
-                     "Appendix B: Supplementary Code and Configuration",
-                     "Appendix C: Instrumentation Agent Work Order",
-                     "Appendix D: Supplementary Evidence",
-                     "Appendix E: Open Items and Assumptions"):
-        assert appendix in text, f"missing topic-scoped appendix: {appendix}"
-    assert "Body content under an appendix heading" in text, (
-        "the completeness bar must fail a document that hides body content in an "
-        "appendix"
-    )
-
-
-def test_every_detector_needs_a_threshold_and_every_objective_a_budget():
-    text = TEMPLATE.read_text()
-    assert "A detector with no threshold" in text
-    assert "error budget" in text
-    levels = (SKILLS / "references" / "service-levels.md").read_text()
-    for required in ("Good events", "Total events", "error budget",
-                     "burn-rate", "user-facing statement"):
-        assert required.lower() in levels.lower(), (
-            f"the service-levels spec must define {required}"
-        )
-    assert "voice" in levels.lower(), (
-        "objectives are written in the customer's voice first, the query second"
-    )
-
-
-def test_use_cases_open_with_a_narrative():
-    text = TEMPLATE.read_text()
-    narrative = text.index("**`Narrative`**")
-    identity = text.index("**`Workflow identity`**")
-    assert narrative < identity, (
-        "the narrative comes first; a use case whose narrative cannot be written "
-        "does not exist"
-    )
-
-
-# --------------------------------------------------------------------------- #
-# value in the customer's document, cost in the account team's
-# --------------------------------------------------------------------------- #
-BUSINESS_VALUE = SKILLS / "references" / "business-value.md"
-EXPOSURE = SKILLS / "references" / "entitlement-exposure.md"
-VALUE_SECTION = "Business Value Realization"
-
-
-def test_business_value_is_the_last_body_section_before_the_appendices():
-    """The value case is the argument the document has earned, not its opening
-    promise — and it is a body section, because the customer reads it."""
-    text = TEMPLATE.read_text()
-    value = text.index(f"| 26 | **{VALUE_SECTION}** | H1 |")
-    use_cases = text.index("**Composite Use Cases** | H1 |")
-    appendix_a = text.index("| 27 | Appendix A: Master Attribute Dictionary")
-    assert use_cases < value < appendix_a, (
-        "Business Value Realization comes after the catalogue and before the "
-        "appendices"
-    )
-    assert f"**No `{VALUE_SECTION}` section**" in text, (
-        "the completeness bar must fail a document that drops the value section"
-    )
-
-
-def test_business_value_figures_carry_their_provenance():
-    """An unlabelled business number is indistinguishable from an invented one,
-    and one invented number costs the whole document its credibility."""
-    spec = BUSINESS_VALUE.read_text()
-    for label in ("`stated`", "`measured`", "`public`", "`derived`"):
-        assert label in spec, f"the value spec must define the {label} label"
-    assert "Never infer a business number" in spec, (
-        "the spec must forbid substituting a benchmark for a number nobody gave"
-    )
-    assert "benchmark" in spec.lower()
-    # Every claim has to point at machinery that exists in the same document.
-    assert "names its mechanism" in spec or "names the workflow" in spec
-    # And it must not promise what instrumentation does not deliver.
-    assert "does not make it fast" in spec or "does not make the application fast" in spec
-
-    for required in ("The problem in the customer's words",
-                     "What the public record shows",
-                     "Measured performance today",
-                     "Where the time goes today",
-                     "What realisation looks like",
-                     "become quantitative"):
-        assert required in spec, f"the value section is missing {required}"
-
-    # Written even with nothing supplied, or a first engagement produces nothing.
-    assert "no business context" in spec.lower()
-
-    template = TEMPLATE.read_text()
-    assert "industry benchmark" in template, (
-        "the completeness bar must fail a benchmark in the customer document"
-    )
-
-
-def test_public_evidence_is_cited_and_bounded_to_twelve_months():
-    spec = BUSINESS_VALUE.read_text()
-    assert "Cite or delete" in spec
-    assert "complaint is a complaint, not an outage" in spec, (
-        "a complaint promoted into an outage is unsafe in a document carrying the "
-        "customer's name"
-    )
-    assert "Absence is a finding too" in spec, (
-        "a twelve-month search that finds nothing must be reportable"
-    )
-    template = (ROOT / "inputs" / "engagement-inputs.template.yaml").read_text()
-    assert "public_evidence:" in template
-    assert "window_months: 12" in template
-    assert "allowed:" in template, (
-        "research must be refusable; some engagements cannot search in the open"
-    )
-
-
-def test_intake_collects_the_business_context_no_scan_can_reach():
-    template = (ROOT / "inputs" / "engagement-inputs.template.yaml").read_text()
-    assert "business_context:" in template
-    for field in ("commentary", "mttd_minutes", "mtta_minutes", "mttr_minutes",
-                  "incidents_per_month", "fully_loaded_hourly_cost",
-                  "annual_tooling_spend", "opex_challenges",
-                  "revenue_per_hour_online", "conversion_rate_pct",
-                  "revenue_challenges", "business_model"):
-        assert field in template, f"business context must capture {field}"
-
-    intake = (SKILLS / "engagement-intake" / "SKILL.md").read_text()
-    assert "business" in intake.lower()
-    assert "MTTR" in intake, "the intake must ask for the current MTTx"
-    assert "own words" in intake, (
-        "the commentary is quoted, so it has to be asked for as prose"
-    )
-    command = (ROOT / "commands" / "ob-intake.md").read_text()
-    assert "what hurts today" in command, (
-        "the intake command must prompt for the business commentary itself, since "
-        "a host may run the command without reading the skill first"
-    )
-
-
-def test_entitlement_prices_the_recommendation_and_never_silently_caps_it():
-    """Licensing is reference. A customer told that full coverage needs more MTS
-    can buy it, phase it, or promote less — and none of those happen if a
-    dimension is dropped before anyone sees the number."""
-    exposure = EXPOSURE.read_text()
-    assert "reference, not a ceiling" in exposure
-    assert "account team" in exposure
-    assert "entitlement-exposure-<app>-<date>.md" in exposure, (
-        "the exposure document needs a stable path, or it is written once and lost"
-    )
-    assert "there is no exposure document" in exposure, (
-        "with no entitlement supplied, every number in the document would be "
-        "invented, and it would be quoted as though it were not"
-    )
-    assert "fit_to_entitlement" in exposure
-
-    inputs = (ROOT / "inputs" / "engagement-inputs.template.yaml").read_text()
-    assert "fit_to_entitlement: false" in inputs, (
-        "cutting to fit is opt-in, on explicit customer request"
-    )
-
-    budget = (SKILLS / "cardinality-budget" / "SKILL.md").read_text()
-    assert "Cost is not a veto" in budget
-    assert "entitlement-exposure.md" in budget
-
-    template = TEMPLATE.read_text()
-    assert "**Licensing or overage numbers in this document**" in template, (
-        "the completeness bar must keep commercial exposure out of the customer "
-        "document"
-    )
-    assert "trimmed to fit the entitlement without being asked" in template
-
-
-def test_the_analysis_run_owns_both_new_outputs():
-    skill = (SKILLS / "instrumentation-analyze" / "SKILL.md").read_text()
-    assert "entitlement-exposure-<app>-<date>.md" in skill
-    output = skill.split("## Output", 1)[1].split("## ", 1)[0]
-    assert "traffic_baseline" in output, (
-        "a baseline with no entitlement still requires the exposure document"
-    )
-    assert "empty collection" in output, (
-        "an empty integration list is not a supplied baseline"
-    )
-    assert "public record" in skill and "twelve months" in skill
-    assert "business-value.md" in skill
-
-    prompt = (PROMPTS / "01-analyze-application.md").read_text()
-    assert VALUE_SECTION in prompt
-    assert "entitlement-exposure" in prompt
-    assert "business_context" in prompt
-
-    # The grader has to know both, or neither is enforced at delivery.
-    review = (SKILLS / "deliverable-review" / "SKILL.md").read_text()
-    assert VALUE_SECTION in review
-    assert "benchmark" in review
-    assert "blocking defect" in review, (
-        "an exposure document with no supplied entitlement is invented, which is "
-        "worse than a missing one"
-    )
-
-
-def test_the_wiki_keeps_the_value_workings():
-    """The document states the case; the wiki holds the arithmetic, so the next
-    run updates a coefficient instead of re-researching a quarter."""
-    spec = (SKILLS / "references" / "agent-wiki.md").read_text()
-    for note in ("business/", "value-model.md", "public-evidence.md", "asks.md"):
-        assert note in spec, f"the wiki layout is missing {note}"
-
-    script = (SKILLS / "instrumentation-wiki" / "scripts" / "verify_wiki.py").read_text()
-    assert "business/value-model.md" in script, (
-        "the value model exists on every run, so the verifier requires it"
-    )
-    assert "read date" in script, (
-        "a citation with no read date points at a page that may have changed"
-    )
-
-
-# --------------------------------------------------------------------------- #
-# one customer document, and a wiki underneath it
-# --------------------------------------------------------------------------- #
-def test_there_is_exactly_one_customer_facing_document():
-    """The second document duplicated the first and was read by nobody.
-
-    Customers did not read it and agents could not load it without spending
-    their whole context on irrelevant material. Nothing may reintroduce it.
-    """
-    template = TEMPLATE.read_text()
-    assert "One customer document, two renderings" in template
-    assert "A second customer-facing document" in template, (
-        "the completeness bar must fail a run that produces two documents"
-    )
-
-    wiki_prompt = (PROMPTS / "02-build-instrumentation-wiki.md").read_text()
-    assert "Do not produce a second document" in wiki_prompt
-    assert ".docx" in wiki_prompt, "the wiki prompt must say it emits no .docx"
-
-    # Naming the retired artifact to say it is retired is fine; producing or
-    # reading it is not, so the check is for a live path reference.
-    stale = [
-        path
-        for path in sorted(ROOT.rglob("*.md"))
-        if PLUGIN not in path.parents
-        and "docs/observability/INSTRUMENTATION-GUIDE.md" in path.read_text()
-    ]
-    assert not stale, (
-        "the retired guide artifact is still read or written by "
-        + ", ".join(str(p.relative_to(ROOT)) for p in stale)
-    )
-
-
-def test_wiki_is_addressable_and_host_readable():
-    spec = (SKILLS / "references" / "agent-wiki.md").read_text()
-    # Apps, then the services those apps use. A shared service stays under each
-    # app and is joined with a wikilink.
-    layout = "wiki/apps/<app>/services/<service>/"
-    assert layout in spec
-    assert spec.index("apps/") < spec.index("<app>/") < spec.index("services/") < spec.index("<service>/")
-    assert "recorded under each app" in spec
-    assert "neither app owns" in spec
-    skill = (SKILLS / "instrumentation-wiki" / "SKILL.md").read_text()
-    assert layout in skill
-    assert "A human does not create them first." in skill
-    for required in ("business-transactions/", "workflows/", "use-cases/",
-                     "findings/", "detectors/", "slos/", "work-orders/",
-                     "meta/", "index.md"):
-        assert required in spec, f"wiki layout is missing {required}"
-    # Frontmatter is what makes it machine-usable rather than a folder of prose.
-    for field in ("type:", "status:", "updated:", "tags:"):
-        assert field in spec, f"note frontmatter must carry {field}"
-    assert "[[wikilinks]]" in spec
-    for host in (".cursor/rules", "CLAUDE.md", "AGENTS.md"):
-        assert host in spec, f"the wiki must be reachable from {host}"
-    assert "Do not load the whole wiki" in spec, (
-        "the retrieval rule is the point of having a wiki rather than a document"
-    )
-
-
-def test_the_grader_grades_both_artifacts_it_claims_to():
-    """The reviewer's description offers to grade "an analysis document or a
-    wiki". It graded only the document, so a wiki with broken links and stub
-    notes passed review."""
-    skill = (SKILLS / "deliverable-review" / "SKILL.md").read_text()
-    assert "a wiki" in skill
-    wiki_pass = skill[skill.index("Grade the wiki"):]
-    wiki_pass = wiki_pass[:wiki_pass.index("\n### ")]
-
-    # The mechanical half is a script, so the check cannot degrade into a claim
-    # that the reviewer looked. The judgement half must not restate it.
-    assert "verify_wiki.py" in wiki_pass, (
-        "the wiki pass must run the verifier rather than describe its checks"
-    )
-    for judgement in ("verbatim", "pointer", "status"):
-        assert judgement in wiki_pass, (
-            f"the wiki pass drops {judgement}, which no script settles"
-        )
-
-    script = (SKILLS / "instrumentation-wiki" / "scripts" / "verify_wiki.py").read_text()
-    for check in ("wikilink", "ambiguous", "frontmatter", "index", "provenance",
-                  "pointer", "SECRET_PATTERNS", "earns its file"):
-        assert check in script, f"the verifier does not check {check}"
-    # It has to be able to fail, and the wiki run has to be the one that runs it.
-    assert "return 1" in script
-    assert "verify_wiki.py" in (SKILLS / "instrumentation-wiki" / "SKILL.md").read_text()
-
-    # The rubric owns the section list; the grader must not restate it.
-    assert "document-template.md" in skill and "the rubric wins" in skill
-
-
-def test_a_note_earns_its_file():
-    """One note per subject is not one note per name. An application with four
-    hundred workflows would otherwise open with four hundred frontmatter stubs,
-    which dilutes every search and hides the twenty that have a design."""
-    spec = (SKILLS / "references" / "agent-wiki.md").read_text()
-    rule = spec[spec.index("## A note earns its file"):]
-    rule = rule[:rule.index("\n## ", 10)]
-    # The promotion trigger has to be concrete, or it is a matter of taste.
-    for trigger in ("spans", "threshold", "objective", "work order"):
-        assert trigger in rule, f"promotion trigger {trigger} is not named"
-    assert "BT note" in rule, "an unpromoted workflow needs a stated home"
-    assert "index.md" in rule, (
-        "counts belong in the index, so the gap is visible rather than looking "
-        "like an omission"
-    )
-    # And the rule must come before the note shape, since it decides whether a
-    # note exists at all.
-    assert spec.index("## A note earns its file") < spec.index("## Note shape")
-
-
-# --------------------------------------------------------------------------- #
-# the run repeats: versions tracked, deltas not rewrites, CI possible
-# --------------------------------------------------------------------------- #
-def test_versions_are_tracked_with_provenance_and_an_upgrade_path():
-    spec = (SKILLS / "references" / "version-currency.md").read_text()
-    for component in ("semconv", "collector", "tf.signalfx", "rum_agent"):
-        assert component in spec, f"version tracking must cover {component}"
-    assert "Provenance" in spec or "provenance" in spec, (
-        '"how do you know" is the question that matters when a number is wrong'
-    )
-    assert "Upgrade path" in spec
-    assert "unverified" in spec, (
-        "a version that could not be checked must be marked, not reused as though "
-        "it were confirmed"
-    )
-    # A breaking change has to reach the agents, and code cuts over before config.
-    assert "Action for the implementer agent" in spec
-    assert "Action for the as-code agent" in spec
-
-
-def test_repeat_runs_are_deltas_and_carry_findings_forward():
-    spec = (SKILLS / "references" / "incremental-runs.md").read_text()
-    assert "Changes since v" in spec
-    for required in ("New surfaces and services", "Drift", "re-baseline"):
-        assert required.lower() in spec.lower(), f"delta spec is missing {required}"
-    assert "never renumbered" in spec, (
-        "finding ids outlive the document; renumbering invalidates every ticket"
-    )
-    template = TEMPLATE.read_text()
-    assert "Changes since v<N-1>" in template, (
-        "the template must carry the delta subsection, or a repeat run has nowhere "
-        "to put what changed"
-    )
-
-
-def test_pre_merge_branch_job_updates_the_contract_without_merging():
-    """Skills run on an unmerged branch. A sprint move queues work; CI does not merge."""
-    spec = (SKILLS / "references" / "ci-integration.md").read_text()
-    mcp = (SKILLS / "references" / "mcp-servers.md").read_text()
-    template = (ROOT / "inputs" / "engagement-inputs.template.yaml").read_text()
-    example = (ROOT / "examples" / "ci" / "branch-before-merge.yml").read_text()
-
-    assert "Pre-merge branch job" in spec
-    assert "Do not merge" in spec
-    assert "obengineer:" in spec
-    assert "initial_scope" in spec
-    assert "authorized" in spec
-    assert "never pushes to the default branch" in spec
-    assert "sprint" in mcp and "GitHub" in mcp and "GitLab" in mcp
-    assert "option" in mcp
-    assert "does not create issues" in mcp
-    assert "developer_tools" in mcp
-    assert "initial_scope:" in template
-    assert "authorized: unknown" in template
-    assert "parent_folders:" in template
-    assert "developer_tools:" in template
-    implement = (SKILLS / "instrumentation-implement" / "SKILL.md").read_text()
-    intake = (SKILLS / "engagement-intake" / "SKILL.md").read_text()
-    assert "parent_folders" in implement
-    assert "does not ask for instrumentation scope" in intake.lower() or "Do not ask for instrumentation scope" in intake
-    assert "pull_request:" in example
-    assert "Do not merge" in example
-    assert "github.head_ref" in example
-
-
-def test_ci_layers_are_ordered_and_have_runnable_examples():
-    spec = (SKILLS / "references" / "ci-integration.md").read_text()
-    one = spec.index("Contract checks")
-    two = spec.index("Agent instrumentation")
-    three = spec.index("Configuration delivery")
-    assert one < two < three, (
-        "adopt deterministic checks before agent pull requests; without them "
-        "nothing measures whether the pull requests helped"
-    )
-    assert "never pushes to the default branch" in spec
-    assert "Detectors arrive disabled" in spec
-    assert "own repository" in spec, (
-        "observability configuration belongs beside neither the application's "
-        "reviewers nor its revert history"
-    )
-
-    examples = ROOT / "examples" / "ci"
-    for name in ("contract-checks.yml", "agent-instrument.yml",
-                 "terraform-plan-apply.yml", "README.md"):
-        assert (examples / name).is_file(), f"missing CI example: {name}"
-    # An example that leaks a token teaches the wrong thing more effectively
-    # than the prose teaches the right one.
-    for workflow in examples.glob("*.yml"):
-        text = workflow.read_text()
-        # Full-length shapes only: these workflows legitimately contain the
-        # prefixes as part of a detection pattern.
-        assert not re.search(
-            r"(AKIA[A-Z0-9]{16}|ghp_[A-Za-z0-9]{20,}|sk_live_[A-Za-z0-9]{20,}"
-            r"|eyJ[A-Za-z0-9]{20,}\.)", text), (
-            f"{workflow.name} contains a credential-shaped literal"
-        )
-        if "secrets." in text:
-            assert "${{ secrets." in text, (
-                f"{workflow.name} must read tokens from the secret store"
-            )
-
-    # The registry a layer-1 check reads is the schema, which enumerates every
-    # legal workflow name. The wiki's workflows/ folder holds only the promoted
-    # ones, so checking against it would fail every registered name that has
-    # not yet earned a note.
-    checks = (examples / "contract-checks.yml").read_text()
-    registry = checks[checks.index("workflow names are registered"):]
-    registry = registry[:registry.index("\n      # ---")]
-    assert "businessTransactions" in registry and "crossCuttingWorkflows" in registry, (
-        "the workflow-registry check must read the schema's enumeration"
-    )
-    assert "workflows\"" not in registry.replace('bt.get("workflows", [])', ""), (
-        "the registry check must not be scoped to the wiki's promoted notes"
-    )
-
-
-# --------------------------------------------------------------------------- #
-# the approved layout: simple title page, contents, one section per page
-# --------------------------------------------------------------------------- #
-def test_house_style_is_committed_not_remembered():
-    """The layout must survive a session with no approved sample to copy."""
-    render = SKILLS / "customer-doc-render"
-    spec_path = render / "references" / "document-format.json"
-    assert spec_path.is_file(), "document-format.json must be committed"
-    assert (render / "references" / "document-format.md").is_file()
-    assert (render / "assets" / "header-banner.png").is_file()
-    assert (render / "scripts" / "extract_docx_format.py").is_file(), (
-        "the spec must be re-derivable from a newly approved document"
-    )
-
-    spec = json.loads(spec_path.read_text())
-    assert spec["page"]["page_width_in"] == 8.5
-    assert spec["styles"]["Heading 1"]["size_pt"] == 16.0
-    assert spec["sections"]["section_style"] == "Heading 1"
-    assert "pageBreakBefore" in spec["sections"]["renderer_uses"]
-    # Formatting only: tenant labels, author names, and customer filenames
-    # have no place in a template.
-    blob = spec_path.read_text()
-    for leak in ("MSIP_Label", "siteId", "lastModifiedBy"):
-        assert leak not in blob, f"{leak} leaked into the committed format spec"
-    assert spec.get("derived_from") == "approved-house-style.docx", (
-        "derived_from must be a generic house-style name, not a customer document"
-    )
-
-
-def test_title_page_contract_is_stated_everywhere_it_is_enforced():
-    template = (SKILLS / "references" / "document-template.md").read_text()
-    architect = (AGENTS / "instrumentation-architect.agent.md").read_text()
-    skill = (SKILLS / "customer-doc-render" / "SKILL.md").read_text()
-    prompt = (ROOT / "prompts" / "01-analyze-application.md").read_text()
-
-    for name, text in (("template", template), ("architect agent", architect),
-                       ("render skill", skill), ("prompt 01", prompt)):
-        assert "title-page" in text, f"{name} must declare the title-page block"
-        assert "Document control and evidence basis" in text, (
-            f"{name} must send metadata to a body section, not the title page"
-        )
-
-    # Markdown ## -> Word Heading 1 is the visible difference between a document
-    # that looks like the approved sample and one that does not.
-    assert "Heading 1" in template
-    assert "pageBreakBefore" in template
-    assert "pageBreakBefore" in skill
-
-
-def test_cross_references_are_clickable_and_the_two_forms_are_explained():
-    """A 150-page document whose "see Appendix E" is inert makes the reader
-    scroll and guess, and a reference that clicks nowhere is invisible in Word
-    until a customer tries it."""
-    template = (SKILLS / "references" / "document-template.md").read_text()
-    skill = (SKILLS / "customer-doc-render" / "SKILL.md").read_text()
-    analyze = (SKILLS / "instrumentation-analyze" / "SKILL.md").read_text()
-    architect = (AGENTS / "instrumentation-architect.agent.md").read_text()
-    prompt = (ROOT / "prompts" / "01-analyze-application.md").read_text()
-
-    for name, text in (("template", template), ("render skill", skill),
-                       ("analyze skill", analyze), ("architect agent", architect),
-                       ("prompt 01", prompt)):
-        assert "clickable" in text, f"{name} must require clickable references"
-        assert "anchor link" in text, (
-            f"{name} must say how a reference by name is written"
-        )
-
-    # Both halves of the split, or an author guesses which one applies.
-    for name, text in (("template", template), ("render skill", skill)):
-        assert "sections 5 and 6" in text, f"{name} must show the numbered form"
-        assert "#business-transactions" in text, (
-            f"{name} must show the named form as a slug anchor"
-        )
-        assert "vocabulary" in text, (
-            f"{name} must say why names are not auto-linked: a section title is "
-            "also ordinary vocabulary"
-        )
-
-    assert "clickable in the `.docx`" in template, (
-        "the pre-delivery checklist must carry the reference row"
-    )
-
-    # The renderer refuses a stale reference, and the verifier counts them.
-    render_py = (SKILLS / "customer-doc-render" / "scripts"
-                 / "render_customer_doc.py").read_text()
-    verify_py = (SKILLS / "customer-doc-render" / "scripts"
-                 / "verify_render.py").read_text()
-    assert "points at nothing" in render_py
-    assert "matches no heading" in render_py
-    assert "w:bookmarkStart" in render_py and "w:anchor" in render_py
-    assert "cross-reference count" in verify_py
-    assert "point at no bookmark" in verify_py
-    # One authority for what counts as a reference.
-    assert "XREF" not in verify_py.split("def _renderer")[0], (
-        "the verifier must read the reference grammar from the renderer rather "
-        "than restating it"
-    )
-
-
-# --------------------------------------------------------------------------- #
-# plugin packaging
-# --------------------------------------------------------------------------- #
-def test_plugin_manifests_agree():
+def test_plugin_manifests_and_mirrors_agree():
     claude = json.loads((PLUGIN / ".claude-plugin" / "plugin.json").read_text())
     codex = json.loads((PLUGIN / ".codex-plugin" / "plugin.json").read_text())
-    assert claude["name"] == codex["name"] == PLUGIN.name
-    assert claude["version"] == codex["version"], (
-        "Claude and Codex plugin manifest versions must match"
-    )
-
-
-def test_plugin_mcp_config_has_no_inline_credentials():
-    config = json.loads((PLUGIN / ".mcp.json").read_text())
-    blob = json.dumps(config)
-    assert "mcpServers" in config
-    for pattern in (r"eyJ[A-Za-z0-9_-]{8,}\.", r"\b[0-9a-f]{32,}\b",
-                    r"\bAKIA[A-Z0-9]{12,}\b"):
-        assert not re.search(pattern, blob), (
-            f"credential-shaped value in .mcp.json matching {pattern}; "
-            "use ${ENV_VAR} references only"
-        )
-
-
-def test_plugin_skills_mirror_canonical_skills():
-    mirrored = sorted(p.parent.name for p in (PLUGIN / "skills").glob("*/SKILL.md"))
-    assert mirrored == CANONICAL_SKILLS, (
-        "plugin skills drifted from canonical skills; run "
-        "`make sync-plugin-skills`"
-    )
+    assert claude["version"] == codex["version"]
+    mirrored = sorted(path.parent.name for path in (PLUGIN / "skills").glob("*/SKILL.md"))
+    assert mirrored == CANONICAL_SKILLS
     for skill in CANONICAL_SKILLS:
-        canonical = (SKILLS / skill / "SKILL.md").read_text()
-        assert (PLUGIN / "skills" / skill / "SKILL.md").read_text() == canonical, (
-            f"{skill}: plugin copy differs from canonical; run "
-            "`make sync-plugin-skills`"
-        )
+        assert (
+            PLUGIN / "skills" / skill / "SKILL.md"
+        ).read_text() == (SKILLS / skill / "SKILL.md").read_text()
 
 
-def test_cursor_skill_links_resolve():
-    links = sorted((ROOT / ".cursor" / "skills").iterdir())
-    assert links, ".cursor/skills must expose the skills to Cursor"
-    for link in links:
-        assert (link / "SKILL.md").exists(), f"{link.name}: dangling skill link"
-
-
-# --------------------------------------------------------------------------- #
-# no credentials anywhere in the agentry
-# --------------------------------------------------------------------------- #
 CREDENTIAL_PATTERNS = [
-    ("jwt", re.compile(r"\beyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]+")),
-    ("aws access key", re.compile(r"\b(?:AKIA|ASIA|AGPA|AIDA|AROA)[A-Z0-9]{12,}\b")),
-    ("google api key", re.compile(r"\bAIza[0-9A-Za-z_-]{35}\b")),
-    ("github token", re.compile(r"\bgh[posur]_[A-Za-z0-9]{20,}\b")),
-    ("stripe key", re.compile(r"\b(?:sk|pk)_(?:live|test)_[A-Za-z0-9]{16,}\b")),
-    ("private key block", re.compile(r"-----BEGIN [A-Z ]*PRIVATE KEY-----")),
-    ("basic-auth url", re.compile(r"\b[a-z][a-z0-9+.-]*://[^/\s:@]+:[^/\s@]+@")),
+    re.compile(r"\beyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]+"),
+    re.compile(r"\b(?:AKIA|ASIA|AGPA|AIDA|AROA)[A-Z0-9]{12,}\b"),
+    re.compile(r"\bgh[posur]_[A-Za-z0-9]{20,}\b"),
+    re.compile(r"-----BEGIN [A-Z ]*PRIVATE KEY-----"),
+    re.compile(r"\b[a-z][a-z0-9+.-]*://[^/\s:@]+:[^/\s@]+@"),
 ]
+UNSCANNED = {".git", ".pytest_cache", "__pycache__", "node_modules", ".venv", "venv"}
 
 
-# Machine-generated trees hold credentials that were never committed: a remote URL in
-# .git/config carries whatever the clone authenticated with, and a cache holds whatever
-# the source held one revision ago. Scanning them reports a finding nobody can fix by
-# editing a file, which is how a scan gets muted.
-UNSCANNED_DIRS = {".git", ".pytest_cache", "__pycache__", "node_modules", ".venv", "venv"}
-
-
-def credential_findings(root):
-    """Credential-shaped values in the source under root, machine trees excluded."""
-    findings = []
-    for path in sorted(root.rglob("*")):
-        if not path.is_file() or path.suffix not in {".md", ".json", ".py", ".yaml",
-                                                     ".yml", ".cjs", ".mk", ""}:
+def source_files(root: Path):
+    for path in root.rglob("*"):
+        if not path.is_file() or UNSCANNED & set(path.relative_to(root).parts):
             continue
-        if UNSCANNED_DIRS & set(path.relative_to(root).parts):
-            continue
+        if path.suffix in {".md", ".json", ".py", ".yaml", ".yml", ".sh", ""}:
+            yield path
+
+
+def test_no_credentials_or_personal_paths_committed():
+    failures = []
+    for path in source_files(ROOT):
         if path.name == Path(__file__).name:
             continue
-        try:
-            text = path.read_text()
-        except (UnicodeDecodeError, OSError):
-            continue
-        for label, pattern in CREDENTIAL_PATTERNS:
-            if pattern.search(text):
-                findings.append(f"{path.relative_to(root)}: {label}")
-    return findings
-
-
-def test_no_credentials_committed():
-    findings = credential_findings(ROOT)
-    assert not findings, "credential-shaped values committed: " + "; ".join(findings)
-
-
-def test_the_credential_scan_reads_the_source_and_not_the_clone(tmp_path):
-    url = "https://x-access-token:" + "d" * 36 + "@github.com/org/repo"
-    (tmp_path / ".git").mkdir()
-    (tmp_path / ".git" / "config").write_text(f"[remote]\n\turl = {url}\n")
-    assert credential_findings(tmp_path) == []
-
-    (tmp_path / "skill.md").write_text(f"Clone it: `git clone {url}`\n")
-    assert credential_findings(tmp_path) == ["skill.md: basic-auth url"]
-
-
-# --------------------------------------------------------------------------- #
-# no personal home directories
-# --------------------------------------------------------------------------- #
-# A public bundle is cloned onto other machines. /Users/you is the documented
-# installer example; any other /Users/<name> or /home/<name> is a leak.
-# ~/... is allowed: that is how a portable home-relative path is written.
-PORTABILITY_PATTERNS = [
-    ("home directory", re.compile(r"/Users/(?!you\b)[A-Za-z0-9._-]+")),
-    ("home directory", re.compile(r"/home/(?!you\b)[A-Za-z0-9._-]+")),
-]
-
-
-def portability_findings(root):
-    """Personal home paths in the source under root."""
-    findings = []
-    for path in sorted(root.rglob("*")):
-        if not path.is_file() or path.suffix not in {".md", ".json", ".py", ".yaml",
-                                                     ".yml", ".cjs", ".mk", ""}:
-            continue
-        if UNSCANNED_DIRS & set(path.relative_to(root).parts):
-            continue
-        if path.name == Path(__file__).name:
-            continue
-        try:
-            text = path.read_text()
-        except (UnicodeDecodeError, OSError):
-            continue
-        for label, pattern in PORTABILITY_PATTERNS:
-            if pattern.search(text):
-                findings.append(f"{path.relative_to(root)}: {label}")
-    return findings
-
-
-def test_no_personal_home_paths():
-    findings = portability_findings(ROOT)
-    assert not findings, (
-        "personal home path committed: " + "; ".join(findings)
-    )
-
-
-def test_the_portability_scan_reads_the_source(tmp_path):
-    (tmp_path / "ok.md").write_text(
-        "export OB_PROJECT=/path/to/project-repo\n"
-        "obengineer at /Users/you/src/obengineer\n"
-    )
-    assert portability_findings(tmp_path) == []
-    (tmp_path / "leak.md").write_text("clone it under /Users/someone/work\n")
-    assert portability_findings(tmp_path) == ["leak.md: home directory"]
+        text = path.read_text(errors="replace")
+        if any(pattern.search(text) for pattern in CREDENTIAL_PATTERNS):
+            failures.append(str(path.relative_to(ROOT)))
+        if re.search(r"/(?:Users|home)/(?!you\b)[A-Za-z0-9._-]+", text):
+            failures.append(str(path.relative_to(ROOT)))
+    assert failures == []

@@ -1,255 +1,146 @@
 ---
 name: engagement-intake
 description: >-
-  Collect and validate the human-supplied inputs every other skill depends on —
-  artifacts and diagrams, front-end URLs, backend languages and buses, Splunk
-  realm and tenancy, entitlement for pricing the recommendation, privacy regime,
-  percentile standard, and the business context behind the engagement — current
-  MTTx, incident volume, triage and tooling cost, revenue exposure, and the
-  customer's own commentary on what hurts — into a single engagement-inputs.yaml.
-  Guides the human on suggested inputs first. A live production site scan is
-  required for whatever site this engagement names. Test and QA environments
-  are not the scan. Optional traffic baselines (daily sessions, hourly log
-  volume, infrastructure integrations) tighten the consumption prediction;
-  unknown widens it. Asks which developer tools they use and matches that list
-  to MCP servers and environment variable names already present. Asks only for
-  what is missing, one short round of questions, and records `unknown` rather
-  than guessing. Does not collect instrumentation scope. Use when the user types $engagement-intake,
-  starts an engagement, says they have diagrams or a URL to analyze, asks what
-  information you need, or when any other skill finds the inputs file absent or
-  incomplete. A token, API key, or dummy test login may be submitted as a
-  reference so the scan can see authenticated surfaces. Never stores the secret.
-  Whatever was submitted must be rotated by its owner when analysis completes.
+  Guide analysis inputs for /ob-start, /ob-add-inputs, and /ob-edit-inputs.
+  Discover measurable facts before asking, present unanswered or editable inputs
+  as a numbered selection, keep secrets out of chat, and persist only supplied
+  values. Use when the user invokes $engagement-intake, starts an engagement,
+  adds evidence, or corrects an existing input.
 metadata:
   author: obengineer
-  version: 0.1.0
+  version: 0.2.0
   category: observability
 ---
 
-# Engagement Intake — ask once, reuse everywhere
+# Guided analysis inputs
 
-## Overview
+Inputs persist in `docs/observability/engagement-inputs.yaml`. This skill manages the
+file; the analysis consumes it. It does not create a standalone branch, commit, or PR.
 
-Every run in this bundle needs the same facts: what the application is called, where
-the diagrams are, which realm, which percentile, and what the customer is licensed
-for. Asking for them inside each prompt produced three copies that drifted, and a
-human who pasted the third prompt with the second prompt's answers still in it.
+Field meaning and consequences live in
+[`../references/engagement-inputs.md`](../references/engagement-inputs.md). Connected
+systems and direct API behavior live in
+[`../references/mcp-servers.md`](../references/mcp-servers.md) and
+[`../references/existing-telemetry.md`](../references/existing-telemetry.md).
 
-So the inputs live in one file — `engagement-inputs.yaml`, from
-[`../../inputs/engagement-inputs.template.yaml`](../../inputs/engagement-inputs.template.yaml) —
-and this skill is the only thing that writes it. Field-by-field meaning and the
-consequence of leaving each blank:
-[`../references/engagement-inputs.md`](../references/engagement-inputs.md).
-Which MCP servers are mandatory, recommended, or used only when already present:
-[`../references/mcp-servers.md`](../references/mcp-servers.md).
+## Principles
 
-The design runs against **any site**. This file is that site. A URL, diagram, or
-schema from a **different** site is not an input; if one is in the file, remove
-it and say so. Previous scans of this site are inputs. Comparing them with the
-current production scan is [`../references/incremental-runs.md`](../references/incremental-runs.md).
+1. **Measure before asking.** Inspect the workspace, production surface, connected MCP
+   tools, environment-variable names, and direct Splunk APIs. MCP is one source, not the
+   only source. Use every readable source and preserve provenance.
+2. **No required `unknown`.** A blank remains absent. The validator may materialize a
+   schema-compatible null/empty representation, but the human never types `unknown`.
+3. **Ask by selection.** Present applicable suggestions as a numbered list. Accept
+   `yes 1 3 4` or `no`, then prompt for selected items one at a time.
+4. **Do not ask for names of engineers or owners.** Repository review policy supplies
+   reviewers. Roles appear only where routing behavior requires them.
+5. **Secrets never enter chat or committed YAML.** Use references. Direct the human to
+   `scripts/obengineer/setup-splunk-access.sh` when local API access is useful.
+6. **A missing optional input does not block analysis.** Put useful omissions and their
+   consequences on `reference/intake-recommendations.md`.
 
-## The rule that makes this worth having
+## Modes
 
-**Ask for what is missing. Never re-ask for what the file already answers, and never
-ask for anything a scan can measure.**
+The commands invoke [`../../prompts/00-manage-analysis-inputs.md`](../../prompts/00-manage-analysis-inputs.md)
+in one of three modes.
 
-A run that asks the human which router the application uses has given up on the job it
-was hired for. Router, bundle order, competing agents, CSP, consent gating, and the
-existing Splunk footprint are all *discoverable*, and asking about them converts
-evidence into opinion. The intake exists for the facts no scan can reach: commercial
-entitlement, who deploys what, which privacy regime applies, and what the customer is
-trying to fix.
+### Start
 
-| Category | Who answers | Why |
+Read existing workspace facts first. Ask only for:
+
+- application name;
+- a current production URL when it cannot be discovered; and
+- “In your own words, what hurts today?”
+
+Then ask:
+
+> Would you like to add more inputs to the analysis phase?
+>
+> Suggested inputs include:
+
+Number only applicable suggestions. The canonical suggestion families are:
+
+1. diagrams or prior analysis for this application;
+2. passive or safe-active security authorization;
+3. dummy authenticated test access;
+4. unmeasured tenant realm and environments;
+5. order-form entitlement and optional traffic baselines;
+6. privacy, residency, consent, and change constraints;
+7. business context such as MTTx, incident volume, triage cost, and revenue exposure;
+8. permission for bounded public-record research;
+9. chart and detector percentile; and
+10. a journey to rank first.
+
+After the selected answers are validated, `/ob-start` runs analysis V1.
+
+### Add
+
+List only useful absent inputs, renumbered from one for the current prompt. Prompt for
+selected items in ascending order. A blank skips the item. Save additions and
+automatically run the next immutable analysis version.
+
+### Edit
+
+List supplied, human-editable inputs with their current values. Show secret-backed values
+only as `configured`. Do not offer measured facts as human-editable opinions.
+
+For each selection:
+
+1. show the current redacted value;
+2. request the replacement;
+3. accept `clear` to remove it; and
+4. state the immediate consequence.
+
+Save edits and automatically run the next immutable version.
+
+## Discovery
+
+Before displaying suggestions:
+
+- inspect repository source and supplied diagrams;
+- discover the production URL from existing inputs or configuration;
+- list connected MCP tools and use relevant read tools;
+- inspect only whether supported environment-variable names are present, never values;
+- use Observability Cloud and Splunk Platform APIs directly when configured;
+- use MCP results to supplement APIs, not replace them; and
+- record each measured/stated source in `provenance-ledger.json`.
+
+When neither direct APIs nor relevant MCP tools are available, analysis continues from
+source and the production surface. The evidence page states the limitation. Do not make
+the finished site look tenant-measured when it was not.
+
+## Credential setup
+
+Tell the human how to create least-privilege read credentials, then point to:
+
+```bash
+scripts/obengineer/setup-splunk-access.sh
+```
+
+The installed command may substitute the toolkit's absolute
+`scripts/setup-splunk-access.sh` path. The script prompts in the terminal, writes `.env`
+with mode `0600`, adds `.env` to `.gitignore`, and never prints token values.
+
+Temporary dummy login access uses a login identifier plus a secret reference. Production
+credentials are not inputs. Any temporary credential is rotated by its holder after the
+analysis completes.
+
+## Validation and recommendations
+
+Run:
+
+```bash
+python3 <obengineer>/skills/engagement-intake/scripts/verify_engagement_inputs.py \
+  docs/observability/engagement-inputs.yaml --migrate
+```
+
+Report deterministic migrations. Do not delete unknown extension fields.
+
+For each absent but useful input, write one row to the version's
+`reference/intake-recommendations.md`:
+
+| Input | What it would improve | How to add it |
 |---|---|---|
-| Composition, router, load order, competing agents, CSP, consent | The scan | Measurable. Asking invites a stale answer from memory. |
-| Existing MetricSets, workflows, dashboards, tests | The tenant, via MCP if enabled, otherwise the human | Measurable in principle, often gated by access. |
-| Entitlement, for pricing the recommendation | The human, from Org Metrics and the order form | Not in the application, not in the tenant's data plane. |
-| Privacy regime, residency, deny-list additions | The human | A legal position, not a technical one. |
-| Who deploys the front end and the Collector | The human | Determines whether Phase 0 is possible at all. |
-| First journey and known pain | The human, optionally | The run can rank candidates; the human breaks ties. |
-| Current MTTx, incident volume, triage and tooling cost, revenue exposure | The human | Nobody outside the business knows what an outage costs it, and a benchmark in its place is a guess with a citation. |
-| Outage coverage, complaints, field performance | The public record, if research is permitted | Cheaper and more credible from the open record than from recollection. |
 
-## Process
-
-### Step 1 — Find or create the file
-
-Look for `engagement-inputs.yaml` beside the deliverables (conventionally
-`docs/observability/engagement-inputs.yaml`), then at the workspace root. If none
-exists, copy the template and say so — the human should be able to see and edit the
-file, not only answer questions into a chat that ends.
-
-If the human attached a filled file or pasted values, load those first and treat the
-questions as gap-filling. If that file names a site other than the one this
-engagement is for, drop those values and tell the human they were not kept.
-
-Before asking, look at the MCP servers already connected in this session.
-
-- **Splunk Observability Cloud and Splunk Enterprise are mandatory for complete joined
-  inventory.** If either is absent, report that source-specific gap and point at its optional
-  entry. A successful query from the available product remains measured; only conclusions
-  requiring the absent source stay `Not in evidence`. Do not invent a command.
-- **Memory repository `.env`.** API keys for those two servers live in `.env`, copied from `templates/memory-repo/.env.template` in the toolkit. Tell the human to fill that file. Do not read the values into the inputs file. The variable names and the analyze pass are [`existing-telemetry.md`](../references/existing-telemetry.md).
-- **Read entitlement before asking.** When those integrations are available, read
-  subscription usage, current/max MTS, MetricSet counts, and other measurable entitlement
-  facts through [`existing-telemetry.md`](../references/existing-telemetry.md). Record them
-  as measured and ask only for unavailable commercial or order-form limits. Measured
-  tenant evidence outranks a stated value; preserve any conflict for review.
-- **Developer tools.** Ask which tools they use — examples of shape: Jira, GitHub,
-  GitLab, Artifactory — and match only those names to MCP servers and environment
-  variable names already present. Record each match in `developer_tools.matched` as
-  `{tool, via: mcp|env, key}`. Never read or store a value or add a server that is not
-  already connected. The procedure is [`mcp-servers.md`](../references/mcp-servers.md).
-- **Jira, only when named and connected.** Read matching issue keys only when the human named Jira and a Jira MCP is already connected. Connected-but-unnamed and named-but-unavailable Jira are not used. Generating backlog issues is engineering's option after the contract exists, and only when they ask. Intake does not create issues or start coding. The rule is [`mcp-servers.md`](../references/mcp-servers.md).
-- **Repository hosts, if present.** When a GitHub, GitLab, or other repository MCP is already connected, match it to the named tool list. Do not choose `initial_scope` here, and do not adopt every repository it can reach. Scope authorization is the instrumentation phase.
-- **Recommend, do not require,** the other servers in [`mcp-servers.md`](../references/mcp-servers.md): local OpenTelemetry tools, ThousandEyes when an off-box hop is in scope, and a cloud inventory MCP for whatever cloud this site runs on so analyze can generate the production diagram.
-
-### Step 2 — Tell them what to bring, then ask once for the gaps
-
-The first message has two parts. The guidance comes first, then the numbered gaps.
-
-**Guidance, in substance:**
-
-The design runs against whatever site this engagement names. Bring as much as you have. A live **production site scan is required**: the current production URL. Test and QA environments vary from production and are not the scan. Previous scans of this site are welcome; a scan of a different site is not. Diagrams you already have of this site are welcome. If you can grant read-only access to the production cloud environment, the run can generate the architecture diagram from that inventory — any cloud, no credential stored in the file. The only way to skip the scan is to write `no browser` and the reason.
-
-Then the optional numbers, with this notice: **the more accurate the data, the tighter the consumption expectation.** Every one of them may be `unknown`. Unknown widens the range. It does not block the design, and it does not cap it.
-
-- Daily average and peak sessions (RUM).
-- Requests per minute, average and peak, and a typical spans-per-trace if they know it (APM).
-- Hourly log volume, average and peak.
-- Infrastructure metrics already coming from integrations: which integration, how many entities, roughly how many metrics each. Name the integration this site runs. Do not invent a vendor.
-
-**Then the gaps**, in one message, numbered, each with the consequence of skipping it. A drip of single questions across a session is the failure mode this skill exists to remove.
-
-Ask in this order, because early answers make later questions unnecessary:
-
-1. **Application, customer, and date.** Without the name there is no filename. Do not ask for instrumentation scope. Engineering authorizes that after the contract exists.
-2. **Developer tools.** The list they use. Examples of shape: Jira, GitHub, GitLab, Artifactory. Then match it. A miss is an open item, not a prompt for a token.
-3. **Artifacts.** Diagrams, prior contract, prior schema, earlier scans of this site, house-style `.docx`. Say explicitly that a prior schema will be *extended* and its key names reused, never renamed for taste. Previous scans of this site are compared with the current production scan.
-4. **Surfaces and security authorization.** The production site scan. An empty production URL list is a gap, not a default. A test or QA URL does not fill it. Record `security_assessment.mode`; safe-active requires explicit origins, exclusions, and request limits. Analysis access, when they have it: a token, an API key, or a dummy test login, each as a reference, never the secret. `unknown` is acceptable. Anything submitted is rotated by its owner when analysis completes. The rules are [`engagement-inputs.md`](../references/engagement-inputs.md) and [`security-assessment.md`](../references/security-assessment.md).
-5. **Backends and the production cloud diagram.** Languages, deploy targets, buses, account boundaries, what terminates TLS, and whether production can be inventoried for a generated diagram.
-6. **Tenancy.** Realm, org, environments. Identifiers only.
-7. **Remaining entitlement gaps, then the optional traffic baseline.** Do not re-ask
-   for tenant facts already measured. Ask for unavailable order-form terms, then daily
-   sessions, hourly log volume, request rate, and infrastructure integrations. Say the
-   accuracy notice once, not once per field. An empty integration list is unsupplied,
-   the same as `unknown`.
-8. **Constraints.** Privacy regime, residency, consent platform, change windows, who deploys.
-9. **Outcomes.** Known pain, and whether they want to nominate the first journey.
-10. **Business context.** The commentary and the numbers in Step 4.
-11. **Public-record research.** Whether it is permitted, the brand terms to search, and their own status or incident history pages.
-
-### Step 3 — Resolve remaining entitlement gaps as pricing, not as a limit
-
-Ask only for what the tenant read could not supply, and say what it is for, because the reason has changed and the old
-framing made people defensive: these numbers do not constrain the recommendation, they
-**price** it. What implementing the contract will consume, and any overage, goes into a
-separate document for the account team —
-[`../references/entitlement-exposure.md`](../references/entitlement-exposure.md) — and the
-recommendation itself is what the application needs either way.
-
-Say that in one sentence before asking. A customer who thinks the numbers will be used to
-shrink their design has a reason to withhold them; one who understands they buy a costed
-plan does not.
-
-| Ask | What it prices |
-|---|---|
-| Custom MTS included, and current consumption | Every proposed dimension, charged against real headroom rather than against a guess. |
-| MMS cardinality entitled and in use | Monitoring MetricSets are bounded by cardinality, not object slots. |
-| Observed Troubleshooting MetricSet distinct-value peak, if they have one | A baseline the prediction compares against. Not a cap. Identity keys stay attribute-only either way. |
-| RUM sessions per month; replay entitled | Sampling, and whether replay may be discussed at all. |
-| Synthetics run quota and private locations | Test frequency and which locations the plan may assume. |
-| Platform GB/day and retention | What goes to Splunk platform versus what stays in Observability Cloud. |
-| ThousandEyes agent units and test slots | How many off-box hops can actually be covered. |
-
-Two answers remain hard vetoes rather than pricing inputs, and they do shape the
-recommendation: `session_replay_accepted_in_writing` and `log_observer_connect_entitled`.
-
-If the human does not have the numbers, record `unknown`, note who would, and move on.
-There is **no exposure document** only when entitlement is `unknown` throughout and
-every traffic-baseline factor is unsupplied — neither `unknown` nor an empty
-collection counts as supplied. A supplied baseline with no entitlement is still
-written, as an expectation range. The rule is
-[`../references/entitlement-exposure.md`](../references/entitlement-exposure.md).
-The recommendation is written as though there is enough licensing, and the
-deliverable says the budget was not supplied. Do not stall the run on a
-procurement question, and do not invent a limit so that there is something to
-design around.
-
-Ask one more thing, once: **has the customer asked for a recommendation that fits inside
-what they already own?** Only a yes sets `fit_to_entitlement: true`, and then cutting to fit
-becomes the job and every cut is recorded.
-
-### Step 4 — Ask for the business context, and take the prose
-
-The section that makes a Business Value Realization section possible. Nobody outside the
-business knows what an outage costs it, and an industry benchmark in place of their number
-is a guess with a citation attached.
-
-**Ask for the commentary first, and ask for it as prose.** "In your own words, what hurts
-today — what breaks, who finds out first, and what it costs you when it does?" The answer
-gets quoted in the deliverable, attributed to the role that gave it, and it is the one input
-that cannot be reconstructed later.
-
-Then the numbers, `unknown` freely accepted:
-
-| Ask | What the value section can then say |
-|---|---|
-| MTTD / MTTA / MTTR, however they measure them | Where the incident time actually goes, and which instrumentation slice touches that stage |
-| Incidents per month, Sev1s per quarter | The multiplier. A twenty-minute detection improvement is a rounding error at one incident a quarter |
-| Responders per incident, fully loaded hourly cost | Triage cost per incident as arithmetic instead of assertion |
-| Percentage of incidents customers report first | The number executives react to fastest, and the one a customer-facing SLI moves directly |
-| Tools in use and annual tooling spend | Consolidation value, checked against the agents the scan actually found on the page |
-| Revenue per hour online, orders per day, average order value, conversion rate | Exposure per outage minute, and the value of catching a checkout regression before a release |
-| Named peak events and their dates | When the value is concentrated, which is what a phase plan should be aimed at |
-| OpEx and revenue challenges, in prose | Which audience the section leads with, and the language the executive already uses |
-
-Finally, **public-record research**: is it permitted, which brand terms and sub-brands to
-search, and do they publish a status or incident history page. Say what it is for — the last
-twelve months of outage coverage, complaints, and field performance make the value case rest
-on something other than recollection — and accept `allowed: false` without argument.
-
-Full field-by-field meaning:
-[`../references/business-value.md`](../references/business-value.md).
-
-### Step 5 — Validate before handing off
-
-Refuse to proceed, and say which check failed, when:
-
-- **A value looks like a credential.** Long random strings, anything matching a known token shape, `-----BEGIN`. Strip it, tell the human it was not stored, and ask for a `${ENV_VAR}` or a secret name. A login that is not a dummy test account is refused. When a reference was accepted, rotation on completion is required. The rule is [`engagement-inputs.md`](../references/engagement-inputs.md).
-- **A referenced path does not exist.** A diagram in the file but not on disk becomes a phantom citation in the deliverable.
-- **`standards.percentile` is not a single value.** One percentile, everywhere. Two percentiles in one contract means two definitions of "slow".
-- **A URL is in `surfaces` but the human said there is no browser.** One of the two is wrong; ask which.
-- **`production_urls` is empty and `front_end_scan_notes` is not `no browser` with a reason.** The production scan is required. A test or QA URL does not satisfy it. Ask for the production URL. Do not proceed by reusing a different site. Previous scans of this site stay.
-- **`session_replay_entitled` is true but `session_replay_accepted_in_writing` is false.** Replay stays out of the recommendation until the cost and Core Web Vitals risk are accepted in writing.
-- **A business figure arrived as a benchmark.** "Retail typically loses $X a minute" is not this customer's number. Record `unknown` and name the ask.
-- **`fit_to_entitlement: true` with no entitlement numbers.** Nothing to fit to; either get the numbers or set it back to false.
-- **`public_evidence.allowed: true` with no brand terms.** A search for the parent company finds the investor-relations record and misses the market where customers are complaining.
-
-### Step 6 — Write the file and report the gaps
-
-Write `engagement-inputs.yaml`, then print a short report: what was filled, what stayed
-`unknown`, and which sections of the eventual deliverable each `unknown` will weaken.
-That report is the seed of the guide's "Open items and assumptions" appendix — the two
-should not be written twice.
-
-## Warning signs
-
-- **The run asks the human a question the scan already answered.** The evidence wins; correct the file from the measurement and note the disagreement.
-- **An `unknown` silently becomes a number later in the run.** If the budget was assumed, every sentence that depends on it says so.
-- **The business commentary got summarised into a bullet.** The quote is the value; a paraphrase reads as our characterisation of their problem and the executive stops recognising themselves in it.
-- **Entitlement asked for as a constraint.** It prices the recommendation. Asking as though it caps the design invites a customer to withhold it.
-- **Intake grows a field for something one skill wanted once.** The file is read by every run; a field that serves one paragraph belongs in that paragraph.
-- **The file accumulates a credential because someone pasted a whole config.** The validator exists for exactly this. Never commit the filled file to a customer repository without checking.
-
-## Non-goals
-
-- Intake creates no branch, commit, or pull request. Its validated artifact remains
-  uncommitted until `/ob-analyze` includes it in the analysis branch and PR described
-  by [`analysis-run-lifecycle.md`](../references/analysis-run-lifecycle.md).
-
-- Does not scan, measure, or infer anything about the application. That is `instrumentation-analyze`.
-- Does not decide dimensions or compute the prediction, only records the optional baselines and the entitlement they are compared with. The formulas live in `cardinality-budget`.
-- Does not store a credential value. A submitted token, API key, or dummy test login is
-  a reference, and records that its owner must rotate it when analysis completes.
+The action is `/ob-add-inputs`, not manual YAML editing. A cleared value returns to this
+page. When the page has no useful rows, omit its landing-page link.

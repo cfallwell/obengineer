@@ -1,4 +1,4 @@
-# MCP servers — which ones a run requires
+# MCP servers — optional host-integrated evidence
 
 Authoring reference for [`engagement-intake`](../engagement-intake/SKILL.md),
 [`instrumentation-analyze`](../instrumentation-analyze/SKILL.md), and the plugin
@@ -16,22 +16,24 @@ supply. A placeholder command fails at session start, and a plugin that fails
 at session start gets uninstalled. Tokens are `${VAR}` references. No command
 is guessed.
 
-Mandatory means the operator copies that entry from `.mcp.optional.json` into
-`.mcp.json` and supplies their own command before a run treats tenant facts as
-measured. It does not mean this repository hardcodes an endpoint.
+MCP is not the only tenant interface. Direct Observability Cloud and Splunk Platform APIs
+are first-class and often more comprehensive. A run discovers servers already connected
+to the host and combines their results with direct API evidence.
 
-## Mandatory
+## Splunk integrations when connected
 
-Both are required. A run that cannot see them still proceeds on the site scan
-and on what the human typed, and it labels those tenant rows `stated`.
+Neither server is required when equivalent direct API access is configured. A run with no
+tenant access still proceeds from source and the production surface and states the
+limitation on the evidence page.
 
 | Server key | Product | What a run reads through it |
 |---|---|---|
 | `splunk-observability` | Splunk Observability Cloud | MetricSets, APM workflows, Tag Spotlight cardinality, RUM and Synthetics configuration, Subscription Usage |
 | `splunk-platform` | Splunk Enterprise | Indexes, sourcetypes, `trace_id` extraction, the SPL behind a Log Observer Connect panel, ITSI services when that app is present |
 
-Copy both entries. Enabling one of them is not enough: Observability Cloud does
-not see Enterprise indexes, and Enterprise does not see RUM sessions.
+Observability Cloud does not see Enterprise indexes, and Enterprise does not see RUM
+sessions. Complete joined inventory needs evidence from both products, whether through
+APIs, MCP, or a combination.
 
 ## Recommended
 
@@ -52,9 +54,8 @@ repository, and do not guess a command.
 
 ### Developer tools already in the environment
 
-Intake asks the human which tools they use. Examples of shape: Jira, GitHub,
-GitLab, Artifactory. Match that list to MCP servers already connected and to
-environment variable names already present. Record each match as
+Discover connected Jira, GitHub, GitLab, Artifactory, and repository tools without asking
+the human to enumerate what the host can already see. Record each relevant match as
 `{tool: "<named tool>", via: "mcp" | "env", key: "<server or variable name>"}` in
 `developer_tools.matched`. Do not read the value, do not write it into
 `engagement-inputs.yaml`, and do not ask the human to paste it. A credential
@@ -112,9 +113,9 @@ scope stays out until engineering adds it.
 ## Existing telemetry
 
 The analyze inventory of logs, spans, traces, MetricSets, MTS, and `sf.org` usage is
-[`existing-telemetry.md`](existing-telemetry.md). The analyze run uses the
-`splunk-observability` and `splunk-platform` MCP servers and the Splunk API endpoints
-(Observability and Enterprise). Server keys stay the ones in the
+[`existing-telemetry.md`](existing-telemetry.md). The analyze run uses direct Splunk API
+endpoints and relevant connected `splunk-observability` and `splunk-platform` tools when
+available. Server keys stay the ones in the
 tables above. The environment variable names are in that procedure and in
 `plugins/obengineer/.mcp.optional.json`. This file does not repeat the queries.
 

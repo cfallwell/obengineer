@@ -8,10 +8,10 @@ root [README](../README.md) is intentionally limited to a quick start.
 1. [Installation and upgrades](installation.md) — choose a host and artifact
    repository, install or remove the toolkit, and configure renderer dependencies.
 2. [Configuration and behavior controls](configuration.md) — configure credentials by
-   reference, MCP integrations, engagement inputs, scope, licensing behavior, and
-   output constraints.
-3. [End-to-end usage and command reference](usage.md) — run intake, analysis, wiki
-   generation, implementation, Terraform generation, review, and rendering.
+   guided script, direct APIs, connected MCP integrations, engagement inputs, scope,
+   licensing behavior, and output constraints.
+3. [End-to-end usage and command reference](usage.md) — start, add or edit inputs,
+   review and accept a version, implement work orders, generate Terraform, and verify.
 4. [How obengineer operates](how-it-works.md) — understand dispatch, sources of truth,
    state, evidence precedence, output flow, repeat runs, and safety boundaries.
 
@@ -22,8 +22,9 @@ over explanatory documentation if behavior changes:
 
 - [`inputs/engagement-inputs.template.yaml`](../inputs/engagement-inputs.template.yaml)
   defines every accepted engagement input.
-- [`skills/references/document-template.md`](../skills/references/document-template.md)
-  defines the analysis structure and completion checks.
+- [`skills/references/analysis-site.md`](../skills/references/analysis-site.md)
+  defines the linked analysis layout, versioning, breadcrumbs, side-panel handoff,
+  and optional short Word summary.
 - [`skills/references/agent-wiki.md`](../skills/references/agent-wiki.md) defines the
   wiki layout and metadata.
 - [`skills/references/ci-integration.md`](../skills/references/ci-integration.md)
@@ -31,7 +32,7 @@ over explanatory documentation if behavior changes:
 - [`skills/references/security-assessment.md`](../skills/references/security-assessment.md)
   defines credential/API checks, OWASP coverage, confidence, and P0 routing.
 - [`skills/references/analysis-run-lifecycle.md`](../skills/references/analysis-run-lifecycle.md)
-  defines analysis branches, commits, PRs, and exact-commit acceptance.
+  defines analysis branches, commits, review, content-bound acceptance, and merge.
 - [`skills/references/implementation-work-orders.md`](../skills/references/implementation-work-orders.md)
   defines bounded targets, repository mapping, linked PRs, and Jira fallback.
 - [`skills/references/provenance-ledger.md`](../skills/references/provenance-ledger.md)
@@ -50,7 +51,7 @@ over explanatory documentation if behavior changes:
 ## Maintainer references
 
 - [Design rationale](design.md)
-- [Current architecture review — 9 Nov 2026](reviews/architecture-review.md)
+- [Architecture review — 9 Nov 2026](reviews/architecture-review.md)
 - [Archived architecture review — 18 Sep 2026](reviews/2026-09-18-architecture-review.md)
 - [Contributing guide](../CONTRIBUTING.md)
 - [Agent instructions](../AGENTS.md)
