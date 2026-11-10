@@ -33,10 +33,12 @@ than creating another.
 
 ## Parallel analysis, serialized naming
 
-Use every safe sub-agent slot available for independent evidence collection: production
-surface, source and diagrams, each connected integration, direct Splunk APIs, and public
-evidence when authorized. Naming, schema reconciliation, and the dependency graph remain
-serialized after evidence returns.
+Use the six fixed evidence jobs from the analysis manifest: production; source and
+technology; diagrams and prior artifacts; Observability Cloud; platform, cloud, and
+messaging; and public plus authorized security review. Reserve one host concurrency slot
+for the coordinator. The host launches workers; repository tooling audits result shape,
+recorded intervals, overlap, and capacity but never claims to spawn agents. Naming,
+schema reconciliation, and the dependency graph remain serialized after evidence returns.
 
 Naming and schema reconciliation remain serial.
 
