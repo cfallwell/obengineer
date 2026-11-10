@@ -660,7 +660,7 @@ def validate_run_timing(
 
 def validate_contract(contract: Any) -> list[str]:
     failures = validate_contract_schema(contract)
-    if failures:
+    if not isinstance(contract, dict):
         return failures
     if not _require(contract, TOP_LEVEL_KEYS, "contract", failures):
         return failures
@@ -907,6 +907,7 @@ def validate_contract(contract: Any) -> list[str]:
             failures,
         ):
             continue
+        _substantive(workflow.get("narrative"), f"{path}.narrative", failures)
         for key in ("spans", "events", "metrics", "joins", "codeLocations", "verification"):
             _list(workflow.get(key), f"{path}.{key}", failures)
         for location_index, location in enumerate(workflow.get("codeLocations", [])):

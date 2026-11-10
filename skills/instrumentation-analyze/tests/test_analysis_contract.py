@@ -129,13 +129,13 @@ def test_runnable_job_failure_is_not_a_green_audit():
     )
 
 
-def test_schema_gate_runs_before_semantic_placeholder_checks():
+def test_schema_and_semantic_gates_report_independent_defects_together():
     value = contract()
     del value["operations"]["detectors"][0]["threshold"]
     value["summaries"]["strategy"] = "TBD " + value["summaries"]["strategy"]
     failures = validate_contract(value)
     assert any("missing required field threshold" in failure for failure in failures)
-    assert not any("placeholder" in failure for failure in failures)
+    assert any("placeholder" in failure for failure in failures)
 
     value = contract()
     value["summaries"]["strategy"] = "TBD " + value["summaries"]["strategy"]
