@@ -5,9 +5,8 @@ description: Start — collect the minimum inputs, offer optional additions, and
 Start or resume an obengineer engagement.
 
 1. Before reading source, using the network, browsing production, or discovering MCP/API
-   tools, prefill supplied project context, then start the turn:
-   `python3 "{{OBENGINEER_ROOT}}/skills/engagement-intake/scripts/prefill_engagement_inputs.py" --project-root .`
-   `python3 "{{OBENGINEER_ROOT}}/skills/engagement-intake/scripts/manage_run_context.py" start --project-root .`
+   tools, prefill supplied project context silently and emit the first turn:
+   `python3 "{{OBENGINEER_ROOT}}/skills/engagement-intake/scripts/start_turn.py" --project-root .`
    Ask only the required fields still marked `[ ]`: application name, explicit production
    URL or `no browser: <reason>`, and what hurts today. When all three are `[x]`, do not
    ask them again; proceed immediately to optional review. Do not prepend discovery or

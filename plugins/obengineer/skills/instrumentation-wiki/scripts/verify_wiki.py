@@ -466,7 +466,10 @@ def check(target: Path, repo_root: Path, index_max_lines: int) -> list[str]:
                 failures.append(f"{leg_path} must be an object")
                 continue
             repository = leg.get("repository")
-            if repository not in repositories:
+            if not isinstance(repository, str) or not repository:
+                failures.append(f"{leg_path}.repository is required")
+                authorized = []
+            elif repository not in repositories:
                 failures.append(f"{leg_path} references unknown repository {repository!r}")
                 authorized = []
             else:
@@ -483,7 +486,11 @@ def check(target: Path, repo_root: Path, index_max_lines: int) -> list[str]:
                 ):
                     failures.append(f"{leg_path}.{key} is not meaningful")
         actual_repositories = {
-            leg.get("repository") for leg in legs if isinstance(leg, dict)
+            repository
+            for leg in legs
+            if isinstance(leg, dict)
+            for repository in (leg.get("repository"),)
+            if isinstance(repository, str)
         }
         if actual_repositories != mapped_repositories.get(order_id, set()):
             failures.append(

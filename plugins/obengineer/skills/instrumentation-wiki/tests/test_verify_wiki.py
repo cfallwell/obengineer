@@ -287,6 +287,20 @@ def test_work_order_rejects_invalid_selector_and_meaningless_leg(wiki):
     assert any("changes is not meaningful" in failure for failure in result)
 
 
+def test_work_order_malformed_repository_leg_reports_instead_of_crashing(wiki):
+    path = wiki.parents[1] / "implementation" / "work-orders" / "WO-001.md"
+    text = path.read_text().replace(
+        "    tests: [Run deterministic propagation and workflow contract tests for the repository leg.]",
+        "    tests: [Run deterministic propagation and workflow contract tests for the repository leg.]\n"
+        "  - paths: [src/]\n"
+        "    changes: [This malformed leg intentionally omits its repository identifier.]\n"
+        "    tests: [The verifier must report this malformed leg without raising an exception.]",
+    )
+    path.write_text(text)
+    result = failures(wiki)
+    assert any("repository is required" in failure for failure in result)
+
+
 def test_work_order_rejects_unauthorized_repository_path(wiki):
     path = wiki.parents[1] / "implementation" / "work-orders" / "WO-001.md"
     path.write_text(path.read_text().replace("paths: [src/]", "paths: [../secrets/]"))

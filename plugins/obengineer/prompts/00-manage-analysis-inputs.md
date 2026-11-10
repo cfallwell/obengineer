@@ -42,8 +42,8 @@ three copies.
 The command runs this before loading or discovering anything else:
 
 ```bash
-python3 <obengineer-root>/skills/engagement-intake/scripts/manage_run_context.py \
-  start --project-root .
+python3 <obengineer-root>/skills/engagement-intake/scripts/start_turn.py \
+  --project-root .
 ```
 
 Ask the emitted question immediately. It requests, together:

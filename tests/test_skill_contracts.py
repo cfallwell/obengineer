@@ -94,7 +94,7 @@ def test_start_asks_required_question_before_any_discovery_and_gates_analysis():
     command = (COMMANDS / "ob-start.md").read_text()
     prompt = (PROMPTS / "00-manage-analysis-inputs.md").read_text()
     analyze = (COMMANDS / "ob-analyze.md").read_text()
-    assert command.index("manage_run_context.py") < command.index(
+    assert command.index("start_turn.py") < command.index(
         "prompts/00-manage-analysis-inputs.md"
     )
     assert command.index("Before reading source") < command.index(
@@ -117,6 +117,7 @@ def test_start_asks_required_question_before_any_discovery_and_gates_analysis():
 def test_intake_runtime_and_schemas_are_packaged():
     skill = SKILLS / "engagement-intake"
     for relative in (
+        "scripts/start_turn.py",
         "scripts/prefill_engagement_inputs.py",
         "scripts/manage_run_context.py",
         "schemas/env-prefill.schema.json",

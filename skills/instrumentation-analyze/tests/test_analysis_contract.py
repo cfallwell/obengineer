@@ -21,6 +21,7 @@ from analysis_contract import (  # noqa: E402
     validate_worker_results,
 )
 from render_analysis_site import Renderer  # noqa: E402
+from validate_analysis import main as validate_analysis_main  # noqa: E402
 
 
 def contract():
@@ -37,6 +38,17 @@ def results():
 
 def timing():
     return load_json(FIXTURE / "run-timing.json")
+
+
+def test_final_worker_validation_requires_run_timing():
+    with pytest.raises(SystemExit) as exc:
+        validate_analysis_main([
+            "--manifest",
+            str(FIXTURE / "job-manifest.json"),
+            "--results",
+            str(FIXTURE / "results"),
+        ])
+    assert exc.value.code == 2
 
 
 def digest_tree(root: Path) -> str:

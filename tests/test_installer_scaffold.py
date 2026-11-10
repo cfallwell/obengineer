@@ -141,6 +141,37 @@ def test_existing_host_command_or_skill_collision_refuses_without_partial_instal
     assert skill.joinpath("SKILL.md").read_text() == "my skill\n"
 
 
+def test_symlinked_host_parent_cannot_escape_project(tmp_path):
+    external = tmp_path.parent / f"{tmp_path.name}-external"
+    external.mkdir()
+    (tmp_path / ".cursor").mkdir()
+    (tmp_path / ".cursor/commands").symlink_to(external, target_is_directory=True)
+
+    result = try_install(tmp_path, "--cursor")
+    assert result.returncode == 1
+    assert "symlinked or escaping parent" in result.stdout
+    assert list(external.iterdir()) == []
+    assert not (tmp_path / ".env.template").exists()
+
+    # A malicious manifest cannot make uninstall follow the same parent.
+    manifest = tmp_path / ".cursor/.obengineer-install.json"
+    manifest.write_text(json.dumps({
+        "schema_version": 2,
+        "source": str(ROOT),
+        "scope": "project",
+        "owned": {
+            "commands/ob-start.md": {
+                "kind": "file",
+                "sha256": "0" * 64,
+            }
+        },
+    }))
+    outside = external / "ob-start.md"
+    outside.write_text("outside\n")
+    run_install(tmp_path, "--cursor", "--uninstall")
+    assert outside.read_text() == "outside\n"
+
+
 def test_reinstall_is_digest_checked_and_modified_command_survives_uninstall(tmp_path):
     run_install(tmp_path, "--cursor")
     manifest_path = tmp_path / ".cursor/.obengineer-install.json"

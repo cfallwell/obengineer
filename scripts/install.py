@@ -190,6 +190,30 @@ def _host_relative(base: Path, path: Path) -> str:
     return path.relative_to(base).as_posix()
 
 
+def _symlinked_or_escaping_parent(root: Path, path: Path) -> Path | None:
+    """Return the first unsafe parent between root and path, without following it."""
+    root = root.absolute()
+    path = path.absolute()
+    try:
+        path.relative_to(root)
+    except ValueError:
+        return path
+    current = path.parent
+    while current != root:
+        if current.is_symlink():
+            return current
+        try:
+            current.resolve(strict=False).relative_to(root.resolve(strict=False))
+        except ValueError:
+            return current
+        if current == current.parent:
+            return current
+        current = current.parent
+    if root.is_symlink():
+        return root
+    return None
+
+
 def _tree_digest(path: Path) -> str:
     digest = hashlib.sha256()
     for child in sorted(path.rglob("*"), key=lambda candidate: candidate.as_posix()):
@@ -252,6 +276,12 @@ def host_install_conflicts(
     owned = host_owned_entries(manifest)
     conflicts: list[str] = []
     for path in desired_host_targets(host, scope_root, project):
+        unsafe_parent = _symlinked_or_escaping_parent(scope_root, path)
+        if unsafe_parent is not None:
+            conflicts.append(
+                f"{path} has symlinked or escaping parent {unsafe_parent}"
+            )
+            continue
         if not (path.exists() or path.is_symlink()):
             continue
         relative = _host_relative(base, path)
@@ -546,7 +576,10 @@ def _owned_host_path(base: Path, relative: str) -> Path | None:
     candidate = Path(relative)
     if candidate.is_absolute() or ".." in candidate.parts or candidate == Path("."):
         return None
-    return base / candidate
+    path = base / candidate
+    if _symlinked_or_escaping_parent(base.parent, path) is not None:
+        return None
+    return path
 
 
 def uninstall_project_scaffold(scope_root: Path, dry_run: bool) -> list[str]:

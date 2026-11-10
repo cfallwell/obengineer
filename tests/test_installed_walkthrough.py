@@ -25,10 +25,7 @@ def test_installed_start_sequence_emits_before_network_or_discovery(tmp_path):
 
     installed = (project / ".cursor/commands/ob-start.md").read_text()
     scripts = re.findall(r'`python3 "([^"]+)"[^`]*`', installed)
-    assert [Path(script).name for script in scripts[:2]] == [
-        "prefill_engagement_inputs.py",
-        "manage_run_context.py",
-    ]
+    assert [Path(script).name for script in scripts[:1]] == ["start_turn.py"]
     assert "{{OBENGINEER_ROOT}}" not in installed
 
     instrumentation = tmp_path / "instrumentation"
@@ -63,7 +60,7 @@ subprocess.Popen = blocked_popen
     env["PYTHONPATH"] = str(instrumentation)
 
     started = time.monotonic()
-    prefill_process = subprocess.Popen(
+    start_process = subprocess.Popen(
         [
             sys.executable,
             scripts[0],
@@ -75,31 +72,14 @@ subprocess.Popen = blocked_popen
         text=True,
         env=env,
     )
-    assert prefill_process.stdout is not None
-    first_visible = prefill_process.stdout.readline()
+    assert start_process.stdout is not None
+    first_visible = start_process.stdout.readline()
     elapsed = time.monotonic() - started
-    stderr = prefill_process.communicate(timeout=5)[1]
+    stderr = start_process.communicate(timeout=5)[1]
 
     assert elapsed <= 5
-    assert first_visible.startswith("Prefilled engagement input fields:")
-    assert prefill_process.returncode == 0, stderr
-    assert not attempts.exists()
-
-    start_result = subprocess.run(
-        [
-            sys.executable,
-            scripts[1],
-            "start",
-            "--project-root",
-            str(project),
-        ],
-        check=True,
-        capture_output=True,
-        text=True,
-        timeout=5,
-        env=env,
-    )
-    assert start_result.stdout.startswith(
+    assert first_visible.startswith(
         "Before I inspect source, the network, or connected tools"
     )
+    assert start_process.returncode == 0, stderr
     assert not attempts.exists()

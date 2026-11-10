@@ -29,6 +29,8 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
     if not args.contract and not args.manifest:
         parser.error("provide --contract, --manifest, or both")
+    if args.results and not args.timing:
+        parser.error("--timing is required whenever --results are validated")
     failures: list[str] = []
     worker_results = None
     if args.contract:
