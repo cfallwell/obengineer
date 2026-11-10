@@ -219,7 +219,7 @@ def test_legacy_digest_survives_later_analysis_contract(tmp_path):
 
 
 def test_selected_v2_discovery_and_historical_v1_are_both_verifiable(tmp_path):
-    repo, v1_analysis, _, v1_commit, v1_digest = accepted_repo(tmp_path)
+    repo, v1_analysis, v1_record, v1_commit, v1_digest = accepted_repo(tmp_path)
     v2_analysis, v2_record, v2_commit, v2_digest = add_v2(repo)
 
     discovered, failures = verify_acceptance.discover_acceptance(repo)
@@ -231,6 +231,9 @@ def test_selected_v2_discovery_and_historical_v1_are_both_verifiable(tmp_path):
     assert verify_acceptance.verify(
         repo, v1_analysis, "V1", v1_digest, v1_commit
     ) == []
+    assert verify_acceptance.main([
+        "--record", str(v1_record), "--repo", str(repo),
+    ]) == 0
 
 
 def test_legacy_v1_uses_commit_companions_after_v2_changes(tmp_path):
