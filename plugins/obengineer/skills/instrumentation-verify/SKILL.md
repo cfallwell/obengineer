@@ -17,8 +17,10 @@ metadata:
 
 ## Preconditions
 
-1. Resolve the accepted version and verify its content-bound acceptance record.
-2. Validate `verification-plan.json`, `provenance-ledger.json`, and optional
+1. Resolve exactly one accepted version from
+   `docs/observability/analysis/<app>/V<N>/acceptance.yaml` and verify its
+   content-bound acceptance record. Reject ambiguous discovery.
+2. Validate the schema version 2 `verification-plan.json`, `provenance-ledger.json`, and optional
    human-approved `verification-exclusions.json`.
 3. Load only the read integrations named by eligible criteria.
 4. Refuse every tenant mutation operation.
@@ -53,6 +55,8 @@ Authorities:
 - anonymized GitHub issue create/update when previewed and authenticated.
 
 CI exits nonzero for unmet criteria. `unmeasurable` lowers coverage and stays visible.
+New results bind with `analysis_content_commit`; schema version 1 records using
+`analysis_commit` remain read-compatible for migration.
 
 ## Prohibitions
 

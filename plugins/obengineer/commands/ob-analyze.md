@@ -31,7 +31,7 @@ authorization.
 8. Follow `${CLAUDE_PLUGIN_ROOT}/skills/references/analysis-run-lifecycle.md`: include
    inputs, the analysis site, wiki, and work orders in one PR and process review
    comments.
-9. Validate the provenance ledger and read-only verification plan.
+9. Validate the provenance ledger and schema version 2 read-only verification plan.
 
 The review surface is owned by
 `${CLAUDE_PLUGIN_ROOT}/skills/references/analysis-site.md`: linked Markdown opened in
@@ -41,6 +41,7 @@ localhost URL.
 Required outputs:
 
 - `docs/observability/analysis/<app>/V<N>/index.md` and every linked page
+- `docs/observability/analysis-contract.json`
 - `docs/observability/attribute-schema.json`
 - `docs/observability/implementation-map.json`
 - `docs/observability/provenance-ledger.json`

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Prove an agent wiki is retrievable, resolvable, and safe to load into context.
 
-    python3 verify_wiki.py "wiki/apps/<app>/versions/V<N>/services/<service>"
+    python3 verify_wiki.py "wiki/apps/<app>/versions/V<N>"
 
 The document has verify_render.py; without an equivalent the wiki's rules are
 enforced by whoever remembers them. Checks, all mechanical:
@@ -29,7 +29,13 @@ import importlib.util
 import json
 import re
 import sys
+from datetime import date
 from pathlib import Path
+
+try:
+    import yaml
+except ImportError:
+    sys.exit("PyYAML is required: pip install PyYAML==6.0.3")
 
 # Identical to verify_render.py's list: a value unsafe in a customer document is
 # more dangerous in a wiki, which agent hosts load by default.
@@ -44,13 +50,16 @@ SECRET_PATTERNS = [
     ("basic-auth url", re.compile(r"\b[a-z][a-z0-9+.-]*://[^/\s:@]+:[^/\s@]+@")),
 ]
 
-REQUIRED = [
+VERSION_REQUIRED = [
     "index.md",
     "meta/versions.md",
     "meta/run-log.md",
     "meta/decisions.md",
+    "implementation/work-orders/index.md",
+]
+SERVICE_REQUIRED = [
+    "index.md",
     "contract/cross-cutting.md",
-    "contract/attribute-schema.json",
     # The value model exists on every run. With no business inputs it holds the
     # arithmetic with its coefficients visibly unfilled, which is what makes the
     # next run a coefficient update rather than a fresh research exercise.
@@ -62,13 +71,21 @@ REQUIRED = [
 # the fastest way to lose an executive audience.
 VALUE_LABELS = ("stated", "measured", "public", "derived")
 
-NOTE_TYPES = {"index", "reference", "bt", "workflow", "use-case", "finding",
-              "metric", "detector", "sli", "work-order"}
-NOTE_STATUS = {
-    "proposed", "ready", "blocked", "designed", "implemented", "verified",
-    "retained", "changed", "superseded", "retired",
+NOTE_TYPES = {
+    "architecture", "business-transaction", "bt", "catalog", "contract",
+    "dashboard", "decision", "detector", "finding", "index", "metric",
+    "objective", "operation", "reference", "run-log", "service", "sli",
+    "slo", "use-case", "workflow", "work-order",
 }
-FINDING_STATUS = {"open", "fixed", "regressed", "risk-accepted"}
+NOTE_STATUS = {
+    "accepted", "active", "blocked", "changed", "deferred", "designed",
+    "implemented", "not-applicable", "observed", "proposed", "ready",
+    "resolved", "retained", "superseded", "retired", "verified",
+}
+FINDING_STATUS = {
+    "deferred", "false-positive", "fixed", "open", "regressed",
+    "risk-accepted",
+}
 WORK_ORDER_STATUS = {
     "proposed", "ready", "in-progress", "blocked", "retained", "changed",
     "superseded", "implemented", "verified", "retired",
@@ -95,7 +112,7 @@ WIKILINK = re.compile(r"\[\[([^\]|#]+)")
 
 
 def wiki_root_of(service: Path) -> Path | None:
-    """The `wiki/` directory that holds `apps/<app>/services/<service>/`."""
+    """The `wiki/` directory that holds `apps/<app>/versions/V<N>/`."""
     resolved = service.resolve()
     for parent in (resolved, *resolved.parents):
         if parent.name == "wiki":
@@ -109,15 +126,15 @@ def repo_root_of(service: Path) -> Path:
     if wiki is not None and wiki.parent != wiki:
         return wiki.parent
     resolved = service.resolve()
-    # wiki/apps/<app>/services/<service> — five levels up is the repository root.
+    # Fall back for callers outside the expected versioned wiki tree.
     return resolved.parents[4] if len(resolved.parents) >= 5 else Path(".")
 
 
 def note_outside_service(target: str, note: Path, service: Path) -> Path | None:
     """Resolve a path wikilink that leaves this service, including a shared service.
 
-    A shared service is recorded under each app. The join is a path such as
-    `apps/<other-app>/services/<service>/index`, resolved from `wiki/`.
+    A shared service is recorded under each app. The join is a versioned path
+    resolved from `wiki/`.
     """
     wiki = wiki_root_of(service)
     if wiki is None or "/" not in target:
@@ -139,16 +156,15 @@ def note_outside_service(target: str, note: Path, service: Path) -> Path | None:
     return None
 
 
-def frontmatter(text: str) -> dict[str, str] | None:
+def frontmatter(text: str) -> dict | None:
     m = FRONTMATTER.match(text)
     if not m:
         return None
-    fields: dict[str, str] = {}
-    for line in m.group(1).split("\n"):
-        km = re.match(r"([A-Za-z_][\w-]*):\s*(.*)$", line)
-        if km:
-            fields[km.group(1)] = km.group(2).strip()
-    return fields
+    try:
+        fields = yaml.safe_load(m.group(1))
+    except yaml.YAMLError:
+        return None
+    return fields if isinstance(fields, dict) else None
 
 
 def body(text: str) -> str:
@@ -165,37 +181,55 @@ def acceptance_verifier():
     return module.verify
 
 
-def check(app: Path, repo_root: Path, index_max_lines: int) -> list[str]:
+def check(target: Path, repo_root: Path, index_max_lines: int) -> list[str]:
     failures: list[str] = []
-    # wiki/apps/<app>/versions/V<N>/services/<service>
-    if app.parent.name != "services" or not re.fullmatch(r"V[1-9][0-9]*", app.parents[1].name):
+    # New invocations pass wiki/apps/<app>/versions/V<N>. Accepting a service
+    # path remains a CLI migration aid, but validation always covers every
+    # service in that version.
+    if target.parent.name == "services":
+        version_root = target.parents[1]
+    else:
+        version_root = target
+    if version_root.parent.name != "versions" or not re.fullmatch(
+        r"V[1-9][0-9]*", version_root.name
+    ):
         return [
-            "service path must be wiki/apps/<app>/versions/V<N>/services/<service>"
+            "wiki path must be wiki/apps/<app>/versions/V<N>"
         ]
-    version_root = app.parents[1]
-    versions_root = app.parents[2]
-    app_root = app.parents[3]
+    app_root = version_root.parents[1]
     version = version_root.name
-    app_work_orders = list(
+    services_root = version_root / "services"
+    services = sorted(
+        path for path in services_root.iterdir() if path.is_dir()
+    ) if services_root.is_dir() else []
+    if not services:
+        failures.append("version has no services/<service> directories")
+    app_work_orders = sorted(
         (version_root / "implementation" / "work-orders").glob("*.md")
     )
-    notes = sorted(set(app.rglob("*.md")) | set(app_work_orders))
+    notes = sorted(version_root.rglob("*.md"))
     rel = {
         p: str(p.relative_to(repo_root)) if p.is_relative_to(repo_root) else str(p)
         for p in notes
     }
 
     # ---- layout ----------------------------------------------------------
-    for required in REQUIRED:
-        if not (app / required).is_file():
+    for required in VERSION_REQUIRED:
+        if not (version_root / required).is_file():
             failures.append(f"missing required note: {required}")
-    if not (version_root / "implementation" / "work-orders" / "index.md").is_file():
-        failures.append("missing work-order queue index")
+    for service in services:
+        for required in SERVICE_REQUIRED:
+            if not (service / required).is_file():
+                failures.append(
+                    f"{service.relative_to(version_root)}: "
+                    f"missing required note: {required}"
+                )
 
     acceptance_path = (
         repo_root / "docs" / "observability" / "analysis" / app_root.name /
         version / "acceptance.yaml"
     )
+    is_accepted = acceptance_path.is_file()
     # Proposed analysis versions must pass before acceptance. When an acceptance
     # record exists, verify its content digest and version binding.
     if acceptance_path.is_file():
@@ -217,22 +251,32 @@ def check(app: Path, repo_root: Path, index_max_lines: int) -> list[str]:
                     repo_root,
                     Path(accepted["analysis"]),
                     accepted["version"],
-                    accepted["analysis_content_digest"],
+                    accepted.get("analysis_content_digest"),
                     accepted["analysis_content_commit"],
+                    accepted["schema_version"],
                 )
             )
 
     # ---- frontmatter -----------------------------------------------------
-    fields: dict[Path, dict[str, str]] = {}
+    fields: dict[Path, dict] = {}
     for p in notes:
         fm = frontmatter(p.read_text())
         if fm is None:
             failures.append(f"{rel[p]}: no YAML frontmatter")
             continue
         fields[p] = fm
-        for key in ("title", "type", "status", "updated", "version"):
+        for key in (
+            "title", "type", "app", "version", "status", "updated",
+            "sources", "work_orders",
+        ):
             if not fm.get(key):
+                if key in ("sources", "work_orders") and fm.get(key) == []:
+                    continue
                 failures.append(f"{rel[p]}: frontmatter has no {key}")
+        if fm.get("app") and fm["app"] != app_root.name:
+            failures.append(
+                f"{rel[p]}: app {fm['app']!r} does not match {app_root.name!r}"
+            )
         if fm.get("version") and fm["version"] != version:
             failures.append(
                 f"{rel[p]}: version {fm['version']!r} does not match {version}"
@@ -249,8 +293,20 @@ def check(app: Path, repo_root: Path, index_max_lines: int) -> list[str]:
         if status and status not in allowed:
             failures.append(
                 f"{rel[p]}: status {status!r} is not one of {sorted(allowed)} for type {kind!r}")
+        for key in ("sources", "work_orders"):
+            if key in fm and not isinstance(fm[key], list):
+                failures.append(f"{rel[p]}: {key} must be a list")
+            elif isinstance(fm.get(key), list) and not all(
+                isinstance(item, str) and item for item in fm[key]
+            ):
+                failures.append(f"{rel[p]}: {key} entries must be non-empty strings")
         updated = fm.get("updated", "")
-        if updated and not re.fullmatch(r"\d{4}-\d{2}-\d{2}", updated):
+        if isinstance(updated, date):
+            updated = updated.isoformat()
+        if updated and (
+            not isinstance(updated, str)
+            or not re.fullmatch(r"\d{4}-\d{2}-\d{2}", updated)
+        ):
             failures.append(f"{rel[p]}: updated {updated!r} is not an ISO date")
         if "[Analysis](" not in body(p.read_text()):
             failures.append(f"{rel[p]}: no Analysis breadcrumb")
@@ -259,6 +315,16 @@ def check(app: Path, repo_root: Path, index_max_lines: int) -> list[str]:
     for p in app_work_orders:
         if p.name == "index.md":
             continue
+        status = fields.get(p, {}).get("status")
+        if is_accepted and status == "proposed":
+            failures.append(
+                f"{rel[p]}: accepted versions cannot leave eligible work "
+                "orders proposed; use ready or blocked"
+            )
+        if not is_accepted and status == "ready":
+            failures.append(
+                f"{rel[p]}: work orders cannot be ready before acceptance"
+            )
         content = body(p.read_text()).lower()
         for heading in (
             "## findings",
@@ -297,8 +363,8 @@ def check(app: Path, repo_root: Path, index_max_lines: int) -> list[str]:
     # Both are legal here; an ambiguous bare name is not, because the tool and
     # the agent may pick different notes.
     by_path = {
-        str(p.relative_to(app).with_suffix("")): p
-        for p in notes if p.is_relative_to(app)
+        str(p.relative_to(version_root).with_suffix("")): p
+        for p in notes if p.is_relative_to(version_root)
     }
     by_stem: dict[str, list[Path]] = {}
     for p in notes:
@@ -314,12 +380,13 @@ def check(app: Path, repo_root: Path, index_max_lines: int) -> list[str]:
             candidates = {
                 target,
                 target.lstrip("./"),
-                str((p.parent / target).resolve().relative_to(app.resolve()))
-                if (p.parent / target).resolve().is_relative_to(app.resolve()) else target,
+                str((p.parent / target).resolve().relative_to(version_root.resolve()))
+                if (p.parent / target).resolve().is_relative_to(version_root.resolve())
+                else target,
             }
             if candidates & set(by_path):
                 continue
-            if note_outside_service(target, p, app) is not None:
+            if note_outside_service(target, p, version_root) is not None:
                 continue
             # A slash is a path. A missing path is broken even when the last
             # segment matches some other note's stem.
@@ -337,8 +404,10 @@ def check(app: Path, repo_root: Path, index_max_lines: int) -> list[str]:
         failures.append(f"{len(ambiguous)} ambiguous wikilink(s): {ambiguous[:5]}")
 
     # ---- index: a map, not a summary -------------------------------------
-    index = app / "index.md"
-    if index.is_file():
+    indexes = [version_root / "index.md", *[service / "index.md" for service in services]]
+    for index in indexes:
+        if not index.is_file():
+            continue
         text = index.read_text()
         lines = len(text.strip().split("\n"))
         if lines > index_max_lines:
@@ -359,7 +428,7 @@ def check(app: Path, repo_root: Path, index_max_lines: int) -> list[str]:
             counted_root = (
                 version_root / "implementation" / "work-orders"
                 if directory == "implementation/work-orders"
-                else app / directory
+                else index.parent / directory
             )
             actual = (
                 len([path for path in counted_root.glob("*.md") if path.name != "index.md"])
@@ -371,17 +440,23 @@ def check(app: Path, repo_root: Path, index_max_lines: int) -> list[str]:
                     f"{directory}/ holds {actual}")
 
     # ---- promotion: a note earns its file --------------------------------
-    for directory in ("workflows", "detectors"):
-        for p in (app / directory).glob("*.md") if (app / directory).is_dir() else []:
-            content = [ln for ln in body(p.read_text()).split("\n")
-                       if ln.strip() and not ln.strip().startswith("#")]
-            if len(content) < 3:
-                failures.append(
-                    f"{rel[p]}: promoted note carries {len(content)} line(s) of content. "
-                    "A note earns its file — fold it back into its catalogue note.")
+    for service in services:
+        for directory in ("workflows", "detectors"):
+            root = service / directory
+            for p in root.glob("*.md") if root.is_dir() else []:
+                content = [
+                    line for line in body(p.read_text()).split("\n")
+                    if line.strip() and not line.strip().startswith("#")
+                ]
+                if len(content) < 3:
+                    failures.append(
+                        f"{rel[p]}: promoted note carries {len(content)} line(s) "
+                        "of content. A note earns its file — fold it back into "
+                        "its catalogue note."
+                    )
 
     # ---- versions --------------------------------------------------------
-    versions = app / "meta" / "versions.md"
+    versions = version_root / "meta" / "versions.md"
     if versions.is_file():
         text = versions.read_text()
         header = next((ln for ln in text.split("\n")
@@ -396,26 +471,31 @@ def check(app: Path, repo_root: Path, index_max_lines: int) -> list[str]:
     # ---- value model -----------------------------------------------------
     # The value case is only as good as the provenance of its inputs, so the
     # note that holds the arithmetic has to say where each number came from.
-    model = app / "business" / "value-model.md"
-    if model.is_file():
-        text = model.read_text()
-        if not any(label in text.lower() for label in VALUE_LABELS):
-            failures.append(
-                "business/value-model.md labels no figure "
-                f"{VALUE_LABELS}; an unlabelled number reads as an invented one")
+    for service in services:
+        model = service / "business" / "value-model.md"
+        if model.is_file():
+            text = model.read_text()
+            if not any(label in text.lower() for label in VALUE_LABELS):
+                failures.append(
+                    f"{service.name}/business/value-model.md labels no figure "
+                    f"{VALUE_LABELS}; an unlabelled number reads as an invented one"
+                )
 
-    evidence = app / "business" / "public-evidence.md"
-    if evidence.is_file():
-        text = evidence.read_text()
-        urls = re.findall(r"https?://\S+", text)
-        if urls and not re.search(r"\bread\b", text, re.I):
-            failures.append(
-                "business/public-evidence.md cites sources but records no read date; "
-                "a citation with no read date points at a page that may have changed")
+        evidence = service / "business" / "public-evidence.md"
+        if evidence.is_file():
+            text = evidence.read_text()
+            urls = re.findall(r"https?://\S+", text)
+            if urls and not re.search(r"\bread\b", text, re.I):
+                failures.append(
+                    f"{service.name}/business/public-evidence.md cites sources "
+                    "but records no read date; a citation with no read date points "
+                    "at a page that may have changed"
+                )
 
     # ---- host pointers ---------------------------------------------------
-    index_path = str(index.relative_to(repo_root)) if index.is_file() and \
-        index.resolve().is_relative_to(repo_root.resolve()) else "index.md"
+    app_index = app_root / "index.md"
+    index_path = str(app_index.relative_to(repo_root)) if app_index.is_file() and \
+        app_index.resolve().is_relative_to(repo_root.resolve()) else "index.md"
     for pointer in (".cursor/rules/obengineer-wiki.mdc", "CLAUDE.md", "AGENTS.md"):
         path = repo_root / pointer
         if not path.is_file():
@@ -429,10 +509,7 @@ def check(app: Path, repo_root: Path, index_max_lines: int) -> list[str]:
                 failures.append(f"{pointer} does not carry {label}")
 
     # ---- secrets ---------------------------------------------------------
-    security_files = list(app.rglob("*"))
-    security_files += list(
-        (version_root / "implementation" / "work-orders").glob("*.md")
-    )
+    security_files = list(version_root.rglob("*"))
     for p in sorted(set(security_files)):
         if not p.is_file() or p.suffix not in (".md", ".json", ".yaml", ".yml"):
             continue
@@ -451,31 +528,29 @@ def check(app: Path, repo_root: Path, index_max_lines: int) -> list[str]:
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument(
-        "app", type=Path,
-        help="wiki/apps/<app>/versions/V<N>/services/<service>",
-    )
+    ap.add_argument("wiki", type=Path, help="wiki/apps/<app>/versions/V<N>")
     ap.add_argument("--repo-root", type=Path,
                     help="where the host pointers live (default: the wiki's parent repo)")
     ap.add_argument("--index-max-lines", type=int, default=200)
     args = ap.parse_args(argv)
 
-    app = args.app
-    if not app.is_dir():
-        sys.exit(f"not a directory: {app}")
+    wiki = args.wiki
+    if not wiki.is_dir():
+        sys.exit(f"not a directory: {wiki}")
 
     repo_root = args.repo_root
     if repo_root is None:
-        repo_root = repo_root_of(app)
+        repo_root = repo_root_of(wiki)
 
-    failures = check(app, repo_root, args.index_max_lines)
-    notes = len(list(app.rglob("*.md")))
+    failures = check(wiki, repo_root, args.index_max_lines)
+    version = wiki.parents[1] if wiki.parent.name == "services" else wiki
+    notes = len(list(version.rglob("*.md")))
     if failures:
         print(f"FAIL — {len(failures)} problem(s):")
         for f in failures:
             print(f"  - {f}")
         return 1
-    print(f"PASS — {app.name} wiki: {notes} notes, every link resolves")
+    print(f"PASS — {version.name} wiki: {notes} notes, every link resolves")
     return 0
 
 

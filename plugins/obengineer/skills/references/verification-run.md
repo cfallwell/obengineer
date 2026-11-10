@@ -20,10 +20,10 @@ Analysis emits `docs/observability/verification-plan.json`:
 
 ```json
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "criteria": [{
     "id": "VC-001",
-    "source_section": 17,
+    "source_ref": "operations/verification#VC-001",
     "system": "splunk-observability",
     "query": {
       "kind": "signalflow",
@@ -43,6 +43,10 @@ Analysis emits `docs/observability/verification-plan.json`:
   }]
 }
 ```
+
+`source_ref` is a stable page/anchor or object reference; it does not change when
+analysis sections are reordered. Schema version 1 plans with numeric `source_section`
+remain readable, but every newly generated plan is schema version 2.
 
 Criteria IDs are stable. Allowed remediation routes are `implementation`, `terraform`,
 `contract-amendment`, and `human-owner`. Every criterion needs actionable instructions
@@ -69,6 +73,10 @@ remain visible in:
 
 Machine results contain only eligible criteria with `met`, `unmet`, or `unmeasurable`.
 Excluded criteria are forbidden.
+
+Schema version 2 results and exclusions bind to the acceptance record with
+`analysis_content_commit`. Schema version 1 inputs using `analysis_commit` remain
+readable for migration.
 
 Every `unmet` row includes expected and observed values, ledger evidence IDs, owner,
 remediation route, exact next command/instructions, and recheck instructions. The human is

@@ -32,10 +32,10 @@ def write(tmp_path: Path, name: str, data: object) -> Path:
 
 def plan() -> dict:
     return {
-        "schema_version": 1,
+        "schema_version": 2,
         "criteria": [{
             "id": "VC-001",
-            "source_section": 17,
+            "source_ref": "operations/verification#VC-001",
             "system": "splunk-observability",
             "query": {"kind": "signalflow", "reference": "SRC-001"},
             "expected": {"operator": "equals", "value": True},
@@ -48,7 +48,7 @@ def plan() -> dict:
             },
         }, {
             "id": "VC-002",
-            "source_section": 17,
+            "source_ref": "operations/verification#VC-002",
             "system": "terraform",
             "query": {"kind": "state-read", "reference": "SRC-002"},
             "expected": {"operator": "exists"},
@@ -60,6 +60,25 @@ def plan() -> dict:
             },
         }],
     }
+
+
+def acceptance_record(tmp_path: Path, commit: str) -> Path:
+    acceptance = tmp_path / "acceptance.yaml"
+    acceptance.write_text(
+        "schema_version: 2\n"
+        "status: accepted\n"
+        "version: V1\n"
+        "analysis: docs/observability/analysis/app/V1/index.md\n"
+        f"analysis_content_commit: {commit}\n"
+        f"analysis_content_digest: {'c' * 64}\n"
+        "analysis_pr: https://example.invalid/pr/1\n"
+        "accepted_via: explicit-human-confirmation\n"
+        "accepted_at: 2026-11-09T00:00:00Z\n"
+        "qualifications: []\n"
+        "rejected_decisions: []\n"
+        f"provenance_seal_digest: {'d' * 64}\n"
+    )
+    return acceptance
 
 
 def test_plan_requires_actionable_remediation(tmp_path):
@@ -86,12 +105,30 @@ def test_plan_requires_actionable_remediation(tmp_path):
     assert plan_verifier.verify(write(tmp_path, "filtered-plan.json", data)) == []
 
 
+def test_plan_v1_source_section_remains_readable(tmp_path):
+    data = plan()
+    data["schema_version"] = 1
+    for criterion in data["criteria"]:
+        criterion["source_section"] = 17
+        criterion.pop("source_ref")
+    assert plan_verifier.verify(write(tmp_path, "legacy-plan.json", data)) == []
+
+
+def test_plan_v2_requires_stable_source_ref(tmp_path):
+    data = plan()
+    data["criteria"][0]["source_ref"] = "17"
+    assert any(
+        "source_ref is invalid" in item
+        for item in plan_verifier.verify(write(tmp_path, "bad-plan.json", data))
+    )
+
+
 def test_results_omit_human_exclusion_and_require_notification(tmp_path):
     commit = "a" * 40
     plan_path = write(tmp_path, "plan.json", plan())
     excluded = write(tmp_path, "exclusions.json", {
-        "schema_version": 1,
-        "analysis_commit": commit,
+        "schema_version": 2,
+        "analysis_content_commit": commit,
         "exclusions": [{
             "criterion_id": "VC-002",
             "decision": "unremediable",
@@ -117,8 +154,8 @@ def test_results_omit_human_exclusion_and_require_notification(tmp_path):
         "human_notification": "VC-001 is unmet; run WO-001.",
     }
     results_data = {
-        "schema_version": 1,
-        "analysis_commit": commit,
+        "schema_version": 2,
+        "analysis_content_commit": commit,
         "results": [row],
         "summary": {
             "accepted": 2, "excluded": 1, "eligible": 1,
@@ -133,6 +170,25 @@ def test_results_omit_human_exclusion_and_require_notification(tmp_path):
         "human_notification" in item
         for item in result_verifier.verify(plan_path, results, excluded)
     )
+
+
+def test_results_v1_commit_name_remains_readable(tmp_path):
+    commit = "a" * 40
+    plan_path = write(tmp_path, "plan.json", plan())
+    results = write(tmp_path, "results.json", {
+        "schema_version": 1,
+        "analysis_commit": commit,
+        "results": [{
+            "criterion_id": criterion["id"],
+            "status": "met",
+            "evidence_refs": ["CHECK-001"],
+        } for criterion in plan()["criteria"]],
+        "summary": {
+            "accepted": 2, "excluded": 0, "eligible": 2,
+            "met": 2, "unmet": 0, "unmeasurable": 0,
+        },
+    })
+    assert result_verifier.verify(plan_path, results) == []
 
 
 def test_results_cli_exits_nonzero_for_valid_unmet_result(tmp_path):
@@ -154,8 +210,8 @@ def test_results_cli_exits_nonzero_for_valid_unmet_result(tmp_path):
         },
     })
     results = write(tmp_path, "results.json", {
-        "schema_version": 1,
-        "analysis_commit": commit,
+        "schema_version": 2,
+        "analysis_content_commit": commit,
         "results": [{
             "criterion_id": "VC-001", "status": "unmet",
             "evidence_refs": ["CHECK-001"], "expected": True,
@@ -174,8 +230,7 @@ def test_results_cli_exits_nonzero_for_valid_unmet_result(tmp_path):
             "met": 1, "unmet": 1, "unmeasurable": 0,
         },
     })
-    acceptance = tmp_path / "acceptance.yaml"
-    acceptance.write_text(f"analysis_commit: {commit}\n")
+    acceptance = acceptance_record(tmp_path, commit)
     completed = subprocess.run([
         sys.executable, str(SCRIPTS / "verify_results.py"),
         str(plan_path), str(results), "--ledger", str(ledger),
@@ -209,7 +264,7 @@ def test_results_reject_invalid_schema_commit_and_evidence_shape(tmp_path):
     plan_path = write(tmp_path, "plan.json", plan())
     results = write(tmp_path, "results.json", {
         "schema_version": 99,
-        "analysis_commit": "short",
+        "analysis_content_commit": "short",
         "results": [{
             "criterion_id": "VC-001", "status": "met",
             "evidence_refs": "CHECK-001",
@@ -223,11 +278,10 @@ def test_results_reject_invalid_schema_commit_and_evidence_shape(tmp_path):
         },
     })
     failures = result_verifier.verify(plan_path, results)
-    assert "verification results schema_version must be 1" in failures
-    assert "verification results need a full analysis_commit SHA" in failures
+    assert "verification results schema_version must be 1 or 2" in failures
+    assert not any("content commit" in failure for failure in failures)
     assert any("needs ledger evidence_refs" in item for item in failures)
-    acceptance = tmp_path / "acceptance.yaml"
-    acceptance.write_text(f"analysis_commit: {'b' * 40}\n")
+    acceptance = acceptance_record(tmp_path, "b" * 40)
     assert "verification results commit does not match acceptance record" in \
         result_verifier.verify(
             plan_path, results, acceptance_path=acceptance

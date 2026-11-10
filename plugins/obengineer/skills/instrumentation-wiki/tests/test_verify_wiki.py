@@ -30,6 +30,8 @@ def note(title: str, kind: str, status: str, body: str = "Content line.\n") -> s
         "version: V1\n"
         f"status: {status}\n"
         "updated: 2026-01-01\n"
+        "sources: []\n"
+        "work_orders: []\n"
         "---\n\n"
         f"[Analysis](../../../../../../../docs/observability/analysis/app/V1/index.md)"
         f" / **{title}**\n\n# {title}\n\n{body}"
@@ -43,11 +45,12 @@ def wiki(tmp_path: Path) -> Path:
         "services" / "payments"
     )
     for directory in (
-        "meta", "contract", "findings", "business-transactions",
+        "contract", "findings", "business-transactions",
         "use-cases", "slos", "business", "workflows", "detectors",
     ):
         (service / directory).mkdir(parents=True, exist_ok=True)
     version = service.parents[1]
+    (version / "meta").mkdir(parents=True)
     work_orders = version / "implementation" / "work-orders"
     work_orders.mkdir(parents=True)
     analysis = tmp_path / "docs" / "observability" / "analysis" / "app" / "V1"
@@ -74,12 +77,20 @@ def wiki(tmp_path: Path) -> Path:
 - [[slos/checkout-success]]
 """,
     ))
-    (service / "meta" / "versions.md").write_text(note(
+    (version / "index.md").write_text(note(
+        "V1 index", "index", "designed",
+        body="- [[services/payments/index]]\n- [[implementation/work-orders/index]]\n",
+    ))
+    (version / "meta" / "versions.md").write_text(note(
         "versions", "reference", "verified",
         body="| Component | Version | Checked | Provenance |\n|---|---|---|---|\n| semconv | 1.27 | 2026-01-01 | pin |\n",
     ))
-    (service / "meta" / "run-log.md").write_text(note("run log", "reference", "verified"))
-    (service / "meta" / "decisions.md").write_text(note("decisions", "reference", "verified"))
+    (version / "meta" / "run-log.md").write_text(
+        note("run log", "run-log", "verified")
+    )
+    (version / "meta" / "decisions.md").write_text(
+        note("decisions", "decision", "verified")
+    )
     (service / "contract" / "cross-cutting.md").write_text(
         note("cross-cutting", "reference", "designed", "Contract. [[baggage]]\n")
     )
@@ -177,6 +188,27 @@ def test_frontmatter_requires_version(wiki):
     assert any("frontmatter has no version" in failure for failure in failures(wiki))
 
 
+def test_frontmatter_requires_matching_app_and_list_links(wiki):
+    path = wiki / "use-cases" / "checkout.md"
+    path.write_text(
+        path.read_text()
+        .replace("app: app", "app: other")
+        .replace("sources: []", "sources: F-01")
+    )
+    result = failures(wiki)
+    assert any("does not match" in failure for failure in result)
+    assert any("sources must be a list" in failure for failure in result)
+
+
+def test_verifier_iterates_every_service(wiki):
+    other = wiki.parent / "other"
+    other.mkdir()
+    assert any(
+        "services/other" in failure and "missing required note" in failure
+        for failure in failures(wiki)
+    )
+
+
 def test_note_requires_analysis_breadcrumb(wiki):
     path = wiki / "use-cases" / "checkout.md"
     path.write_text(path.read_text().replace("[Analysis](", "[Home]("))
@@ -193,6 +225,12 @@ def test_work_order_status_sets_are_enforced(wiki):
     path = wiki.parents[1] / "implementation" / "work-orders" / "WO-001.md"
     path.write_text(path.read_text().replace("status: proposed", "status: accepted"))
     assert any("status 'accepted'" in failure for failure in failures(wiki))
+
+
+def test_ready_work_order_requires_acceptance(wiki):
+    path = wiki.parents[1] / "implementation" / "work-orders" / "WO-001.md"
+    path.write_text(path.read_text().replace("status: proposed", "status: ready"))
+    assert any("before acceptance" in failure for failure in failures(wiki))
 
 
 def test_index_count_is_checked(wiki):
