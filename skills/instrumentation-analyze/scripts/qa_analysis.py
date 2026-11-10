@@ -25,6 +25,20 @@ def tree_digest(root: Path) -> str:
     return digest.hexdigest()
 
 
+def write_work_order_stubs(repo_root: Path, contract: dict) -> None:
+    app = contract["application"]
+    root = (
+        repo_root / "wiki" / "apps" / app["id"] / "versions" /
+        app["version"] / "implementation" / "work-orders"
+    )
+    root.mkdir(parents=True, exist_ok=True)
+    for order in contract["workOrders"]:
+        (root / f"{order['id']}.md").write_text(
+            f"# {order['id']} — {order['title']}\n\n{order['outcome']}\n",
+            encoding="utf-8",
+        )
+
+
 def main() -> int:
     contract_path = FIXTURE / "analysis-contract.json"
     contract = load_json(contract_path)
@@ -45,11 +59,21 @@ def main() -> int:
         )
     with tempfile.TemporaryDirectory(prefix="obengineer-analysis-qa-") as temp:
         root = Path(temp)
-        first = root / "first" / "V1"
-        second = root / "second" / "V1"
+        first_repo = root / "first"
+        second_repo = root / "second"
+        first = (
+            first_repo / "docs" / "observability" / "analysis" /
+            contract["application"]["id"] / contract["application"]["version"]
+        )
+        second = (
+            second_repo / "docs" / "observability" / "analysis" /
+            contract["application"]["id"] / contract["application"]["version"]
+        )
         render_started = time.perf_counter()
         Renderer(contract, first).render()
         Renderer(contract, second).render()
+        write_work_order_stubs(first_repo, contract)
+        write_work_order_stubs(second_repo, contract)
         render_seconds = time.perf_counter() - render_started
         if render_seconds > budgets["renderSeconds"]:
             failures.append(
@@ -58,7 +82,7 @@ def main() -> int:
             )
         if tree_digest(first) != tree_digest(second):
             failures.append("deterministic rendering failed: repeated output differs")
-        failures.extend(check(first, root / "first", contract_path))
+        failures.extend(check(first, first_repo, contract_path))
         files = [path for path in first.rglob("*") if path.is_file()]
         total_bytes = sum(path.stat().st_size for path in files)
         if len(files) > budgets["maxOutputFiles"]:

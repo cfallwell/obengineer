@@ -12,8 +12,8 @@ When invoked:
 4. Run `/ob-start`, input selection, analysis, generated navigation, and work-order flow.
 5. Measure time to first question, per-turn latency, subagent fan-out, scan duration, and
    total completion.
-6. Compare generated analysis depth against the attached architect contract and Nu Skin
-   guide, especially observed storefront/backend architecture and full instrumentation
+6. Compare generated analysis depth against the attached architect contract and approved
+   prior guide, especially observed storefront/backend architecture and full instrumentation
    strategy.
 7. Test links and breadcrumbs without a browser or localhost server.
 

@@ -93,7 +93,7 @@ The coverage matrix also has one row for every API category:
 
 ## Coverage matrix
 
-Section 4 begins with:
+The Findings index begins with:
 
 ```markdown
 | Standard/category | Surfaces checked | Evidence | Result | Finding |
@@ -115,15 +115,16 @@ remediation order. Keep all three separate.
 
 - Every `confirmed` or `high confidence` vulnerability is a Critical Finding,
   regardless of whether it is primarily security, privacy, availability, or integrity.
-- Every such finding appears in `### P0 recommended fixes` at the start of section 5.
+- Every such finding appears in the strategy's P0 remediation summary and links its
+  work order.
 - A medium- or low-confidence hypothesis goes to open items unless independent evidence
   makes it actionable; do not present it as an exploited vulnerability.
 - `P0` is remediation priority and is distinct from observability **Phase 0**, which
   establishes signal trust.
 
-Each P0 row contains finding ID, immediate containment, structural repair, owner,
-deadline/trigger, and runnable verification. Section 5 references section 4 by ID and
-does not duplicate the evidence.
+Each P0 row contains finding ID, immediate containment, structural repair,
+deadline/trigger, and runnable verification. The strategy references the finding detail
+by ID and does not duplicate the evidence.
 
 ## Non-remediation boundary
 

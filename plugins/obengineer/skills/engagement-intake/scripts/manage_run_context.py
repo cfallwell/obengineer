@@ -19,9 +19,17 @@ except ImportError:  # pragma: no cover
 
 CONTEXT_RELATIVE_PATH = Path(".obengineer/run-context.json")
 INPUTS_RELATIVE_PATH = Path("docs/observability/engagement-inputs.yaml")
+DEFAULT_TEMPLATE = (
+    Path(__file__).resolve().parents[3]
+    / "inputs"
+    / "engagement-inputs.template.yaml"
+)
 STATES = {"new", "required", "optional-review", "optional-answers"}
 STATUSES = {"pending", "complete", "skipped"}
-EVENTS = {"initialize", "start", "required", "review-yes", "answer", "review-no"}
+EVENTS = {
+    "initialize", "start", "required", "review-yes", "answer", "review-no",
+    "reopen",
+}
 MARKERS = {"pending": "[ ]", "complete": "[x]", "skipped": "[-]"}
 REQUIRED_LABELS = {
     "application": "Application",
@@ -39,6 +47,42 @@ OPTIONAL_LABELS = {
     8: "Bounded public-record research",
     9: "Chart and detector percentile",
     10: "Journey to rank first",
+}
+OPTIONAL_INPUT_PATHS = {
+    1: (
+        "artifacts.diagrams",
+        "artifacts.narrative",
+        "artifacts.prior_contract",
+        "artifacts.prior_schema",
+        "artifacts.prior_scans",
+    ),
+    2: (
+        "security_assessment.mode",
+        "security_assessment.authorized_origins",
+        "security_assessment.excluded_paths",
+        "security_assessment.notes",
+    ),
+    3: ("analysis_access.login_id", "analysis_access.password_ref"),
+    4: ("tenancy.o11y_realm", "tenancy.environments"),
+    5: ("entitlement", "traffic_baseline"),
+    6: (
+        "constraints.privacy_regimes",
+        "constraints.data_residency",
+        "constraints.consent_platform",
+        "constraints.change_windows",
+    ),
+    7: (
+        "business_context.incident_experience",
+        "business_context.operating_cost",
+        "business_context.revenue_context",
+    ),
+    8: (
+        "public_evidence.allowed",
+        "public_evidence.brand_terms",
+        "public_evidence.status_page_urls",
+    ),
+    9: ("standards.percentile",),
+    10: ("outcomes.first_journey",),
 }
 FIRST_QUESTION = """Before I inspect source, the network, or connected tools, please provide or confirm:
 1. What is the application name?
@@ -182,13 +226,103 @@ def required_statuses(inputs_path: Path) -> dict[str, str]:
     }
 
 
-def start(context: dict) -> dict:
+def _get_path(data: dict, dotted: str) -> object:
+    current: object = data
+    for part in dotted.split("."):
+        if not isinstance(current, dict):
+            return None
+        current = current.get(part)
+    return current
+
+
+def optional_statuses(inputs_path: Path) -> dict[str, str]:
+    try:
+        current = yaml.safe_load(inputs_path.read_text())
+        baseline = yaml.safe_load(DEFAULT_TEMPLATE.read_text())
+    except (OSError, yaml.YAMLError) as exc:
+        raise StateError(f"cannot load optional input state: {exc}") from exc
+    if not isinstance(current, dict) or not isinstance(baseline, dict):
+        raise StateError("engagement inputs and template must be objects")
+    statuses: dict[str, str] = {}
+    for item, paths in OPTIONAL_INPUT_PATHS.items():
+        changed = any(
+            _get_path(current, path) != _get_path(baseline, path)
+            and _is_set(_get_path(current, path))
+            for path in paths
+        )
+        statuses[str(item)] = "complete" if changed else "pending"
+    return statuses
+
+
+def start(context: dict, inputs_path: Path | None = None) -> dict:
     if context["analysis_authorized"]:
         raise StateError("analysis is already authorized for this intake")
-    if context["state"] == "new":
+    if inputs_path is not None and inputs_path.is_file():
+        context["required"] = required_statuses(inputs_path)
+        discovered = optional_statuses(inputs_path)
+        for item, status in discovered.items():
+            if context["optional"]["items"][item] == "pending" and status == "complete":
+                context["optional"]["items"][item] = "complete"
+    if all(status == "complete" for status in context["required"].values()):
+        context["state"] = "optional-review"
+    elif context["state"] in {"new", "optional-review"}:
         context["state"] = "required"
     context["turn"] += 1
     context["last_event"] = "start"
+    return context
+
+
+def render_required_prompt(context: dict) -> str:
+    pending = [
+        (key, label)
+        for key, label in REQUIRED_LABELS.items()
+        if context["required"][key] != "complete"
+    ]
+    if not pending:
+        return (
+            "Required start inputs are already complete from the project context. "
+            "Continue to the optional-input review; do not ask for them again."
+        )
+    lines = [
+        "Before I inspect source, the network, or connected tools, please provide or confirm:"
+    ]
+    for index, (_, label) in enumerate(pending, 1):
+        if label == "Application":
+            question = "What is the application name?"
+        elif label == "Explicit production URL or no-browser reason":
+            question = (
+                "What is the explicit production URL? If no browser applies, "
+                "answer `no browser: <reason>`."
+            )
+        else:
+            question = "In your own words, what hurts today?"
+        lines.append(f"{index}. {question}")
+    return "\n".join(lines)
+
+
+def reopen(context: dict, inputs_path: Path | None = None) -> dict:
+    if context["state"] == "optional-answers" and context["optional"]["pending"]:
+        raise StateError("finish the pending optional answers before reopening intake")
+    context["analysis_authorized"] = False
+    context["optional"]["offered"] = []
+    context["optional"]["selected"] = []
+    context["optional"]["pending"] = []
+    for item, status in list(context["optional"]["items"].items()):
+        if status == "skipped":
+            context["optional"]["items"][item] = "pending"
+    if inputs_path is not None and inputs_path.is_file():
+        context["required"] = required_statuses(inputs_path)
+        discovered = optional_statuses(inputs_path)
+        for item, status in discovered.items():
+            if status == "complete":
+                context["optional"]["items"][item] = "complete"
+    context["state"] = (
+        "optional-review"
+        if all(status == "complete" for status in context["required"].values())
+        else "required"
+    )
+    context["turn"] += 1
+    context["last_event"] = "reopen"
     return context
 
 
@@ -310,7 +444,7 @@ def read_payload(path: str | None) -> dict:
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
-        "event", choices=("start", "required", "review", "answer", "show")
+        "event", choices=("start", "required", "review", "answer", "reopen", "show")
     )
     parser.add_argument("--project-root", type=Path, default=Path.cwd())
     parser.add_argument("--payload", metavar="PATH", help="JSON payload; use - for stdin")
@@ -322,7 +456,7 @@ def main(argv=None) -> int:
         context = load_context(context_path)
         payload = read_payload(args.payload)
         if args.event == "start":
-            context = start(context)
+            context = start(context, inputs_path)
         elif args.event == "required":
             context = complete_required(context, inputs_path)
         elif args.event == "review":
@@ -337,13 +471,15 @@ def main(argv=None) -> int:
                 payload.get("item"),
                 payload.get("status", ""),
             )
+        elif args.event == "reopen":
+            context = reopen(context, inputs_path)
         if args.event != "show":
             atomic_write_context(context_path, context)
     except StateError as exc:
         print(f"FAIL — {exc}")
         return 1
     if args.event == "start":
-        print(FIRST_QUESTION)
+        print(render_required_prompt(context))
     print(render_checklist(context))
     return 0
 

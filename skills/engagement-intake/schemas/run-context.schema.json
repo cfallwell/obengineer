@@ -60,7 +60,7 @@
       }
     },
     "last_event": {
-      "enum": ["initialize", "start", "required", "review-yes", "answer", "review-no"]
+      "enum": ["initialize", "start", "required", "review-yes", "answer", "review-no", "reopen"]
     }
   }
 }

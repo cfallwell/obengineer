@@ -271,14 +271,18 @@ class Renderer:
                     ),
                 )
             )
-        sections.extend(("", "## Third parties by consequence", ""))
         if a["thirdParties"]:
-            sections.append(
-                table(
-                    ("Third party", "Category", "Contract consequence", "Required controls"),
-                    (
-                        (x["name"], x["category"], x["consequence"], "; ".join(x["controls"]))
-                        for x in a["thirdParties"]
+            sections.extend(
+                (
+                    "",
+                    "## Third parties by consequence",
+                    "",
+                    table(
+                        ("Third party", "Category", "Contract consequence", "Required controls"),
+                        (
+                            (x["name"], x["category"], x["consequence"], "; ".join(x["controls"]))
+                            for x in a["thirdParties"]
+                        ),
                     ),
                 )
             )
@@ -454,6 +458,11 @@ class Renderer:
         self.write("implementation/index.md", text)
 
     def render_work_orders(self) -> None:
+        app = self.c["application"]
+        wiki_root = (
+            f"../../../../../../wiki/apps/{app['id']}/versions/"
+            f"{app['version']}/implementation/work-orders"
+        )
         rows = (
             (
                 w["id"],
@@ -461,7 +470,7 @@ class Renderer:
                 ", ".join(w["dependsOn"]) or "None",
                 w["status"],
                 ", ".join(w["unlocks"]) or "None",
-                f"[Detail]({w['id'].lower()}.md)",
+                f"[Open canonical work order]({wiki_root}/{w['id']}.md)",
             )
             for w in self.c["workOrders"]
         )
@@ -475,34 +484,6 @@ class Renderer:
             )
         )
         self.write("work-orders/index.md", index)
-        for item in self.c["workOrders"]:
-            legs = (
-                (
-                    leg["repository"],
-                    "; ".join(leg["paths"]),
-                    "; ".join(leg["changes"]),
-                    "; ".join(leg["tests"]),
-                )
-                for leg in item["repositoryLegs"]
-            )
-            text = (
-                f"{breadcrumb('Work orders', item['id'])}\n\n# {item['id']} — {item['title']}\n\n"
-                f"**Status:** {item['status']} · **Depends on:** {', '.join(item['dependsOn']) or 'None'} · "
-                f"**Unlocks:** {', '.join(item['unlocks']) or 'None'}\n\n"
-                "## Outcome\n\n"
-                f"{item['outcome']}\n\n"
-                "## Repository legs\n\n"
-                + table(("Repository", "Authorized paths", "Changes", "Tests"), legs)
-                + "\n\n## Acceptance criteria\n\n"
-                + bullets(item["acceptanceCriteria"])
-                + "\n\n## Verification\n\n"
-                + bullets(item["verification"])
-                + finish(
-                    (("Work-order queue", "index.md"), ("Verification", "../operations/verification.md")),
-                    ("Return to Work orders", "index.md"),
-                )
-            )
-            self.write(f"work-orders/{item['id'].lower()}.md", text)
 
     def render_use_cases(self) -> None:
         workflow_labels = {x["id"]: x["name"] for x in self.c["workflows"]}
@@ -785,6 +766,17 @@ class Renderer:
 
     def render_operations(self) -> None:
         o = self.c["operations"]
+        conditional_lines = []
+        if o["synthetics"]["applicable"]:
+            conditional_lines.append(
+                f"- **Synthetics:** {o['synthetics']['design']} "
+                f"Evidence: {o['synthetics']['evidence']}"
+            )
+        if o["thousandEyes"]["applicable"]:
+            conditional_lines.append(
+                f"- **ThousandEyes:** {o['thousandEyes']['design']} "
+                f"Evidence: {o['thousandEyes']['evidence']}"
+            )
         index = (
             f"{breadcrumb(current='Operations and verification')}\n\n# Operations and verification\n\n"
             f"{self.c['summaries']['operations']}\n\n"
@@ -798,11 +790,16 @@ class Renderer:
                     ("Verification criteria", len(o["verificationCriteria"]), "[Open](verification.md)"),
                 ),
             )
-            + "\n\n## Release, logs, Synthetics, and ThousandEyes\n\n"
+            + "\n\n## Release and log correlation\n\n"
             + f"- **Release correlation:** {o['releaseCorrelation']}\n"
             + f"- **Log correlation:** {o['logCorrelation']}\n"
-            + f"- **Synthetics:** {o['synthetics']['design']} Evidence: {o['synthetics']['evidence']}\n"
-            + f"- **ThousandEyes:** {o['thousandEyes']['design']} Evidence: {o['thousandEyes']['evidence']}\n"
+            + (
+                "\n## Conditional path and canary coverage\n\n"
+                + "\n".join(conditional_lines)
+                + "\n"
+                if conditional_lines
+                else ""
+            )
             + finish(
                 (("Contracts", "../contracts/index.md"), ("Reference", "../reference/index.md")),
                 ("Continue to Reference", "../reference/index.md"),
@@ -836,6 +833,8 @@ class Renderer:
                 + bullets(item["variables"])
                 + "\n\n## Panels\n\n"
                 + bullets(item["panels"])
+                + "\n\n## SignalFlow\n\n"
+                + code(item["signalFlow"], "python")
                 + f"\n\n**Release overlay required:** {item['releaseOverlay']}.\n"
                 + finish((("Dashboard catalogue", "index.md"), ("Detectors", "../detectors/index.md")), ("Return to Dashboards", "index.md")),
             )

@@ -27,7 +27,7 @@ three copies.
 - Number the currently applicable choices. The reply grammar is `yes` followed by
   space-separated numbers, for example `yes 1 3 4 6 7`, or `no`.
 - After `yes`, prompt once for each selected item in ascending order. A blank skips it.
-- On every start-mode turn, update `.obengineer/run-context.json` with
+- On every start, add, and edit turn, update `.obengineer/run-context.json` with
   `manage_run_context.py`. Show its checklist markers: `[x]` answered, `[ ]` pending,
   and `[-]` skipped or explicitly declined. The file is local, ignored, and written
   atomically.
@@ -89,12 +89,19 @@ analysis only when the script reports `Analysis authorized: yes (explicit no rec
 
 ## Add mode
 
+Run `manage_run_context.py reopen --project-root .` before offering inputs. This resets
+prior analysis authorization, retains completed items, and makes previously skipped items
+available again.
+
 Use the same question and reply grammar, but list only useful items that remain absent.
 Do not renumber against an old run; number the current list from one.
 After selected answers, show the checked list and ask again. Only an exact `no`
 authorizes the next analysis version; `yes` never does.
 
 ## Edit mode
+
+Run `manage_run_context.py reopen --project-root .` before listing values. This resets
+prior analysis authorization without discarding completed inputs.
 
 List set, human-editable values with redacted current values. Ask:
 
@@ -103,6 +110,9 @@ List set, human-editable values with redacted current values. Ask:
 For every selected item, show the current value and request a replacement. `clear`
 removes it. Do not offer measured facts as editable human inputs; a later measurement
 supersedes them through evidence precedence.
+Write the explicit replacement with
+`prefill_engagement_inputs.py --json - --overwrite-existing`. Do not use that flag in
+start or add mode.
 
 ## Completion
 

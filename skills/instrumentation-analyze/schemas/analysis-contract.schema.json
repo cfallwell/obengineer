@@ -403,12 +403,13 @@
     "dashboard": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["id", "title", "variables", "panels", "releaseOverlay"],
+      "required": ["id", "title", "variables", "panels", "signalFlow", "releaseOverlay"],
       "properties": {
         "id": { "$ref": "#/$defs/slug" },
         "title": { "type": "string", "minLength": 5 },
         "variables": { "$ref": "#/$defs/stringList" },
         "panels": { "$ref": "#/$defs/stringList" },
+        "signalFlow": { "$ref": "#/$defs/substantive" },
         "releaseOverlay": { "type": "boolean" }
       }
     },

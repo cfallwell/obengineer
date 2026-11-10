@@ -42,7 +42,6 @@ COMMANDS = ROOT / "commands"
 MANIFEST_NAME = ".obengineer-install.json"
 SCAFFOLD_MANIFEST = Path(".obengineer/scaffold-manifest.json")
 SCAFFOLD_FILES = (
-    (Path("templates/memory-repo/.gitignore"), Path(".gitignore")),
     (Path("templates/memory-repo/.env.template"), Path(".env.template")),
     (
         Path("templates/memory-repo/artifacts/README.md"),
@@ -244,12 +243,45 @@ def read_scaffold_manifest(path: Path) -> dict:
     return manifest
 
 
+def install_project_gitignore(
+    scope_root: Path,
+    dry_run: bool,
+    created: dict,
+) -> list[str]:
+    source = ROOT / "templates/memory-repo/.gitignore"
+    destination = scope_root / ".gitignore"
+    required = [
+        line
+        for line in source.read_text().splitlines()
+        if line and not line.startswith("#")
+    ]
+    if not destination.exists():
+        action = f"create missing {destination}"
+        if not dry_run:
+            atomic_write(destination, source.read_text())
+            created[".gitignore"] = {"sha256": file_digest(destination)}
+        return [action]
+    existing_text = destination.read_text()
+    existing = set(existing_text.splitlines())
+    missing = [line for line in required if line not in existing]
+    if not missing:
+        return [f"preserve existing {destination}; required ignores already present"]
+    action = f"append missing safe ignores to {destination}: {', '.join(missing)}"
+    if not dry_run:
+        separator = "" if not existing_text or existing_text.endswith("\n") else "\n"
+        atomic_write(
+            destination,
+            existing_text + separator + "\n".join(missing) + "\n",
+        )
+    return [action]
+
+
 def install_project_scaffold(scope_root: Path, dry_run: bool) -> list[str]:
     """Create only missing project-root files and record only files we created."""
     manifest_path = scope_root / SCAFFOLD_MANIFEST
     manifest = read_scaffold_manifest(manifest_path)
     created = dict(manifest.get("created", {}))
-    actions: list[str] = []
+    actions = install_project_gitignore(scope_root, dry_run, created)
 
     for source_rel, destination_rel in SCAFFOLD_FILES:
         source = ROOT / source_rel

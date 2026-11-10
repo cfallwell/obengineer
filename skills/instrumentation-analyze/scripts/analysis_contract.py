@@ -175,6 +175,7 @@ def validate_manifest(manifest: Any) -> list[str]:
             "executionAuthority",
             "repositoryCapability",
             "hostConcurrency",
+            "performanceBudgets",
             "jobs",
         ),
         "manifest",
@@ -193,6 +194,44 @@ def validate_manifest(manifest: Any) -> list[str]:
             failures.append("manifest.hostConcurrency.coordinatorSlots: exactly one slot is required")
         if not isinstance(concurrency.get("maxConcurrentAgents"), int) or concurrency["maxConcurrentAgents"] < 2:
             failures.append("manifest.hostConcurrency.maxConcurrentAgents: expected integer >= 2")
+    budgets = manifest.get("performanceBudgets")
+    budget_fields = (
+        "totalSeconds",
+        "collectionSeconds",
+        "reconciliationSeconds",
+        "renderSeconds",
+        "validationSeconds",
+        "progressIntervalSeconds",
+    )
+    if _require(budgets, budget_fields, "manifest.performanceBudgets", failures):
+        limits = {
+            "totalSeconds": 1200,
+            "collectionSeconds": 600,
+            "reconciliationSeconds": 240,
+            "renderSeconds": 180,
+            "validationSeconds": 120,
+            "progressIntervalSeconds": 60,
+        }
+        for field, limit in limits.items():
+            value = budgets.get(field)
+            if not isinstance(value, int) or value < 1 or value > limit:
+                failures.append(
+                    f"manifest.performanceBudgets.{field}: expected integer from 1 to {limit}"
+                )
+        phase_total = sum(
+            budgets.get(field, 0)
+            for field in (
+                "collectionSeconds",
+                "reconciliationSeconds",
+                "renderSeconds",
+                "validationSeconds",
+            )
+            if isinstance(budgets.get(field), int)
+        )
+        if isinstance(budgets.get("totalSeconds"), int) and phase_total > budgets["totalSeconds"]:
+            failures.append(
+                "manifest.performanceBudgets: phase budgets exceed totalSeconds"
+            )
     jobs = _list(manifest.get("jobs"), "manifest.jobs", failures, 6)
     if len(jobs) > 6:
         failures.append("manifest.jobs: at most 6 jobs are allowed")
@@ -205,13 +244,19 @@ def validate_manifest(manifest: Any) -> list[str]:
         path = f"manifest.jobs[{index}]"
         if not _require(
             job,
-            ("id", "title", "runnable", "evidenceScopes", "requiredOutputs"),
+            (
+                "id", "title", "runnable", "deadlineSeconds",
+                "evidenceScopes", "requiredOutputs",
+            ),
             path,
             failures,
         ):
             continue
         _list(job.get("evidenceScopes"), f"{path}.evidenceScopes", failures)
         _list(job.get("requiredOutputs"), f"{path}.requiredOutputs", failures)
+        deadline = job.get("deadlineSeconds")
+        if not isinstance(deadline, int) or not 1 <= deadline <= 600:
+            failures.append(f"{path}.deadlineSeconds: expected integer from 1 to 600")
         if job.get("runnable") is False and not job.get("skipReason"):
             failures.append(f"{path}.skipReason: required for a non-runnable job")
     runnable_count = sum(job.get("runnable") is True for job in jobs if isinstance(job, dict))
@@ -319,6 +364,17 @@ def validate_worker_results(manifest: Any, results: list[Any]) -> list[str]:
         )
     if len(expected) >= 2 and maximum < 2:
         failures.append("results: two or more runnable jobs require overlapping execution intervals")
+    if intervals:
+        collection_seconds = (
+            max(completed for _, completed, _ in intervals)
+            - min(started for started, _, _ in intervals)
+        ).total_seconds()
+        budget = manifest["performanceBudgets"]["collectionSeconds"]
+        if collection_seconds > budget:
+            failures.append(
+                "results: collection wall time "
+                f"{collection_seconds:.0f}s exceeds budget {budget}s"
+            )
     _scan_placeholders(results, "results", failures)
     return sorted(set(failures))
 
@@ -591,12 +647,30 @@ def validate_contract(contract: Any) -> list[str]:
         objective_ids = _unique_ids(objectives, "contract.operations.objectives", failures)
         _unique_ids(criteria, "contract.operations.verificationCriteria", failures)
         for index, dashboard in enumerate(dashboards):
-            _require(
+            if _require(
                 dashboard,
-                ("id", "title", "variables", "panels", "releaseOverlay"),
+                (
+                    "id", "title", "variables", "panels",
+                    "signalFlow", "releaseOverlay",
+                ),
                 f"contract.operations.dashboards[{index}]",
                 failures,
-            )
+            ):
+                _list(
+                    dashboard.get("variables"),
+                    f"contract.operations.dashboards[{index}].variables",
+                    failures,
+                )
+                _list(
+                    dashboard.get("panels"),
+                    f"contract.operations.dashboards[{index}].panels",
+                    failures,
+                )
+                _substantive(
+                    dashboard.get("signalFlow"),
+                    f"contract.operations.dashboards[{index}].signalFlow",
+                    failures,
+                )
         for index, detector in enumerate(detectors):
             _require(
                 detector,
@@ -618,6 +692,29 @@ def validate_contract(contract: Any) -> list[str]:
                 f"contract.operations.verificationCriteria[{index}]",
                 failures,
             )
+        _substantive(
+            operations.get("releaseCorrelation"),
+            "contract.operations.releaseCorrelation",
+            failures,
+        )
+        _substantive(
+            operations.get("logCorrelation"),
+            "contract.operations.logCorrelation",
+            failures,
+        )
+        for key in ("synthetics", "thousandEyes"):
+            conditional = operations.get(key)
+            path = f"contract.operations.{key}"
+            if _require(
+                conditional,
+                ("applicable", "evidence", "design"),
+                path,
+                failures,
+            ):
+                if not isinstance(conditional.get("applicable"), bool):
+                    failures.append(f"{path}.applicable: expected boolean")
+                _substantive(conditional.get("evidence"), f"{path}.evidence", failures, 20)
+                _substantive(conditional.get("design"), f"{path}.design", failures, 20)
         budgets = operations.get("performanceBudgets")
         _require(
             budgets,
@@ -725,7 +822,19 @@ def validate_contract(contract: Any) -> list[str]:
     ):
         _substantive(contracts.get("singleInit"), "contract.contracts.singleInit", failures)
         spa = contracts.get("spaRoutes")
-        _require(spa, ("owner", "classifier", "navigationSpan", "code"), "contract.contracts.spaRoutes", failures)
+        if _require(
+            spa,
+            ("owner", "classifier", "navigationSpan", "code"),
+            "contract.contracts.spaRoutes",
+            failures,
+        ):
+            spa_code = spa.get("code", "")
+            _substantive(spa_code, "contract.contracts.spaRoutes.code", failures)
+            for required in ("setGlobalAttributes", "route.change"):
+                if required not in spa_code:
+                    failures.append(
+                        "contract.contracts.spaRoutes.code: missing " + required
+                    )
         cross = contracts.get("crossCutting")
         if _require(
             cross,
@@ -736,6 +845,26 @@ def validate_contract(contract: Any) -> list[str]:
             _list(cross.get("attributes"), "contract.contracts.crossCutting.attributes", failures, 3)
             for key in ("providerBootstrap", "spanProcessor", "identityWrite", "backendPropagator", "messagePropagation"):
                 _substantive(cross.get(key), f"contract.contracts.crossCutting.{key}", failures)
+            if "onStart" not in str(cross.get("spanProcessor", "")):
+                failures.append(
+                    "contract.contracts.crossCutting.spanProcessor: missing onStart"
+                )
+            message_code = str(cross.get("messagePropagation", ""))
+            for required in ("inject", "extract"):
+                if required not in message_code:
+                    failures.append(
+                        "contract.contracts.crossCutting.messagePropagation: "
+                        f"missing {required}"
+                    )
+            if any(
+                join.get("type") == "span-link"
+                for join in contracts.get("joins", [])
+                if isinstance(join, dict)
+            ) and "links" not in message_code:
+                failures.append(
+                    "contract.contracts.crossCutting.messagePropagation: "
+                    "span-link joins require executable links code"
+                )
             for index, attribute in enumerate(cross.get("attributes", [])):
                 _require(
                     attribute,
@@ -747,12 +876,25 @@ def validate_contract(contract: Any) -> list[str]:
                     failures,
                 )
         attribution = contracts.get("attribution")
-        _require(
+        if _require(
             attribution,
             ("trigger", "event", "firstTouch", "lastTouch", "baggageKeys", "code"),
             "contract.contracts.attribution",
             failures,
-        )
+        ):
+            for key in ("trigger", "firstTouch", "lastTouch", "code"):
+                _substantive(
+                    attribution.get(key),
+                    f"contract.contracts.attribution.{key}",
+                    failures,
+                    20,
+                )
+            attribution_code = str(attribution.get("code", ""))
+            for required in ("localStorage", "sessionStorage"):
+                if required not in attribution_code:
+                    failures.append(
+                        "contract.contracts.attribution.code: missing " + required
+                    )
         for index, join in enumerate(contracts.get("joins", [])):
             _require(
                 join,
@@ -762,6 +904,12 @@ def validate_contract(contract: Any) -> list[str]:
             )
         collector = contracts.get("collector")
         if _require(collector, ("placement", "processorOrder", "ottl", "redactions"), "contract.contracts.collector", failures):
+            _substantive(
+                collector.get("ottl"),
+                "contract.contracts.collector.ottl",
+                failures,
+                20,
+            )
             order = collector.get("processorOrder", [])
             lower = [str(item).lower() for item in order]
             transform_positions = [i for i, item in enumerate(lower) if "transform" in item]

@@ -22,6 +22,15 @@ def site(tmp_path: Path) -> tuple[Path, Path]:
     contract["application"]["id"] = "app"
     contract["application"]["name"] = "Representative App"
     renderer.Renderer(contract, version).render()
+    work_orders = (
+        tmp_path / "wiki" / "apps" / "app" / "versions" / "V1" /
+        "implementation" / "work-orders"
+    )
+    work_orders.mkdir(parents=True)
+    for order in contract["workOrders"]:
+        (work_orders / f"{order['id']}.md").write_text(
+            f"# {order['id']}\n\n{order['outcome']}\n"
+        )
     return version, tmp_path
 
 

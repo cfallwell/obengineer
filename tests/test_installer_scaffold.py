@@ -47,7 +47,10 @@ def test_project_install_and_reinstall_never_overwrite_existing_content(tmp_path
     (tmp_path / "artifacts").mkdir()
     (tmp_path / "artifacts/README.md").write_text("customer artifact instructions\n")
     run_install(tmp_path, "--cursor")
-    assert (tmp_path / ".gitignore").read_text() == "custom-ignore\n"
+    gitignore = (tmp_path / ".gitignore").read_text()
+    assert gitignore.startswith("custom-ignore\n")
+    assert "\n.env\n" in gitignore
+    assert ".obengineer/" in gitignore
     assert (
         tmp_path / "artifacts/README.md"
     ).read_text() == "customer artifact instructions\n"

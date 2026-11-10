@@ -42,6 +42,24 @@ schema reconciliation, and the dependency graph remain serialized after evidence
 
 Naming and schema reconciliation remain serial.
 
+## Performance budget and degradation
+
+For a standard run:
+
+- first required question: 5 seconds, before network or source discovery;
+- manifest and worker scheduling after explicit authorization: 20 seconds;
+- evidence collection: 10 minutes;
+- reconciliation and schema freeze: 4 minutes;
+- deterministic rendering: 3 minutes;
+- validation and one repair cycle: 2 minutes; and
+- total analysis: 20 minutes, excluding human review, forge operations, and CI.
+
+Emit a progress update at least every 60 seconds while workers are active. A timed-out
+worker returns a limited result with exact missing evidence; do not rerun it serially.
+Authentication denial is recorded once and not retried indefinitely. If the total budget
+expires or semantic QA still fails after one repair cycle, keep the PR draft and label the
+result a degraded draft. Never run past 30 minutes and call a shallow result complete.
+
 ## Phase commits
 
 Commit completed phases on the same branch:

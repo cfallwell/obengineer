@@ -189,7 +189,8 @@ def apply_prefill(
     values: dict[str, str],
     schema: dict,
     *,
-    fresh_from_template: bool = False,
+    baseline: dict,
+    force_names: set[str] | None = None,
 ) -> list[str]:
     production_url = values.get("PRODUCTION_URL", "").strip()
     no_browser = values.get("NO_BROWSER_REASON", "").strip()
@@ -199,15 +200,24 @@ def apply_prefill(
         )
 
     changed: list[str] = []
+    force_names = force_names or set()
     for name, rule in schema["properties"].items():
         raw = values.get(name, "").strip()
         if not raw:
             continue
         target = rule["x-target"]
-        if not fresh_from_template and not is_missing(get_path(data, target)):
+        current = get_path(data, target)
+        default = get_path(baseline, target)
+        if (
+            name not in force_names
+            and not is_missing(current)
+            and current != default
+        ):
             continue
-        set_path(data, target, convert_value(name, raw, rule))
-        changed.append(target)
+        converted = convert_value(name, raw, rule)
+        if current != converted:
+            set_path(data, target, converted)
+            changed.append(target)
     validate_access(data)
     return changed
 
@@ -235,19 +245,25 @@ def prefill(
     output: Path,
     template: Path = DEFAULT_TEMPLATE,
     supplied: dict[str, object] | None = None,
+    *,
+    overwrite_existing: bool = False,
 ) -> list[str]:
     schema = load_schema()
     values = collect_values(project_root, schema, supplied)
-    fresh_from_template = not output.is_file()
-    source = output if not fresh_from_template else template
+    source = output if output.is_file() else template
     try:
         data = yaml.safe_load(source.read_text())
+        baseline = yaml.safe_load(template.read_text())
     except (OSError, yaml.YAMLError) as exc:
         raise PrefillError(f"cannot load engagement inputs: {exc}") from exc
-    if not isinstance(data, dict):
-        raise PrefillError("engagement inputs top level must be an object")
+    if not isinstance(data, dict) or not isinstance(baseline, dict):
+        raise PrefillError("engagement inputs and template top levels must be objects")
     changed = apply_prefill(
-        data, values, schema, fresh_from_template=fresh_from_template
+        data,
+        values,
+        schema,
+        baseline=baseline,
+        force_names=set(supplied or {}) if overwrite_existing else set(),
     )
     if changed or not output.exists():
         atomic_dump_yaml(output, data)
@@ -268,6 +284,11 @@ def main(argv=None) -> int:
         metavar="PATH",
         help="additional allowlisted values as a JSON object; use - for stdin",
     )
+    parser.add_argument(
+        "--overwrite-existing",
+        action="store_true",
+        help="replace supplied human-editable values; use only for /ob-edit-inputs",
+    )
     args = parser.parse_args(argv)
     project_root = args.project_root.resolve()
     output = (
@@ -287,7 +308,13 @@ def main(argv=None) -> int:
             print("FAIL — prefill JSON must be an object")
             return 1
     try:
-        changed = prefill(project_root, output, args.template, supplied)
+        changed = prefill(
+            project_root,
+            output,
+            args.template,
+            supplied,
+            overwrite_existing=args.overwrite_existing,
+        )
     except PrefillError as exc:
         print(f"FAIL — {exc}")
         return 1

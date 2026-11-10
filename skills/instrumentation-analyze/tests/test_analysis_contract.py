@@ -58,6 +58,17 @@ def test_manifest_reserves_coordinator_and_never_claims_repository_launch():
     assert any("exactly one slot" in failure for failure in failures)
 
 
+def test_manifest_enforces_analysis_time_budgets():
+    value = manifest()
+    value["performanceBudgets"]["totalSeconds"] = 1201
+    value["performanceBudgets"]["progressIntervalSeconds"] = 61
+    value["jobs"][0]["deadlineSeconds"] = 601
+    failures = validate_manifest(value)
+    assert any("totalSeconds" in failure for failure in failures)
+    assert any("progressIntervalSeconds" in failure for failure in failures)
+    assert any("deadlineSeconds" in failure for failure in failures)
+
+
 def test_two_or_more_runnable_jobs_must_overlap():
     value = results()
     for index, result in enumerate(value):
@@ -66,6 +77,15 @@ def test_two_or_more_runnable_jobs_must_overlap():
         result["completedAt"] = f"2026-11-10T20:{minute + 5:02d}:00Z"
     assert any(
         "overlapping execution intervals" in failure
+        for failure in validate_worker_results(manifest(), value)
+    )
+
+
+def test_collection_wall_time_must_fit_manifest_budget():
+    value = results()
+    value[-1]["completedAt"] = "2026-11-10T20:11:00Z"
+    assert any(
+        "collection wall time" in failure
         for failure in validate_worker_results(manifest(), value)
     )
 
@@ -89,6 +109,26 @@ def test_semantic_gate_rejects_missing_detector_fields_and_placeholders():
     assert any("placeholder" in failure for failure in failures)
 
 
+def test_semantic_gate_rejects_malformed_conditional_operations():
+    value = contract()
+    value["operations"]["synthetics"] = {}
+    failures = validate_contract(value)
+    assert any("operations.synthetics" in failure for failure in failures)
+
+
+def test_semantic_gate_requires_first_touch_and_span_link_code():
+    value = contract()
+    value["contracts"]["attribution"]["code"] = (
+        value["contracts"]["attribution"]["code"].replace("localStorage", "memory")
+    )
+    value["contracts"]["crossCutting"]["messagePropagation"] = (
+        value["contracts"]["crossCutting"]["messagePropagation"].replace("links", "refs")
+    )
+    failures = validate_contract(value)
+    assert any("attribution.code: missing localStorage" in failure for failure in failures)
+    assert any("span-link joins require executable links code" in failure for failure in failures)
+
+
 def test_cardinality_arithmetic_is_checked():
     value = contract()
     value["contracts"]["cardinality"]["headroomAfter"] += 1
@@ -100,8 +140,14 @@ def test_cardinality_arithmetic_is_checked():
 
 def test_render_is_deterministic_and_full_tree_is_linked(tmp_path):
     value = contract()
-    first = tmp_path / "first" / "V1"
-    second = tmp_path / "second" / "V1"
+    first = (
+        tmp_path / "first" / "docs" / "observability" / "analysis" /
+        value["application"]["id"] / value["application"]["version"]
+    )
+    second = (
+        tmp_path / "second" / "docs" / "observability" / "analysis" /
+        value["application"]["id"] / value["application"]["version"]
+    )
     Renderer(copy.deepcopy(value), first).render()
     Renderer(copy.deepcopy(value), second).render()
     assert digest_tree(first) == digest_tree(second)
@@ -121,6 +167,31 @@ def test_render_is_deterministic_and_full_tree_is_linked(tmp_path):
         "reference/index.md",
     ):
         assert (first / required).is_file()
+    assert not list((first / "work-orders").glob("WO-*.md"))
+    work_order_index = (first / "work-orders" / "index.md").read_text()
+    assert "wiki/apps/" in work_order_index
+    assert "Open canonical work order" in work_order_index
+
+
+def test_empty_optional_architecture_catalogue_does_not_render_empty_heading(tmp_path):
+    value = contract()
+    value["architecture"]["thirdParties"] = []
+    output = tmp_path / "docs" / "observability" / "analysis" / "app" / "V1"
+    Renderer(value, output).render()
+    assert "Third parties by consequence" not in (
+        output / "overview" / "index.md"
+    ).read_text()
+
+
+def test_inapplicable_path_products_are_omitted_from_operations_view(tmp_path):
+    value = contract()
+    value["operations"]["synthetics"]["applicable"] = False
+    value["operations"]["thousandEyes"]["applicable"] = False
+    output = tmp_path / "docs" / "observability" / "analysis" / "app" / "V1"
+    Renderer(value, output).render()
+    operations = (output / "operations" / "index.md").read_text()
+    assert "**Synthetics:**" not in operations
+    assert "**ThousandEyes:**" not in operations
 
 
 def test_published_json_schemas_capture_bounded_jobs_and_required_objects():
@@ -128,6 +199,9 @@ def test_published_json_schemas_capture_bounded_jobs_and_required_objects():
     contract_schema = json.loads((SKILL / "schemas" / "analysis-contract.schema.json").read_text())
     worker_schema = json.loads((SKILL / "schemas" / "analysis-worker-result.schema.json").read_text())
     assert job_schema["properties"]["jobs"]["maxItems"] == 6
+    assert job_schema["properties"]["performanceBudgets"]["properties"][
+        "totalSeconds"
+    ]["maximum"] == 1200
     assert job_schema["properties"]["hostConcurrency"]["properties"]["coordinatorSlots"]["const"] == 1
     assert set(contract_schema["required"]) >= {
         "architecture",
