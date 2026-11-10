@@ -93,7 +93,7 @@ it is a summary under 20 pages.
 
 Run `make qa-analysis`. Validate manifest intervals and coordinator capacity, canonical
 object fields, deterministic rendering, placeholders, links, breadcrumbs, schema, map,
-ledger, verification plan, wiki,
+ledger, verification plan schema version 2 with stable `source_ref` values, wiki,
 work-order dependencies, reverse links, performance budgets, and credential scanning.
 Open one analysis PR.
 

@@ -12,9 +12,12 @@ Read, in order:
 4. `skills/references/outcome-metrics.md`
 5. `skills/references/outcome-issues.md`
 
-Verify acceptance and all machine inputs before querying. Execute only list/get/search/query
-operations named by eligible criteria. Never infer that a criterion is unremediable; only a
-human-approved exclusion can remove it from machine results.
+Discover acceptance only from the versioned analysis path and reject ambiguity. Verify
+acceptance and all machine inputs before querying. New inputs use schema version 2,
+`analysis_content_commit`, and stable `source_ref` values; schema version 1 is migration
+read compatibility only. Execute only list/get/search/query operations named by eligible
+criteria. Never infer that a criterion is unremediable; only a human-approved exclusion
+can remove it from machine results.
 
 For every unmet result, notify the human with evidence, owner, exact remediation
 instructions, and recheck steps. An unmeasurable result stays visible and lowers coverage.

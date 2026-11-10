@@ -4,7 +4,8 @@ This repository holds the instrumentation architecture agentry: agent definition
 the three-run prompt workflow, canonical skills, and the plugin bundle that
 distributes them to Cursor, Codex, and Claude Code. It belongs to no engagement —
 customer deliverables live in the engagement's own repository, under
-`docs/observability/` and `wiki/apps/<app>/services/<service>/` there.
+`docs/observability/` and
+`wiki/apps/<app>/versions/V<N>/services/<service>/` there.
 
 ## Setup
 

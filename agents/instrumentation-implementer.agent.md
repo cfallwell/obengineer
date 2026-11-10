@@ -11,7 +11,7 @@ Obey, in this order:
 
 1. The accepted version selected by `wiki/apps/<app>/index.md`
 2. Its content-bound acceptance record, `implementation-map.json`, and the versioned app-level work
-   order under `wiki/apps/<app>/implementation/work-orders/`
+   order under `wiki/apps/<app>/versions/V<N>/implementation/work-orders/`
 3. `attribute-schema.json` as the **only** source of allowed attributes
 4. Golden examples in-repo, if present
 
