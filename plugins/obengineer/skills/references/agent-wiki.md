@@ -48,6 +48,11 @@ Versions are immutable snapshots. The app index marks one accepted version as ac
 Host pointers resolve the app index and then the active version. An older `[V<N>]` never
 links into a newer wiki snapshot.
 
+Version metadata exists once under `versions/V<N>/meta/`. Service trees do not duplicate
+`meta/versions.md`, `meta/run-log.md`, `meta/decisions.md`, or
+`contract/attribute-schema.json`; they link the version metadata and the canonical
+`docs/observability/attribute-schema.json`.
+
 ## Breadcrumbs and links
 
 Every versioned note opens with:
@@ -89,9 +94,15 @@ work_orders: [WO-004]
 ---
 ```
 
-Types include `index`, `finding`, `use-case`, `workflow`, `bt`, `metric`, `detector`,
-`sli`, `reference`, and `work-order`. Statuses include `proposed`, `ready`, `blocked`,
-`designed`, `implemented`, `verified`, `retained`, `changed`, `superseded`, and `retired`.
+Every note has the matching `app` and `version`; `sources` and `work_orders` are YAML
+lists, including when empty. Types include `index`, `architecture`, `catalog`,
+`contract`, `decision`, `run-log`, `finding`, `use-case`, `workflow`, `bt`, `metric`,
+`business-transaction`, `dashboard`, `operation`, `service`, `detector`, `sli`, `slo`,
+`objective`, `reference`, and `work-order`. General statuses
+include `proposed`, `ready`, `blocked`, `observed`, `designed`, `accepted`, `active`,
+`deferred`, `implemented`, `verified`, `resolved`, `not-applicable`, `retained`,
+`changed`, `superseded`, and `retired`; finding and work-order statuses use their
+applicable subsets.
 
 Do not require customer, engineer, owner, or accepter names.
 
@@ -143,6 +154,13 @@ Before acceptance, dependency-free orders are `proposed`; dependent orders are `
 Acceptance changes eligible orders to `ready`. A later version compares the prior queue
 and marks each order retained, changed, superseded, implemented, or verified.
 
+Canonical work-order frontmatter carries `work_order_id`, `selectors`, `depends_on`, and
+structured `repository_legs`; the body carries the required reverse-link sections.
+Verification rejects unsupported selectors, unknown or cyclic dependencies, repository
+IDs absent from the implementation map, absolute or traversal paths, paths outside
+`authorized_paths`, meaningless changes/tests, and a `ready` status whose acceptance or
+dependencies do not authorize execution.
+
 The first work order installs deterministic schema agreement, single-init,
 workflow-registry, baggage-allowlist, and deny-list checks.
 
@@ -178,7 +196,8 @@ No browser or localhost server is required.
 
 ## Verification
 
-`verify_wiki.py` checks:
+Run `verify_wiki.py wiki/apps/<app>/versions/V<N>`. It iterates every directory under
+`services/` and checks:
 
 - required paths and frontmatter;
 - version and analysis breadcrumbs;

@@ -58,20 +58,38 @@ render: ## Render a Markdown deliverable to .docx and verify the result
 	  $(PY) skills/customer-doc-render/scripts/render_customer_doc.py "$$src" -o "$$out" && \
 	  $(PY) skills/customer-doc-render/scripts/verify_render.py "$$src" "$$out"
 
-# make verify-wiki WIKI="wiki/apps/<app>/services/<service>" OB_PROJECT=<repo>
+# make verify-wiki WIKI="wiki/apps/<app>/versions/V<N>" OB_PROJECT=<repo>
 .PHONY: verify-wiki
 verify-wiki: ## Verify an agent wiki: links, frontmatter, counts, pointers, secrets
-	@test -n "$(WIKI)" || { echo "usage: make verify-wiki WIKI=<wiki/apps/<app>/services/<service>> [OB_PROJECT=<repo>] [REPO_ROOT=<repo>]"; exit 2; }
+	@test -n "$(WIKI)" || { echo "usage: make verify-wiki WIKI=<wiki/apps/<app>/versions/V<N>> [OB_PROJECT=<repo>] [REPO_ROOT=<repo>]"; exit 2; }
 	@root="$(REPO_ROOT)"; [[ -n "$$root" ]] || root="$(OB_PROJECT)"; \
 	  $(PY) skills/instrumentation-wiki/scripts/verify_wiki.py "$(call at,$(WIKI))" \
 	    $${root:+--repo-root "$$root"}
 
+.PHONY: validate-analysis
+validate-analysis: ## Validate canonical analysis JSON and optional audited worker intervals
+	@test -n "$(CONTRACT)" || { echo "usage: make validate-analysis CONTRACT=<analysis-contract.json> [MANIFEST=<job-manifest.json> RESULTS=<worker-results-dir> TIMING=<run-timing.json>] [OB_PROJECT=<repo>]"; exit 2; }
+	@contract="$(call at,$(CONTRACT))"; manifest="$(if $(MANIFEST),$(call at,$(MANIFEST)))"; results="$(if $(RESULTS),$(call at,$(RESULTS)))"; timing="$(if $(TIMING),$(call at,$(TIMING)))"; \
+	  $(PY) skills/instrumentation-analyze/scripts/validate_analysis.py \
+	    --contract "$$contract" $${manifest:+--manifest "$$manifest"} $${results:+--results "$$results"} $${timing:+--timing "$$timing"}
+
+.PHONY: render-analysis
+render-analysis: ## Deterministically render canonical analysis JSON as linked Markdown
+	@test -n "$(CONTRACT)" -a -n "$(VERSION)" || { echo "usage: make render-analysis CONTRACT=<analysis-contract.json> VERSION=docs/observability/analysis/<app>/V<N> [OB_PROJECT=<repo>]"; exit 2; }
+	$(PY) skills/instrumentation-analyze/scripts/render_analysis_site.py \
+	  "$(call at,$(CONTRACT))" "$(call at,$(VERSION))" --clean
+
 .PHONY: verify-analysis
-verify-analysis: ## Verify one linked analysis version without a browser/server
-	@test -n "$(VERSION)" || { echo "usage: make verify-analysis VERSION=docs/observability/analysis/<app>/V<N> [OB_PROJECT=<repo>]"; exit 2; }
+verify-analysis: ## Verify linked analysis semantics, links, breadcrumbs, and optional canonical JSON
+	@test -n "$(VERSION)" || { echo "usage: make verify-analysis VERSION=docs/observability/analysis/<app>/V<N> [CONTRACT=<analysis-contract.json>] [OB_PROJECT=<repo>]"; exit 2; }
 	@root="$(OB_PROJECT)"; [[ -n "$$root" ]] || root="."; \
+	  contract="$(if $(CONTRACT),$(call at,$(CONTRACT)))"; \
 	  $(PY) skills/instrumentation-analyze/scripts/verify_analysis_site.py \
-	    "$(call at,$(VERSION))" --repo-root "$$root"
+	    "$(call at,$(VERSION))" --repo-root "$$root" $${contract:+--contract "$$contract"}
+
+.PHONY: qa-analysis
+qa-analysis: ## Run representative orchestration, semantic, deterministic render, and budget QA
+	$(PY) skills/instrumentation-analyze/scripts/qa_analysis.py
 
 .PHONY: verify
 verify: ## Verify an existing .docx against its Markdown source
@@ -91,10 +109,10 @@ verify-results: ## Validate read-only verification results against the accepted 
 	  ledger="$(call at,$(or $(LEDGER),docs/observability/provenance-ledger.json))"; \
 	  acceptance="$(call at,$(ACCEPTANCE))"; base="$(OB_PROJECT)"; \
 	  [[ -n "$$base" ]] || base="."; \
-	  [[ -n "$(ACCEPTANCE)" ]] || acceptance=$$(ls "$$base"/docs/observability/analysis-*.acceptance.yaml 2>/dev/null | sort | tail -1); \
 	  exclusions=""; [[ -z "$(EXCLUSIONS)" ]] || exclusions="$(call at,$(EXCLUSIONS))"; \
 	  $(PY) skills/instrumentation-verify/scripts/verify_results.py "$$plan" "$$results" \
-	    --ledger "$$ledger" --acceptance "$$acceptance" \
+	    --ledger "$$ledger" --repo "$$base" \
+	    $${acceptance:+--acceptance "$$acceptance"} \
 	    $${exclusions:+--exclusions "$$exclusions"}
 
 # make preview DOCX=docs/observability/Guide.docx [PAGES=4] [START=92]

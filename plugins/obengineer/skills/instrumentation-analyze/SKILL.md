@@ -38,6 +38,9 @@ The target is read-only. Application changes happen only through accepted work o
 | [`../references/cross-cutting-attributes.md`](../references/cross-cutting-attributes.md) | Cross-Cutting Attributes and Baggage Propagation |
 | [`../references/business-value.md`](../references/business-value.md) | Value from stated, measured, public, and derived evidence |
 | [`../references/entitlement-exposure.md`](../references/entitlement-exposure.md) | Separate account-team pricing |
+| [`schemas/analysis-job-manifest.schema.json`](schemas/analysis-job-manifest.schema.json) | Six bounded host-run evidence workstreams and coordinator reservation |
+| [`schemas/analysis-worker-result.schema.json`](schemas/analysis-worker-result.schema.json) | Auditable worker evidence and execution intervals |
+| [`schemas/analysis-contract.schema.json`](schemas/analysis-contract.schema.json) | Canonical content rendered into the linked analysis site |
 
 ## Output
 
@@ -45,6 +48,9 @@ Always:
 
 ```text
 docs/observability/analysis/<app>/V<N>/
+docs/observability/analysis-contract.json
+docs/observability/analysis-job-manifest.json
+docs/observability/analysis-worker-results/
 docs/observability/attribute-schema.json
 docs/observability/implementation-map.json
 docs/observability/provenance-ledger.json
@@ -52,9 +58,9 @@ docs/observability/verification-plan.json
 wiki/apps/<app>/versions/V<N>/
 ```
 
-Version selectors use `[V1] [V2] [V3]` and continue monotonically. Start the landing
-page from `templates/analysis-site/index.md` and detail pages from
-`templates/analysis-site/detail.md`; after acceptance replace only the next-step callout
+Version selectors use `[V1] [V2] [V3]` and continue monotonically. Validate the canonical
+JSON and render the landing page plus detail tree deterministically with
+`scripts/render_analysis_site.py`; after acceptance replace only the next-step callout
 from `templates/analysis-site/accepted-next-steps.md`. Do not redesign the approved layout. The analysis
 directory contains the landing page and all linked detail pages. The wiki
 contains one note per substantive object and every work order. The version landing page
@@ -67,6 +73,9 @@ contains the summary, architecture, findings, path, work-order summary, and use 
 ## Rules
 
 - Derive names from this application. A different site's artifact is not evidence.
+- Derive the number of business transactions and workflows from current evidence. A
+  same-customer prior guide is a quality and continuity input, not a fixed taxonomy or
+  required count; retain, revise, add, or retire names with provenance.
 - Use direct Observability Cloud and Splunk Platform APIs when configured. Use connected
   MCP tools as additional sources; do not treat MCP as the only tenant interface.
 - Never print or store a secret. Record shape, location, and exposure only.
@@ -78,6 +87,8 @@ contains the summary, architecture, findings, path, work-order summary, and use 
   bootstrap, allowlisted `SpanProcessor.onStart`, identity write, backend composite
   propagator, and message inject/extract where applicable.
 - Entitlement prices the strategy; it does not silently trim it.
+- When entitlement or current usage is unavailable, preserve proposed MTS arithmetic but
+  leave entitlement, usage, reserve, and headroom explicitly unavailable.
 - Every detector has a threshold; every objective has an error budget.
 - No named engineer, named owner, or accepter is required.
 - Never start a web server, open a browser, or return localhost.
@@ -92,19 +103,25 @@ run is a delta, not a rewrite.
 
 ### 2. Collect evidence in parallel
 
-Fill every safe sub-agent slot with independent work:
+Write one bounded manifest with exactly six workstreams:
 
 - production browser and route behavior;
-- source, configuration, diagrams, and dependencies;
-- direct Observability Cloud APIs;
-- direct Splunk Platform APIs across approved indexes;
-- each relevant connected MCP integration;
-- cloud and message boundaries;
-- security assessment within authorization; and
-- public evidence when permitted.
+- source, configuration, dependencies, and technology;
+- diagrams and prior artifacts;
+- direct Observability Cloud APIs and relevant connected integrations;
+- direct Splunk Platform APIs, cloud boundaries, and messaging; and
+- public evidence plus security assessment within authorization.
 
-Do not parallelize naming or schema reconciliation. Merge evidence into the ledger with
-measured, stated, public, or derived provenance.
+Reserve one host concurrency slot for the coordinator. The host creates workers; this
+repository validates only the manifest, result shape, observed intervals, and capacity.
+Never claim that a repository script spawns agents. With two or more runnable jobs, the
+recorded worker intervals must overlap without exceeding host capacity after the
+coordinator reservation. Do not parallelize naming or schema reconciliation. Merge
+evidence into the ledger with measured, stated, public, or derived provenance.
+Every worker interval fits its job deadline. Limited results identify nonempty
+limitations and the exact unavailable manifest scopes or outputs. Persist
+`analysis-run-timing.json` with bounded collection, reconciliation, render, validation,
+and total intervals.
 
 The production scan checks timings, status versus content, router behavior, provider
 initialization, competing agents, CSP, consent, third parties, beacons, route changes,
@@ -117,6 +134,18 @@ buses, third parties, and current telemetry. Raise actionable findings with evid
 impact, confidence, remediation, and verification. Security findings follow
 `security-assessment.md`.
 
+Architecture names the storefront or client composition, every evidenced backend,
+account boundary, bus, downstream, third party by contract consequence, initialization
+owner, SPA route behavior, and failure point. Technology and Current telemetry are
+separate review views. Prior diagrams and guides supply evidence and depth only; they
+never donate another target's taxonomy.
+
+Each Current telemetry row records application scope, observation window and read time,
+source/provenance, and volume, MetricSet, MTS, and SignalFlow evidence. When those
+portfolio checks cannot be obtained, record an explicit `unavailable` disposition and
+reason rather than an empty field. Every workflow records repository-relative code
+locations.
+
 ### 4. Design from use cases inward
 
 Rank questions the instrumentation must answer. For every use case:
@@ -124,18 +153,29 @@ Rank questions the instrumentation must answer. For every use case:
 1. state why it matters and the user-facing question;
 2. define its workflows and business-transaction grouping;
 3. define span boundaries, events, captured context, joins, meters, detectors,
-   objective, dashboard, and acceptance proof;
+   objective with error budget, dashboard, and acceptance proof;
 4. register every attribute and dimension decision; and
 5. link the work orders that implement it.
 
 Enumerate accepted workflows from source, analytics events, feature flags, UI copy,
 diagrams, and message contracts. Do not invent generic journey names.
+Keep each business transaction's exhaustive evidence-derived workflow catalogue separate
+from the smaller set promoted for complete span-tree and use-case design.
+
+For every ranked use case include the complete span tree; span events; metrics with three
+to six bounded dimensions; dashboard variables and panels; threshold, window, and
+group-by for every detector; objective and error budget; release correlation; logs;
+Synthetics and ThousandEyes when evidence makes them applicable; and runnable
+verification. Label every join `continue-trace`, `span-link`, or `attribute-pivot`.
 
 ### 5. Build the strategy and dependency path
 
 Cover only layers in evidence: deterministic guardrails, browser, identity/context,
 backend, messaging, collector, metrics/cardinality, logs, dashboards/detectors/objectives,
 release events, and verification. Order phases by dependency and trust.
+Browser attribution, message propagation, and Collector contracts each carry explicit
+applicability and evidence. Applicable contracts contain complete code/configuration;
+inapplicable contracts produce no detail page or link.
 
 ### 6. Materialize wiki and work orders
 
@@ -145,18 +185,30 @@ matching wiki version. Dependency-free orders are `proposed`; dependent orders a
 
 Work order 1 establishes deterministic schema, single-init, workflow-registry, baggage
 allowlist, and deny-list checks before journey code.
+When application source or authorization is absent, record workflow and work-order
+repository mapping as unresolved, leave paths and repository legs empty, and keep affected
+orders blocked. Never invent an implementation path to satisfy the contract.
 
 ### 7. Validate
 
 Validate:
 
+- job manifest, worker intervals, host capacity, and coordinator reservation;
+- canonical analysis contract and deterministic repeated rendering;
+- schema-v1 analysis contracts migrate deterministically with
+  `scripts/migrate_analysis_contract.py`; newly generated contracts use schema v2;
 - provenance ledger and analysis seal;
+- schema version 2 analysis contract and content-bound acceptance inputs;
 - schema and implementation map;
-- verification plan with actionable `VC-*` criteria;
+- verification plan schema version 2 with stable `source_ref` values and actionable
+  `VC-*` criteria;
 - landing-page links and breadcrumbs;
 - wiki links, frontmatter, work-order dependency graph, and reverse links;
 - no credential-shaped values; and
 - optional Word summary only when requested.
+
+Run `make qa-analysis` against the generic representative fixture and enforce its
+validation-time, render-time, output-file, and output-byte budgets.
 
 Run `$deliverable-review` against the linked site and wiki. Fix every blocking defect.
 

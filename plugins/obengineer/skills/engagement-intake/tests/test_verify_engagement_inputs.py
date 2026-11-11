@@ -15,6 +15,21 @@ spec.loader.exec_module(verifier)
 
 def v2() -> str:
     return """schema_version: 2
+engagement:
+  application: checkout
+artifacts:
+  front_end_scan_notes: ""
+surfaces:
+  production_urls:
+    - https://example.invalid
+analysis_access:
+  token_ref: unknown
+  api_key_ref: unknown
+  login_id: unknown
+  password_ref: unknown
+  rotate_on_completion: unknown
+business_context:
+  commentary: Slow incident triage
 entitlement:
   fit_to_entitlement: false
   observability_cloud:
@@ -56,3 +71,132 @@ def test_malformed_yaml_and_comment_only_fields_are_rejected():
         "not valid YAML" in failure
         for failure in verifier.verify_text(malformed)
     )
+
+
+def test_required_application_and_production_surface_are_validated():
+    migrated = verifier.migrate_v2(v2())
+    missing_application = migrated.replace(
+        "  application: checkout", '  application: ""'
+    )
+    assert "engagement.application is required" in verifier.verify_text(
+        missing_application
+    )
+    missing_surface = migrated.replace(
+        "  production_urls:\n    - https://example.invalid",
+        "  production_urls: []",
+    )
+    assert any(
+        "provide production_urls" in failure
+        for failure in verifier.verify_text(missing_surface)
+    )
+
+
+def test_no_browser_reason_satisfies_production_surface_requirement():
+    migrated = verifier.migrate_v2(v2())
+    no_browser = migrated.replace(
+        '  front_end_scan_notes: ""',
+        "  front_end_scan_notes: 'no browser: batch-only service'",
+    ).replace(
+        "  production_urls:\n    - https://example.invalid",
+        "  production_urls: []",
+    )
+    assert verifier.verify_text(no_browser) == []
+
+
+def test_login_requires_password_reference_and_rotation():
+    migrated = verifier.migrate_v2(v2()).replace(
+        "  login_id: unknown\n  password_ref: unknown\n"
+        "  rotate_on_completion: unknown",
+        "  login_id: dummy-user\n  password_ref: plain-text\n"
+        "  rotate_on_completion: false",
+    )
+    failures = verifier.verify_text(migrated)
+    assert any("password_ref must be a ${VAR}" in failure for failure in failures)
+    assert any("rotate_on_completion must be true" in failure for failure in failures)
+
+    valid = migrated.replace("password_ref: plain-text", "password_ref: ${TEST_PASSWORD}")
+    valid = valid.replace("rotate_on_completion: false", "rotate_on_completion: true")
+    assert verifier.verify_text(valid) == []
+
+
+def test_login_and_password_reference_must_be_supplied_together():
+    migrated = verifier.migrate_v2(v2()).replace(
+        "  login_id: unknown", "  login_id: dummy-user"
+    )
+    assert any(
+        "must be supplied together" in failure
+        for failure in verifier.verify_text(migrated)
+    )
+
+
+def test_artifact_paths_must_stay_inside_project():
+    migrated = verifier.migrate_v2(v2()).replace(
+        '  front_end_scan_notes: ""',
+        '  front_end_scan_notes: ""\n'
+        "  location: artifacts\n"
+        "  diagrams: [artifacts/context.drawio]\n"
+        "  narrative: artifacts/architecture.md\n"
+        "  prior_contract: artifacts/guide.pdf\n"
+        "  prior_schema: artifacts/schema.json\n"
+        "  prior_scans: [artifacts/scan.json]\n"
+        "  house_style_docx: artifacts/style.docx",
+    )
+    assert verifier.verify_text(migrated) == []
+
+    for unsafe in ("../../outside", "/etc/passwd", r"..\secret"):
+        invalid = migrated.replace(
+            "  prior_contract: artifacts/guide.pdf",
+            f"  prior_contract: '{unsafe}'",
+        )
+        assert any(
+            "artifacts.prior_contract must be a project-relative path" in failure
+            for failure in verifier.verify_text(invalid)
+        )
+
+
+def test_artifact_symlink_escape_is_rejected_at_validation_time(tmp_path):
+    artifacts = tmp_path / "artifacts"
+    artifacts.mkdir()
+    outside = tmp_path.parent / f"{tmp_path.name}-outside"
+    outside.mkdir()
+    (artifacts / "link").symlink_to(outside, target_is_directory=True)
+    migrated = verifier.migrate_v2(v2()).replace(
+        '  front_end_scan_notes: ""',
+        '  front_end_scan_notes: ""\n'
+        "  prior_contract: artifacts/link/guide.pdf",
+    )
+
+    assert any(
+        "resolves outside the project" in failure
+        for failure in verifier.verify_text(migrated, tmp_path)
+    )
+
+
+def test_cli_contains_root_level_input_and_symlinked_parent(tmp_path):
+    inputs = tmp_path / "inputs.yaml"
+    inputs.write_text(verifier.migrate_v2(v2()))
+    assert verifier.main([
+        str(inputs),
+        "--project-root",
+        str(tmp_path),
+    ]) == 0
+
+    outside = tmp_path.parent / f"{tmp_path.name}-external-inputs"
+    outside.mkdir()
+    escaped = outside / "inputs.yaml"
+    escaped.write_text(verifier.migrate_v2(v2()))
+    link = tmp_path / "linked-inputs.yaml"
+    link.symlink_to(escaped)
+    assert verifier.main([
+        str(link),
+        "--project-root",
+        str(tmp_path),
+    ]) == 1
+
+    docs = tmp_path / "docs"
+    docs.symlink_to(outside, target_is_directory=True)
+    assert verifier.main([
+        str(docs / "inputs.yaml"),
+        "--project-root",
+        str(tmp_path),
+    ]) == 1

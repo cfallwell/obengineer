@@ -1,19 +1,24 @@
-# Memory repository template
+# Memory repository scaffold
 
-Copy `.gitignore` and `.env.template` into the root of a new memory repository:
+A project-scoped install creates missing `.gitignore`, `.env.template`, and
+`artifacts/README.md` at the repository root. Existing files are never overwritten.
+Reinstall is safe, and uninstall removes only unchanged files whose scaffold manifest
+proves the installer created them; files placed in `artifacts/` are never removed.
 
-```bash
-cp templates/memory-repo/.gitignore templates/memory-repo/.env.template /path/to/memory-repo/
-```
-
-In that repository, copy the template and fill it:
+Copy the generated environment template locally and fill only the inputs you have:
 
 ```bash
 cp .env.template .env
 ```
 
 `.env` is gitignored. Do not commit it. `.env.template` stays in git with empty values.
+`PASSWORD_REF` must contain a `${VAR}` reference, never a password.
 
-The analyze run reads these variables from `.env` or from the process environment. It uses the `splunk-observability` and `splunk-platform` MCP servers and the Splunk API endpoints (Observability and Enterprise) when it inventories existing telemetry. The procedure is `skills/references/existing-telemetry.md` in the toolkit.
+The intake prefill reads allowlisted names from `.env` or the process environment. It
+maps onboarding values into `docs/observability/engagement-inputs.yaml` without
+overwriting supplied fields. Raw Splunk tokens stay in `.env`; only `${VAR}` references
+enter the committed input artifact.
 
-Install does not copy this directory and does not write a filled `.env`.
+The analyze run uses relevant MCP servers and direct Splunk API endpoints when it
+inventories existing telemetry. The procedure is
+`skills/references/existing-telemetry.md` in the toolkit.

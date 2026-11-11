@@ -80,8 +80,11 @@ List every `mapping_status: incomplete` row on Intake recommendations:
 - the repository remote and authorized parent paths;
 - the Jira project, only if Jira is the configured issue tool.
 
-A missing repository mapping blocks generation of an executable work order. A missing
-Jira mapping does not: the work order remains the manual queue.
+A missing repository mapping blocks generation of an executable work order. Analysis still
+records the proposed outcome, dependencies, acceptance evidence, and verification with an
+`unresolved` mapping, no repository legs, and `blocked` status; it never invents a
+repository or path. A missing Jira mapping does not: the work order remains the manual
+queue.
 
 ## Unified multi-repository work orders
 
@@ -105,6 +108,28 @@ Service notes link to app-level work orders. Each work order contains:
 - cross-repository sequencing and verification;
 - optional Jira project mappings; and
 - copy/paste-ready issue text for manual use.
+
+The executable fields are canonical YAML frontmatter parsed with `safe_load`:
+
+```yaml
+work_order_id: WO-014
+selectors: [use-case:account-update]
+depends_on: [WO-013]
+repository_mapping: mapped
+repository_mapping_evidence: The accepted implementation map authorizes this repository and parent path.
+repository_legs:
+  - repository: web
+    paths: [src/account/]
+    changes: [Implement the accepted account-update signal contract.]
+    tests: [Run the deterministic workflow and propagation contract tests.]
+```
+
+Selectors use only the grammar listed above. Repository IDs must exist in
+`implementation-map.json`; every path is repository-relative, traversal-free, and under
+one of that repository's `authorized_paths`. Changes and tests describe meaningful work.
+Every dependency exists in the same version, and the dependency graph is acyclic.
+An unresolved order uses `repository_mapping: unresolved`, meaningful
+`repository_mapping_evidence`, `repository_legs: []`, and `status: blocked`.
 
 One work order can produce several pull requests. Every PR title and body includes the
 work-order ID and reciprocal links to the coordination PR and sibling PRs. The artifact

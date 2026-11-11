@@ -1,0 +1,26 @@
+{
+  "schemaVersion": 1,
+  "analysisId": "sample-storefront-V1",
+  "jobId": "production",
+  "status": "completed",
+  "startedAt": "2026-11-10T20:00:00Z",
+  "completedAt": "2026-11-10T20:04:30Z",
+  "evidence": [
+    {
+      "id": "EV-PROD-ROUTES",
+      "kind": "measured",
+      "source": "authorized production response capture",
+      "observedAt": "2026-11-10T20:04:00Z",
+      "summary": "The storefront shell performs client-side navigation and loads one monitoring bootstrap before application routes."
+    }
+  ],
+  "facts": [
+    {
+      "id": "FACT-PROD-ROUTER",
+      "evidenceIds": ["EV-PROD-ROUTES"],
+      "statement": "Document load covers the initial route while later route transitions require explicit host-owned navigation spans.",
+      "confidence": "confirmed"
+    }
+  ],
+  "limitations": []
+}

@@ -3,6 +3,7 @@
 .env
 .env.local
 !.env.template
+.obengineer/
 
 # Other local secret files.
 *.pem

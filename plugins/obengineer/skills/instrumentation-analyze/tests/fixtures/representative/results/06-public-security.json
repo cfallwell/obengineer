@@ -1,0 +1,26 @@
+{
+  "schemaVersion": 1,
+  "analysisId": "sample-storefront-V1",
+  "jobId": "public-security",
+  "status": "completed",
+  "startedAt": "2026-11-10T20:05:30Z",
+  "completedAt": "2026-11-10T20:08:30Z",
+  "evidence": [
+    {
+      "id": "EV-SEC-HEADERS",
+      "kind": "measured",
+      "source": "authorized response-header and telemetry-payload review",
+      "observedAt": "2026-11-10T20:10:00Z",
+      "summary": "The telemetry payload includes an unbounded route value and the collector pipeline does not remove cookie headers."
+    }
+  ],
+  "facts": [
+    {
+      "id": "FACT-SEC-REDACTION",
+      "evidenceIds": ["EV-SEC-HEADERS"],
+      "statement": "Raw routes and cookie headers create cardinality and privacy exposure unless classification and redaction precede export.",
+      "confidence": "confirmed"
+    }
+  ],
+  "limitations": []
+}

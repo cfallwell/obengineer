@@ -6,9 +6,9 @@
 #     cp obengineer/inputs/engagement-inputs.template.yaml \
 #        docs/observability/engagement-inputs.yaml
 #
-# Unknown is a legitimate answer. Write `unknown` and the run records the gap in
-# "Open items" rather than inventing a value. What is NOT acceptable is deleting
-# a key: an absent key looks like an oversight, `unknown` looks like a decision.
+# Optional schema fields may remain `unknown`; the guided flow never asks the human to
+# type it. Application, what hurts, and an explicit production URL or no-browser reason
+# are required before analysis.
 #
 # This file describes ONE engagement and whatever site that engagement names.
 # A previous scan of this site is an input. A scan, diagram, or taxonomy from
@@ -22,8 +22,15 @@
 
 schema_version: 3
 
+# Dotted paths explicitly supplied by a human or allowlisted project context.
+# This distinguishes an intentional default-valued answer (for example passive,
+# true, or p90) from an untouched template default. Values and secrets never
+# appear here.
+input_provenance:
+  supplied_paths: []
+
 engagement:
-  application: ""              # the identifier used in every filename and heading
+  application: ""              # required; identifier used in every filename and heading
   customer: ""
   scope: ""                    # e.g. "web storefront and checkout backends"
   date: ""                     # YYYY-MM-DD, the date on the deliverable
@@ -46,6 +53,7 @@ initial_scope:
 # Artifacts the human supplies. Paths relative to the workspace root.
 # ---------------------------------------------------------------------------
 artifacts:
+  location: ""                # supplied-artifact directory; project install prefills artifacts
   diagrams: []                 # C4, sequence, MFE map, account/VPC — paths or "attached in chat"
   narrative: ""                # path to an architecture write-up, if one exists
   prior_contract: ""           # an existing analysis of THIS application. A document from another site is not an input

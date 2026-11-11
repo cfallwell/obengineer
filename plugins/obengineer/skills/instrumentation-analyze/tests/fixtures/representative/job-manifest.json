@@ -1,0 +1,68 @@
+{
+  "schemaVersion": 1,
+  "analysisId": "sample-storefront-V1",
+  "executionAuthority": "host",
+  "repositoryCapability": "audit-only",
+  "hostConcurrency": {
+    "maxConcurrentAgents": 4,
+    "coordinatorSlots": 1
+  },
+  "performanceBudgets": {
+    "totalSeconds": 1200,
+    "collectionSeconds": 600,
+    "reconciliationSeconds": 240,
+    "renderSeconds": 180,
+    "validationSeconds": 120,
+    "progressIntervalSeconds": 60
+  },
+  "jobs": [
+    {
+      "id": "production",
+      "title": "Production surface and route behavior",
+      "runnable": true,
+      "deadlineSeconds": 600,
+      "evidenceScopes": ["production HTML, scripts, routes, CSP, consent, and beacons"],
+      "requiredOutputs": ["timed production observations and route evidence"]
+    },
+    {
+      "id": "source-technology",
+      "title": "Source and technology inventory",
+      "runnable": true,
+      "deadlineSeconds": 600,
+      "evidenceScopes": ["source, configuration, dependencies, routes, and analytics events"],
+      "requiredOutputs": ["technology facts and evidence-derived workflow candidates"]
+    },
+    {
+      "id": "diagrams-prior-artifacts",
+      "title": "Diagrams and prior artifact review",
+      "runnable": true,
+      "deadlineSeconds": 600,
+      "evidenceScopes": ["attached diagrams, guides, exports, and prior decisions"],
+      "requiredOutputs": ["accounts, buses, downstreams, flows, and retained decisions"]
+    },
+    {
+      "id": "observability-cloud",
+      "title": "Observability Cloud inventory",
+      "runnable": true,
+      "deadlineSeconds": 600,
+      "evidenceScopes": ["RUM, APM, Infrastructure, Synthetics, MetricSets, and usage"],
+      "requiredOutputs": ["measured footprint, trust assessment, and cardinality facts"]
+    },
+    {
+      "id": "platform-cloud-messaging",
+      "title": "Platform, cloud, and messaging inventory",
+      "runnable": true,
+      "deadlineSeconds": 600,
+      "evidenceScopes": ["log platform, cloud accounts, collectors, buses, and DLQs"],
+      "requiredOutputs": ["trace-log joins, cloud boundaries, and propagation facts"]
+    },
+    {
+      "id": "public-security",
+      "title": "Public evidence and authorized security review",
+      "runnable": true,
+      "deadlineSeconds": 600,
+      "evidenceScopes": ["public documentation and authorized OWASP-aligned checks"],
+      "requiredOutputs": ["public facts, security conclusions, limitations, and remediation evidence"]
+    }
+  ]
+}

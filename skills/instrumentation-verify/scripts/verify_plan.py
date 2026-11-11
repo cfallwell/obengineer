@@ -27,6 +27,15 @@ ISO_DURATION = re.compile(
 LEDGER_ID = re.compile(r"^SRC-[A-Za-z0-9._-]+$")
 
 
+def valid_source_ref(value: object) -> bool:
+    return (
+        isinstance(value, str)
+        and bool(value.strip())
+        and not value.strip().isdigit()
+        and bool(re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._:/#-]*", value))
+    )
+
+
 def load(path: Path) -> tuple[dict | None, list[str]]:
     try:
         data = json.loads(path.read_text())
@@ -41,8 +50,9 @@ def verify(path: Path) -> list[str]:
     data, failures = load(path)
     if data is None:
         return failures
-    if data.get("schema_version") != 1:
-        failures.append("schema_version must be 1")
+    schema_version = data.get("schema_version")
+    if schema_version not in (1, 2):
+        failures.append("schema_version must be 1 or 2")
     criteria = data.get("criteria")
     if not isinstance(criteria, list) or not criteria:
         return failures + ["criteria must be a non-empty list"]
@@ -60,9 +70,18 @@ def verify(path: Path) -> list[str]:
             seen.add(criterion_id)
         if criterion.get("system") not in SYSTEMS:
             failures.append(f"{criterion_id}: unsupported system")
-        source_section = criterion.get("source_section")
-        if not isinstance(source_section, int) or not 1 <= source_section <= 31:
-            failures.append(f"{criterion_id}: source_section is invalid")
+        if schema_version == 1:
+            source_section = criterion.get("source_section")
+            if not isinstance(source_section, int) or not 1 <= source_section <= 31:
+                failures.append(f"{criterion_id}: source_section is invalid")
+        else:
+            if not valid_source_ref(criterion.get("source_ref")):
+                failures.append(f"{criterion_id}: source_ref is invalid")
+            if "source_section" in criterion:
+                failures.append(
+                    f"{criterion_id}: schema_version 2 uses source_ref, "
+                    "not source_section"
+                )
         query = criterion.get("query")
         if not isinstance(query, dict) or not query.get("kind"):
             failures.append(f"{criterion_id}: query requires kind")

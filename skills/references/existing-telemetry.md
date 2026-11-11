@@ -172,7 +172,9 @@ Use `<metric>`, `<service>`, and `<app>` in anything that is written down. Do no
 
 ## Where the numbers go
 
-Section 3, **Existing portfolio footprint**, gets the operational measurements: log volume, span volume, trace volume, the MetricSets that exist, and the SignalFlow cross-check. Each figure is `measured` or **Not in evidence**.
+The **Current telemetry** landing summary and detail view get the operational measurements:
+log volume, span volume, trace volume, MetricSets, and the SignalFlow cross-check. Each
+figure is `measured`, or the evidence limitation is stated without creating an empty page.
 
 Current MTS and `sf.org.limit.*` are usage/system-limit facts. Write them into the
 entitlement exposure document's position-today table when that document is required and

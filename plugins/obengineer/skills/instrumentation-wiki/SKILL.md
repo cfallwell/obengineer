@@ -38,6 +38,7 @@ wiki/apps/<app>/
   versions/
     V<N>/
       index.md
+      meta/
       services/<service>/
       implementation/work-orders/
 ```
@@ -104,7 +105,10 @@ Create the complete queue during analysis. Each work order contains:
 - use cases enabled;
 - workflows and business transactions affected;
 - selectors;
-- repository ids and authorized paths;
+- repository ids and authorized paths, or an explicit unresolved mapping with no invented
+  leg and blocked status;
+- repository-mapping evidence in frontmatter so validation can distinguish unresolved
+  source from a missing required field;
 - dependencies;
 - shared contracts consumed;
 - allowed and forbidden changes;
@@ -122,7 +126,7 @@ baggage allowlist, and deny-list checks.
 
 ## Run metadata
 
-Each version carries:
+Each version carries one shared `meta/` directory (never a copy under each service):
 
 - inputs snapshot;
 - component versions with provenance;
@@ -140,11 +144,12 @@ copying evidence.
 Run:
 
 ```bash
-python3 scripts/verify_wiki.py wiki/apps/<app>/versions/V<N>/services/<service> \
+python3 scripts/verify_wiki.py wiki/apps/<app>/versions/V<N> \
   --repo-root <artifact-repository>
 ```
 
-Verify paths, frontmatter, breadcrumbs, relative links, wikilinks, index counts, work-order
+The verifier iterates every service. Verify paths, frontmatter, breadcrumbs, relative
+links, wikilinks, index counts, work-order
 dependencies and reverse links, host pointers, acceptance binding, provenance, and
 credential-shaped values. The analysis PR cannot become ready while verification fails.
 

@@ -1,0 +1,26 @@
+{
+  "schemaVersion": 1,
+  "analysisId": "sample-storefront-V1",
+  "jobId": "diagrams-prior-artifacts",
+  "status": "completed",
+  "startedAt": "2026-11-10T20:01:00Z",
+  "completedAt": "2026-11-10T20:05:00Z",
+  "evidence": [
+    {
+      "id": "EV-DIAG-FLOW",
+      "kind": "stated",
+      "source": "architecture sequence diagram",
+      "observedAt": "2026-11-10T20:02:00Z",
+      "summary": "The sequence crosses a storefront account, an integration account, a message bus, a queue, and a fulfillment downstream."
+    }
+  ],
+  "facts": [
+    {
+      "id": "FACT-DIAG-BOUNDARY",
+      "evidenceIds": ["EV-DIAG-FLOW"],
+      "statement": "Message attributes must carry trace context across the account boundary before the consumer span starts.",
+      "confidence": "high"
+    }
+  ],
+  "limitations": []
+}

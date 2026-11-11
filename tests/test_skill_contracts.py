@@ -90,6 +90,69 @@ def test_input_prompt_uses_number_selection_and_no_required_unknown():
         assert "named owner" in text or "names of engineers" in text
 
 
+def test_start_asks_required_question_before_any_discovery_and_gates_analysis():
+    command = (COMMANDS / "ob-start.md").read_text()
+    prompt = (PROMPTS / "00-manage-analysis-inputs.md").read_text()
+    analyze = (COMMANDS / "ob-analyze.md").read_text()
+    assert command.index("start_turn.py") < command.index(
+        "prompts/00-manage-analysis-inputs.md"
+    )
+    assert command.index("Before reading source") < command.index(
+        "discover measurable optional facts"
+    )
+    for text in (command, prompt):
+        normalized = re.sub(r"\s+", " ", text)
+        assert "explicit production URL" in normalized
+        assert "no browser: <reason>" in normalized
+        assert "what hurts" in normalized.lower()
+        assert "yes 1 3" in normalized
+        assert "never starts analysis" in normalized
+        assert "exact `no`" in normalized
+        for marker in ("[x]", "[ ]", "[-]"):
+            assert marker in text
+    assert "analysis_authorized: true" in analyze
+    assert "last_event: review-no" in analyze
+
+
+def test_intake_runtime_and_schemas_are_packaged():
+    skill = SKILLS / "engagement-intake"
+    for relative in (
+        "scripts/start_turn.py",
+        "scripts/prefill_engagement_inputs.py",
+        "scripts/manage_run_context.py",
+        "schemas/env-prefill.schema.json",
+        "schemas/run-context.schema.json",
+    ):
+        path = skill / relative
+        assert path.is_file()
+        mirror = PLUGIN / "skills" / "engagement-intake" / relative
+        assert mirror.is_file()
+        assert mirror.read_bytes() == path.read_bytes()
+    run_schema = json.loads((skill / "schemas/run-context.schema.json").read_text())
+    assert run_schema["properties"]["state"]["enum"] == [
+        "new", "required", "optional-review", "optional-answers"
+    ]
+
+
+def test_environment_template_starts_with_safe_onboarding_fields():
+    template = (ROOT / "templates/memory-repo/.env.template").read_text()
+    assert template.startswith(
+        "PRODUCTION_URL=\nTEST_LOGIN_ID=\nPASSWORD_REF=\n"
+    )
+    assignments = [
+        line.split("=", 1)[0]
+        for line in template.splitlines()
+        if line and not line.startswith("#") and "=" in line
+    ]
+    assert assignments[:3] == [
+        "PRODUCTION_URL", "TEST_LOGIN_ID", "PASSWORD_REF"
+    ]
+    assert "RAW_PASSWORD" not in template
+    assert "ARTIFACTS_DIR=artifacts" in template
+    assert "${SPLUNK_ACCESS_TOKEN}" in template
+    assert "${SPLUNK_TOKEN}" in template
+
+
 def test_setup_script_is_secret_safe_and_guided():
     script = (ROOT / "scripts" / "setup-splunk-access.sh").read_text()
     assert "read -r -s" in script
@@ -114,10 +177,12 @@ def test_direct_apis_and_mcp_are_complementary():
         assert variable in telemetry
 
 
-def test_analysis_uses_maximum_safe_parallelism_but_serial_names():
+def test_analysis_uses_bounded_host_parallelism_but_serial_names():
     skill = (SKILLS / "instrumentation-analyze" / "SKILL.md").read_text()
     lifecycle = (SKILLS / "references" / "analysis-run-lifecycle.md").read_text()
-    assert "every safe sub-agent slot" in skill
+    assert "exactly six workstreams" in skill
+    assert "one host concurrency slot for the coordinator" in skill
+    assert "repository validates only" in skill
     assert "Naming and schema reconciliation remain serial" in lifecycle
 
 
@@ -130,7 +195,7 @@ def test_analysis_site_is_the_review_authority():
         assert "localhost" in text
         assert "[V1] [V2] [V3]" in text or "[V1] [V2]" in text or "[V1] [V2] ..." in text
     for required in (
-        "Findings", "Instrumentation strategy", "Work orders",
+        "Technology", "Current telemetry", "Findings", "Instrumentation strategy", "Work orders",
         "Use cases", "Workflows", "Business transactions",
         "Shared signal contracts", "Reference",
     ):
@@ -145,31 +210,31 @@ def test_analysis_navigation_is_internal_and_breadcrumbed():
     assert "Every `Open` cell links the matching detail index" in site
 
 
-def test_approved_compact_landing_layout_is_committed_and_ordered():
+def test_approved_long_linked_landing_layout_is_committed_and_ordered():
     template = (ROOT / "templates" / "analysis-site" / "index.md").read_text()
     required = (
         "[V1](../V1/index.md) [V2](../V2/index.md) **[V3]**",
         "[Analysis](../index.md)",
-        "Side-panel navigation",
+        "## Status",
         "Next steps",
         "## Changes in this version",
-        "## Contents",
-        "## Analysis summary",
+        "## Table of contents and section summaries",
+        "## Architecture summary",
         "| Priority findings | Primary use cases |",
+        "## Side-panel navigation",
     )
     positions = [template.index(item) for item in required]
     assert positions == sorted(positions)
     rows = (
-        "Architecture", "Findings", "Instrumentation strategy",
+        "Architecture", "Technology", "Current telemetry", "Findings", "Instrumentation strategy",
         "Implementation path", "Work orders", "Use cases", "Workflows",
         "Business transactions", "Shared signal contracts",
         "Operations and verification", "Reference",
     )
     row_positions = [template.index(f"| {row} |") for row in rows]
     assert row_positions == sorted(row_positions)
-    assert template.count("\n## ") == 3, (
-        "detail sections belong in separate side-panel views, not expanded on the landing"
-    )
+    assert template.count("\n## ") >= 7
+    assert "storefront or client composition" in template
 
 
 def test_analysis_creates_versioned_wiki_and_all_work_orders():
@@ -197,6 +262,8 @@ def test_acceptance_is_easy_content_bound_and_has_no_person_name():
     lifecycle = (SKILLS / "references" / "analysis-run-lifecycle.md").read_text()
     assert "reply `yes`" in lifecycle
     assert "analysis_content_digest" in lifecycle
+    assert "schema_version: 2" in lifecycle
+    assert "analysis-contract.json" in lifecycle
     assert "manual SHA" in lifecycle
     assert "No accepter name" in lifecycle
     assert "accepted_by:" not in lifecycle
@@ -206,6 +273,18 @@ def test_acceptance_is_easy_content_bound_and_has_no_person_name():
     ).read_text()
     assert "analysis_content_digest" in verifier
     assert "accepted_by" not in verifier
+
+
+def test_verification_and_wiki_generation_use_current_versioned_contracts():
+    verification = (SKILLS / "references" / "verification-run.md").read_text()
+    wiki = (SKILLS / "references" / "agent-wiki.md").read_text()
+    analyze = (PROMPTS / "01-analyze-application.md").read_text()
+    assert '"schema_version": 2' in verification
+    assert '"source_ref"' in verification
+    assert "source_section" in verification  # documented v1 read compatibility
+    assert "versions/V<N>/meta/" in wiki
+    assert "lists, including when empty" in wiki
+    assert "analysis-contract.json" in analyze
 
 
 def test_ready_for_review_comments_are_processed_before_merge():
@@ -271,6 +350,19 @@ def test_security_coverage_and_credential_handling_remain_contractual():
         assert required in critical
 
 
+def test_linked_analysis_references_do_not_use_retired_section_numbers():
+    for relative in (
+        "critical-findings.md",
+        "security-assessment.md",
+        "service-levels.md",
+        "existing-telemetry.md",
+    ):
+        text = (SKILLS / "references" / relative).read_text()
+        assert not re.search(r"\bsection(?:s)?\s+(?:[0-9]+|[0-9]+ and [0-9]+)", text, re.I), (
+            f"{relative} still routes generated analysis through retired monolith sections"
+        )
+
+
 def test_terraform_provider_names_and_no_apply_boundary():
     reference = (SKILLS / "references" / "splunk-terraform-providers.md").read_text()
     for pin in ("~> 9.34", "~> 3.0", "~> 1.5"):
@@ -328,10 +420,9 @@ def test_reinstall_removes_only_manifest_owned_retired_commands(tmp_path):
     replacement = commands / "ob-start.md"
     retired = commands / "ob-intake.md"
     replacement.rename(retired)
-    manifest["created"] = [
-        str(retired) if entry == str(replacement) else entry
-        for entry in manifest["created"]
-    ]
+    manifest["owned"]["commands/ob-intake.md"] = manifest["owned"].pop(
+        "commands/ob-start.md"
+    )
     manifest_path.write_text(json.dumps(manifest))
     subprocess.run(
         [str(ROOT / "install.sh"), "--cursor", "--project", str(tmp_path)],

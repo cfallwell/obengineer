@@ -17,9 +17,16 @@ Run from the artifact repository:
 /ob-start
 ```
 
-The agent discovers what source, the production surface, direct Splunk APIs, and connected
-MCP tools can measure. It asks only for the application name, a production URL when one
-cannot be discovered, and what hurts today.
+Within five seconds, before source, network, browser, API, or MCP discovery, the agent
+asks one required question for the application name, an explicit production URL (or
+`no browser: <reason>`), and what hurts today. Only after that answer does it discover
+what source, the confirmed production surface, direct Splunk APIs, and connected MCP
+tools can measure.
+
+This five-second check covers the installed deterministic prefill/start executable
+sequence and verifies output precedes instrumented network or process discovery.
+Markdown slash-command parsing and the host model's first-token latency remain owned by
+the host and cannot be guaranteed by repository code.
 
 It then asks:
 
@@ -37,8 +44,17 @@ Example: yes 1 3 4
 Reply no to start with what I can already see.
 ```
 
-Selected items are prompted one at a time. A blank skips one. The human never has to type
-`unknown` or edit YAML.
+Selected items are prompted one at a time. A blank skips one. The checked list uses
+`[x]` for answered, `[ ]` for pending, and `[-]` for skipped. After selected answers the
+agent returns to the optional-review question. `yes 1 3` never starts analysis; only an
+explicit `no` at optional review authorizes it. The human never has to type `unknown` or
+edit YAML. Filtered suggestions retain their canonical 1–10 numbers, so a list may show
+`2` and `9` without renumbering them to `1` and `2`.
+
+Every onboarding turn atomically updates ignored local state at
+`.obengineer/run-context.json`. Allowlisted `.env` values prefill missing engagement
+inputs. Raw token values and passwords are never copied; dummy access uses a
+`${VAR}` password reference.
 
 For optional read-only API access:
 
@@ -50,13 +66,19 @@ The script prompts in the terminal, writes local `.env`, and never prints the to
 
 ## Analysis
 
-`/ob-start` automatically runs analysis V1. Independent evidence sources run with maximum
-safe sub-agent parallelism. Naming and schema reconciliation happen after evidence returns.
+After the explicit `no`, `/ob-start` automatically runs analysis V1. Independent
+evidence sources run as six bounded jobs through the host with one concurrency slot
+reserved for coordination. Repository tooling audits
+result intervals but does not spawn workers. Naming and schema reconciliation happen
+after evidence returns.
 
 The analysis PR contains:
 
 ```text
 docs/observability/analysis/<app>/V1/
+docs/observability/analysis-contract.json
+docs/observability/analysis-job-manifest.json
+docs/observability/analysis-worker-results/
 docs/observability/attribute-schema.json
 docs/observability/implementation-map.json
 docs/observability/provenance-ledger.json
@@ -97,9 +119,10 @@ Navigation remains inside the host's side panel or native document surface:
 - breadcrumbs on every page; and
 - relative links to all detail.
 
-The compact landing page includes version/status, side-panel notice, next steps, changes,
-a linked Contents table, one analysis-summary paragraph, and compact Priority Findings
-and Primary Use Cases previews. Its Contents opens separate side-panel views for:
+The long linked landing page includes version, status, next steps, changes, a substantive
+summary for every linked review area, the observed architecture directly on the landing
+page, and Priority Findings and Primary Use Cases previews. Its table of contents opens
+separate side-panel views for:
 
 1. changes in this version and next steps;
 2. analysis summary;
@@ -127,7 +150,7 @@ Run:
 ```
 
 The agent lists only useful unanswered inputs. Reply `yes 1 3`, answer each selected
-prompt, and the agent automatically creates V2 and its PR.
+prompt, review the checked list, then reply `no` to authorize V2 and its PR.
 
 Run:
 
@@ -137,7 +160,9 @@ Run:
 
 The agent lists supplied human-editable values with redacted current values. Reply
 `yes 2 5`. Send a replacement or `clear`. Secret values display only as `configured`.
-The edit automatically creates the next immutable version.
+`clear` deterministically restores the template value and removes supplied provenance;
+the literal word is never saved. Explicit default-valued answers remain checked across
+restart. The edit automatically creates the next immutable version.
 
 Earlier versions remain selectable and read-only. The accepted version is the only
 executable work-order queue.
