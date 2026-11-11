@@ -27,6 +27,12 @@ def test_prefill_maps_allowlisted_values_and_never_copies_token(tmp_path):
             "PRODUCTION_URL": "https://example.invalid",
             "WHAT_HURTS": "Incidents take too long to isolate",
             "ARTIFACTS_DIR": "artifacts",
+            "ARTIFACT_DIAGRAMS": "artifacts/context.drawio,artifacts/flow.png",
+            "ARTIFACT_NARRATIVE": "artifacts/architecture.md",
+            "PRIOR_CONTRACT": "artifacts/prior-guide.pdf",
+            "PRIOR_SCHEMA": "artifacts/attribute-schema.json",
+            "PRIOR_SCANS": "artifacts/scan-a.json,artifacts/scan-b.json",
+            "HOUSE_STYLE_DOCX": "artifacts/house-style.docx",
             "TEST_LOGIN_ID": "dummy-user",
             "PASSWORD_REF": "${DUMMY_TEST_PASSWORD}",
             "SPLUNK_TOKEN": raw_token,
@@ -39,6 +45,18 @@ def test_prefill_maps_allowlisted_values_and_never_copies_token(tmp_path):
     assert data["surfaces"]["production_urls"] == ["https://example.invalid"]
     assert data["business_context"]["commentary"].startswith("Incidents")
     assert data["artifacts"]["location"] == "artifacts"
+    assert data["artifacts"]["diagrams"] == [
+        "artifacts/context.drawio",
+        "artifacts/flow.png",
+    ]
+    assert data["artifacts"]["narrative"] == "artifacts/architecture.md"
+    assert data["artifacts"]["prior_contract"] == "artifacts/prior-guide.pdf"
+    assert data["artifacts"]["prior_schema"] == "artifacts/attribute-schema.json"
+    assert data["artifacts"]["prior_scans"] == [
+        "artifacts/scan-a.json",
+        "artifacts/scan-b.json",
+    ]
+    assert data["artifacts"]["house_style_docx"] == "artifacts/house-style.docx"
     assert data["analysis_access"]["login_id"] == "dummy-user"
     assert data["analysis_access"]["password_ref"] == "${DUMMY_TEST_PASSWORD}"
     assert data["analysis_access"]["token_ref"] == "${SPLUNK_TOKEN}"

@@ -125,6 +125,11 @@ Re-run installation after:
   absolute path; or
 - receiving skill changes when the original install used `--copy`.
 
+Reinstalling a legacy project installation upgrades its manifest to digest-based
+ownership only when each colliding command still names the legacy toolkit source and each
+colliding skill symlink still targets that source. Modified or copied legacy paths cannot be
+verified and are refused rather than overwritten.
+
 Reinstalling this release migrates `/ob-intake`, `/ob-generate`, and `/ob-wiki` to
 `/ob-start`, and
 `/ob-build-terraform` to `/ob-terraform`. The installer removes retired command files
@@ -145,8 +150,10 @@ as user content and preserved during uninstall.
 
 The project scaffold begins `.env.template` with `PRODUCTION_URL`, `TEST_LOGIN_ID`, and
 `PASSWORD_REF`, then maps optional start inputs to engagement-input fields.
-`ARTIFACTS_DIR=artifacts` is prefilled. `PASSWORD_REF` must be a `${VAR}` reference;
-there is no raw-password variable.
+`ARTIFACTS_DIR=artifacts` is prefilled; `ARTIFACT_DIAGRAMS`, `ARTIFACT_NARRATIVE`,
+`PRIOR_CONTRACT`, `PRIOR_SCHEMA`, `PRIOR_SCANS`, and `HOUSE_STYLE_DOCX` persist supplied
+artifact paths. `PASSWORD_REF` must be a `${VAR}` reference; there is no raw-password
+variable.
 
 For interactive read-only Splunk credentials, from the memory repository run:
 
