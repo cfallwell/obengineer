@@ -173,6 +173,105 @@ def test_published_schema_rejects_path_traversal_ids():
     )
 
 
+def test_unresolved_workflow_mapping_requires_evidence_and_forbids_fake_paths():
+    value = contract()
+    workflow = value["workflows"][0]
+    workflow["codeMapping"] = {
+        "status": "unresolved",
+        "evidence": (
+            "The supplied repository contains analysis artifacts only; application "
+            "source and authorized implementation paths were not provided."
+        ),
+    }
+    workflow["codeLocations"] = []
+    assert validate_contract(value) == []
+
+    workflow["codeLocations"] = ["invented/source.py"]
+    failures = validate_contract(value)
+    assert any(
+        "unresolved workflow cannot claim code locations" in failure
+        or "expected to be empty" in failure
+        for failure in failures
+    )
+
+
+def test_unavailable_cardinality_budget_preserves_cost_without_invented_headroom():
+    value = contract()
+    cardinality = value["contracts"]["cardinality"]
+    cardinality.update({
+        "budgetStatus": "unavailable",
+        "basis": (
+            "The proposed MTS cost uses bounded dimension products, while entitlement "
+            "and current usage were neither supplied nor measurable in this run."
+        ),
+        "entitlement": None,
+        "inUse": None,
+        "reserved": None,
+        "headroomAfter": None,
+    })
+    assert validate_contract(value) == []
+
+    cardinality["entitlement"] = 50000
+    failures = validate_contract(value)
+    assert any(
+        "unavailable budget cannot claim entitlement" in failure
+        or "expected null" in failure
+        for failure in failures
+    )
+
+
+def test_transaction_catalog_keeps_unpromoted_names_and_allows_bootstrap_only_bundle():
+    value = contract()
+    value["businessTransactions"][0]["workflowCatalog"].append("checkout.review")
+
+    bootstrap = copy.deepcopy(value["businessTransactions"][0])
+    bootstrap.update({
+        "id": "global",
+        "name": "Global bootstrap",
+        "groupingValue": "global",
+        "artifact": "src/bootstrap/observability.ts",
+        "summary": (
+            "The global bootstrap owns provider initialization and shared platform "
+            "concerns, so emitting a user workflow from it would misclassify activity."
+        ),
+        "catalogStatus": "none-by-design",
+        "catalogEvidence": (
+            "Source ownership assigns initialization, route subscription, consent, "
+            "and propagation setup to this artifact rather than a user intent."
+        ),
+        "workflowCatalog": [],
+        "workflowIds": [],
+    })
+    value["businessTransactions"].append(bootstrap)
+
+    assert validate_contract(value) == []
+
+
+def test_unresolved_work_order_mapping_stays_blocked_without_invented_legs():
+    value = contract()
+    order = value["workOrders"][0]
+    order.update({
+        "status": "blocked",
+        "repositoryMapping": {
+            "status": "unresolved",
+            "evidence": (
+                "The engagement repository contains analysis artifacts only; the "
+                "application repository and authorized implementation paths were not supplied."
+            ),
+        },
+        "repositoryLegs": [],
+    })
+    assert validate_contract(value) == []
+
+    order["status"] = "proposed"
+    failures = validate_contract(value)
+    assert any(
+        "unresolved repository mapping requires blocked status" in failure
+        or "expected constant 'blocked'" in failure
+        for failure in failures
+    )
+
+
 def test_renderer_refuses_to_write_outside_version_root(tmp_path):
     output = tmp_path / "docs" / "observability" / "analysis" / "app" / "V1"
     renderer = Renderer(contract(), output)
@@ -362,7 +461,7 @@ def test_published_json_schemas_capture_bounded_jobs_and_required_objects():
             "provenance", "portfolioEvidence"} <= set(
         definitions["telemetry"]["required"]
     )
-    assert "codeLocations" in definitions["workflow"]["required"]
+    assert {"codeMapping", "codeLocations"} <= set(definitions["workflow"]["required"])
     assert set(definitions["frontend"]["required"]) == {"applicable", "evidence"}
     message_schema = definitions["contracts"]["properties"]["crossCutting"][
         "properties"

@@ -69,10 +69,15 @@ Produce the full instrumentation strategy:
   release correlation, Synthetics and ThousandEyes where applicable, and verification;
 - Cross-Cutting Attributes and Baggage Propagation with its applicable provider,
   allowlisted `SpanProcessor.onStart`, identity, backend, and bus patterns; and
-- every proposed work order and repository leg.
+- every proposed work order and its evidence-bound repository mapping. Missing application
+  source produces an explicit unresolved mapping and blocked order, never an invented leg.
 
 Do not create empty product chapters. Put plausible future additions on one Suggested
 additions page. Put useful missing human facts on Intake recommendations.
+Derive BT and workflow counts from this target. A same-customer prior guide supplies
+continuity and a quality floor, not a restrictive list or fixed count. Preserve an
+exhaustive catalogue for each evidenced BT while promoting only ranked workflows for
+complete span-tree design.
 
 Security follows `security-assessment.md`; confirmed or high-confidence findings link
 their remediation work orders. Never display a credential value.

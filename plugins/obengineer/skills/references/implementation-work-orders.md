@@ -80,8 +80,11 @@ List every `mapping_status: incomplete` row on Intake recommendations:
 - the repository remote and authorized parent paths;
 - the Jira project, only if Jira is the configured issue tool.
 
-A missing repository mapping blocks generation of an executable work order. A missing
-Jira mapping does not: the work order remains the manual queue.
+A missing repository mapping blocks generation of an executable work order. Analysis still
+records the proposed outcome, dependencies, acceptance evidence, and verification with an
+`unresolved` mapping, no repository legs, and `blocked` status; it never invents a
+repository or path. A missing Jira mapping does not: the work order remains the manual
+queue.
 
 ## Unified multi-repository work orders
 

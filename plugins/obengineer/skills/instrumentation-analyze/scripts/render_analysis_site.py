@@ -600,6 +600,12 @@ class Renderer:
                 for m in item["metrics"]
             )
             joins = ((j["from"], j["to"], j["type"], j["carrier"], j["reason"]) for j in item["joins"])
+            mapping = item["codeMapping"]
+            locations = (
+                bullets(item["codeLocations"])
+                if item["codeLocations"]
+                else "- Not in evidence — application repository mapping is unresolved."
+            )
             text = (
                 f"{breadcrumb('Workflows', item['name'])}\n\n# Workflow: {item['name']}\n\n"
                 f"{item['narrative']}\n\n"
@@ -612,7 +618,9 @@ class Renderer:
                 + "\n\n## Join contract\n\n"
                 + table(("From", "To", "Join type", "Carrier", "Reason"), joins)
                 + "\n\n## Code locations\n\n"
-                + bullets(item["codeLocations"])
+                + f"**Mapping status:** {mapping['status']}\n\n"
+                + f"{mapping['evidence']}\n\n"
+                + locations
                 + "\n\n## Operations and verification\n\n"
                 f"- Dashboard: [{item['dashboardId']}](../operations/dashboards/{item['dashboardId']}.md)\n"
                 f"- Detectors: {', '.join(item['detectorIds'])}\n"
@@ -631,7 +639,8 @@ class Renderer:
         rows = (
             (
                 x["name"], x["groupingValue"], x["artifact"],
-                ", ".join(workflow_labels[i] for i in x["workflowIds"]),
+                len(x["workflowCatalog"]),
+                ", ".join(workflow_labels[i] for i in x["workflowIds"]) or "None promoted",
                 f"[Detail]({x['id']}.md)",
             )
             for x in self.c["businessTransactions"]
@@ -639,7 +648,7 @@ class Renderer:
         index = (
             f"{breadcrumb(current='Business transactions')}\n\n# Business transactions\n\n"
             f"{self.c['summaries']['businessTransactions']}\n\n"
-            + table(("Transaction", "Bounded value", "Owning artifact", "Evidence-derived workflows", "Detail"), rows)
+            + table(("Transaction", "Bounded value", "Owning artifact", "Catalogued workflows", "Promoted details", "Detail"), rows)
             + finish(
                 (("Workflows", "../workflows/index.md"), ("Shared contracts", "../contracts/index.md")),
                 ("Continue to Shared signal contracts", "../contracts/index.md"),
@@ -647,15 +656,29 @@ class Renderer:
         )
         self.write("business-transactions/index.md", index)
         for item in self.c["businessTransactions"]:
+            catalog = (
+                bullets(item["workflowCatalog"])
+                if item["workflowCatalog"]
+                else "- None by design; this artifact owns platform bootstrap only."
+            )
+            promoted = (
+                "\n".join(
+                    f"- [{workflow_labels[workflow_id]}](../workflows/{workflow_id}.md)"
+                    for workflow_id in item["workflowIds"]
+                )
+                if item["workflowIds"]
+                else "- No workflow from this transaction is promoted in this version."
+            )
             text = (
                 f"{breadcrumb('Business transactions', item['name'])}\n\n# BT: {item['name']}\n\n"
                 f"{item['summary']}\n\n"
                 f"**Grouping value:** `{item['groupingValue']}` · **Artifact:** `{item['artifact']}`\n\n"
                 "## Exhaustive evidence-derived workflow catalogue\n\n"
-                + "\n".join(
-                    f"- [{workflow_labels[workflow_id]}](../workflows/{workflow_id}.md)"
-                    for workflow_id in item["workflowIds"]
-                )
+                f"**Catalog status:** {item['catalogStatus']}\n\n"
+                f"{item['catalogEvidence']}\n\n"
+                + catalog
+                + "\n\n## Promoted workflow specifications\n\n"
+                + promoted
                 + "\n\n## Set, propagate, and query\n\n"
                 f"- **Where set:** {item['whereSet']}\n"
                 f"- **Propagation:** {item['propagation']}\n"
@@ -794,16 +817,35 @@ class Renderer:
                 + finish((("Contracts", "index.md"), ("Cardinality", "cardinality.md")), ("Return to Contracts", "index.md")),
             )
         card = c["cardinality"]
+        if card["budgetStatus"] == "unavailable":
+            budget = (
+                "No entitlement or current-usage budget was supplied or measured. "
+                "The design therefore reports its proposed MTS cost without inventing "
+                "headroom or silently trimming required dimensions.\n\n"
+                + table(
+                    ("Budget status", "Proposed cost", "Basis"),
+                    ((card["budgetStatus"], card["proposedCost"], card["basis"]),),
+                )
+            )
+        else:
+            budget = (
+                "The budget is arithmetic against the supplied or measured entitlement. "
+                "The proposed promotion must fit after current use and the operational "
+                "reserve.\n\n"
+                + table(
+                    ("Status", "Entitlement", "In use", "Reserved", "Proposed cost", "Headroom after"),
+                    ((
+                        card["budgetStatus"], card["entitlement"], card["inUse"],
+                        card["reserved"], card["proposedCost"], card["headroomAfter"],
+                    ),),
+                )
+            )
         self.write(
             "contracts/cardinality.md",
             f"{breadcrumb('Shared signal contracts', 'Cardinality and MPM')}\n\n# Cardinality and MPM\n\n"
-            "The budget is arithmetic against the supplied entitlement. The proposed promotion "
-            "must fit after current use and the operational reserve; identity and raw-route keys "
-            "remain trace attributes even when they are valuable troubleshooting pivots.\n\n"
-            + table(
-                ("Entitlement", "In use", "Reserved", "Proposed cost", "Headroom after"),
-                ((card["entitlement"], card["inUse"], card["reserved"], card["proposedCost"], card["headroomAfter"]),),
-            )
+            + budget
+            + "\n\nIdentity and raw-route keys remain trace attributes even when they "
+            "are valuable troubleshooting pivots."
             + "\n\n## Dimension-eligible\n\n"
             + bullets(card["dimensionEligible"])
             + "\n\n## Attribute-only\n\n"

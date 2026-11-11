@@ -387,6 +387,10 @@
       "status": "proposed",
       "dependsOn": [],
       "unlocks": ["WO-002"],
+      "repositoryMapping": {
+        "status": "mapped",
+        "evidence": "The supplied web and platform repositories authorize the bootstrap, shared observability, Collector, and test paths required by this work order."
+      },
       "repositoryLegs": [
         {
           "repository": "sample-web",
@@ -418,6 +422,10 @@
       "status": "blocked",
       "dependsOn": ["WO-001"],
       "unlocks": ["WO-003"],
+      "repositoryMapping": {
+        "status": "mapped",
+        "evidence": "The supplied services repository authorizes the Order API, Order Worker, shared telemetry package, and their propagation and metric test paths."
+      },
       "repositoryLegs": [
         {
           "repository": "sample-services",
@@ -442,6 +450,10 @@
       "status": "blocked",
       "dependsOn": ["WO-002"],
       "unlocks": [],
+      "repositoryMapping": {
+        "status": "mapped",
+        "evidence": "The supplied observability repository authorizes reviewable configuration and verification paths for dashboards, detectors, objectives, and portfolio proof."
+      },
       "repositoryLegs": [
         {
           "repository": "sample-observability",
@@ -579,6 +591,10 @@
       "dashboardId": "order-submission",
       "detectorIds": ["order-error-rate"],
       "objectiveIds": ["order-success"],
+      "codeMapping": {
+        "status": "mapped",
+        "evidence": "Application source and the dependency lock identify the authorized checkout route and Order API payment implementation used by this workflow."
+      },
       "codeLocations": [
         "src/routes/checkout/payment.tsx:24-118",
         "services/order-api/src/payment.ts:40-136"
@@ -680,6 +696,10 @@
       "dashboardId": "order-submission",
       "detectorIds": ["order-error-rate", "order-silent-outage"],
       "objectiveIds": ["order-success"],
+      "codeMapping": {
+        "status": "mapped",
+        "evidence": "Application source and message-contract tests identify the authorized Order API producer and Order Worker consumer implementations used by this workflow."
+      },
       "codeLocations": [
         "services/order-api/src/orders.ts:52-184",
         "services/order-worker/src/consume.ts:31-172"
@@ -699,6 +719,9 @@
       "groupingValue": "checkout",
       "artifact": "src/routes/checkout/",
       "summary": "The checkout surface owns payment authorization and order submission intents discovered in route components, analytics events, API clients, and the order sequence diagram.",
+      "catalogStatus": "observed",
+      "catalogEvidence": "Source route components, analytics events, API clients, and the order sequence diagram identify the complete checkout intent catalogue represented in this version.",
+      "workflowCatalog": ["checkout.payment.authorize", "checkout.order.submit"],
       "workflowIds": ["checkout-payment-authorize", "checkout-order-submit"],
       "whereSet": "The host route classifier sets sample.bt when navigation enters any registered checkout route.",
       "propagation": "The value becomes a global browser attribute and bounded baggage entry stamped onto backend and consumer spans.",
@@ -846,6 +869,8 @@
       ]
     },
     "cardinality": {
+      "budgetStatus": "measured",
+      "basis": "Read-only organization metrics supplied the current custom MTS entitlement and usage; the proposed cost is the bounded product of values, metrics, and reporting services.",
       "entitlement": 50000,
       "inUse": 30000,
       "reserved": 5000,

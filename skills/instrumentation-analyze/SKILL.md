@@ -73,6 +73,9 @@ contains the summary, architecture, findings, path, work-order summary, and use 
 ## Rules
 
 - Derive names from this application. A different site's artifact is not evidence.
+- Derive the number of business transactions and workflows from current evidence. A
+  same-customer prior guide is a quality and continuity input, not a fixed taxonomy or
+  required count; retain, revise, add, or retire names with provenance.
 - Use direct Observability Cloud and Splunk Platform APIs when configured. Use connected
   MCP tools as additional sources; do not treat MCP as the only tenant interface.
 - Never print or store a secret. Record shape, location, and exposure only.
@@ -84,6 +87,8 @@ contains the summary, architecture, findings, path, work-order summary, and use 
   bootstrap, allowlisted `SpanProcessor.onStart`, identity write, backend composite
   propagator, and message inject/extract where applicable.
 - Entitlement prices the strategy; it does not silently trim it.
+- When entitlement or current usage is unavailable, preserve proposed MTS arithmetic but
+  leave entitlement, usage, reserve, and headroom explicitly unavailable.
 - Every detector has a threshold; every objective has an error budget.
 - No named engineer, named owner, or accepter is required.
 - Never start a web server, open a browser, or return localhost.
@@ -154,6 +159,8 @@ Rank questions the instrumentation must answer. For every use case:
 
 Enumerate accepted workflows from source, analytics events, feature flags, UI copy,
 diagrams, and message contracts. Do not invent generic journey names.
+Keep each business transaction's exhaustive evidence-derived workflow catalogue separate
+from the smaller set promoted for complete span-tree and use-case design.
 
 For every ranked use case include the complete span tree; span events; metrics with three
 to six bounded dimensions; dashboard variables and panels; threshold, window, and
@@ -178,6 +185,9 @@ matching wiki version. Dependency-free orders are `proposed`; dependent orders a
 
 Work order 1 establishes deterministic schema, single-init, workflow-registry, baggage
 allowlist, and deny-list checks before journey code.
+When application source or authorization is absent, record workflow and work-order
+repository mapping as unresolved, leave paths and repository legs empty, and keep affected
+orders blocked. Never invent an implementation path to satisfy the contract.
 
 ### 7. Validate
 

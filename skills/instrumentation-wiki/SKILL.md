@@ -105,7 +105,8 @@ Create the complete queue during analysis. Each work order contains:
 - use cases enabled;
 - workflows and business transactions affected;
 - selectors;
-- repository ids and authorized paths;
+- repository ids and authorized paths, or an explicit unresolved mapping with no invented
+  leg and blocked status;
 - dependencies;
 - shared contracts consumed;
 - allowed and forbidden changes;

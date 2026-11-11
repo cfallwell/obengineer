@@ -358,7 +358,7 @@
     "workOrder": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["id", "title", "outcome", "status", "dependsOn", "unlocks", "repositoryLegs", "acceptanceCriteria", "verification"],
+      "required": ["id", "title", "outcome", "status", "dependsOn", "unlocks", "repositoryMapping", "repositoryLegs", "acceptanceCriteria", "verification"],
       "properties": {
         "id": { "type": "string", "pattern": "^WO-[0-9]{3,}$" },
         "title": { "type": "string", "minLength": 8 },
@@ -366,9 +366,17 @@
         "status": { "enum": ["proposed", "ready", "blocked", "implemented", "verified"] },
         "dependsOn": { "$ref": "#/$defs/idList" },
         "unlocks": { "$ref": "#/$defs/idList" },
+        "repositoryMapping": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["status", "evidence"],
+          "properties": {
+            "status": { "enum": ["mapped", "unresolved"] },
+            "evidence": { "$ref": "#/$defs/substantive" }
+          }
+        },
         "repositoryLegs": {
           "type": "array",
-          "minItems": 1,
           "items": {
             "type": "object",
             "additionalProperties": false,
@@ -387,7 +395,26 @@
         },
         "acceptanceCriteria": { "$ref": "#/$defs/stringList" },
         "verification": { "$ref": "#/$defs/stringList" }
-      }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "repositoryMapping": {
+                "properties": { "status": { "const": "mapped" } },
+                "required": ["status"]
+              }
+            }
+          },
+          "then": { "properties": { "repositoryLegs": { "minItems": 1 } } },
+          "else": {
+            "properties": {
+              "status": { "const": "blocked" },
+              "repositoryLegs": { "maxItems": 0 }
+            }
+          }
+        }
+      ]
     },
     "span": {
       "type": "object",
@@ -488,7 +515,7 @@
       "additionalProperties": false,
       "required": [
         "id", "name", "narrative", "businessTransactionIds", "spans", "events", "metrics",
-        "joins", "dashboardId", "detectorIds", "objectiveIds", "codeLocations",
+        "joins", "dashboardId", "detectorIds", "objectiveIds", "codeMapping", "codeLocations",
         "verification", "workOrderIds", "evidenceIds"
       ],
       "properties": {
@@ -503,8 +530,17 @@
         "dashboardId": { "$ref": "#/$defs/slug" },
         "detectorIds": { "$ref": "#/$defs/idList" },
         "objectiveIds": { "$ref": "#/$defs/idList" },
+        "codeMapping": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["status", "evidence"],
+          "properties": {
+            "status": { "enum": ["mapped", "unresolved"] },
+            "evidence": { "$ref": "#/$defs/substantive" }
+          }
+        },
         "codeLocations": {
-          "type": "array", "minItems": 1, "uniqueItems": true,
+          "type": "array", "uniqueItems": true,
           "items": {
             "type": "string",
             "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$))[A-Za-z0-9._/-]+(?::[1-9][0-9]*(?:-[1-9][0-9]*)?)?$"
@@ -513,13 +549,28 @@
         "verification": { "$ref": "#/$defs/stringList" },
         "workOrderIds": { "$ref": "#/$defs/idList" },
         "evidenceIds": { "$ref": "#/$defs/idList" }
-      }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "codeMapping": {
+                "properties": { "status": { "const": "mapped" } },
+                "required": ["status"]
+              }
+            }
+          },
+          "then": { "properties": { "codeLocations": { "minItems": 1 } } },
+          "else": { "properties": { "codeLocations": { "maxItems": 0 } } }
+        }
+      ]
     },
     "businessTransaction": {
       "type": "object",
       "additionalProperties": false,
       "required": [
-        "id", "name", "groupingValue", "artifact", "summary", "workflowIds",
+        "id", "name", "groupingValue", "artifact", "summary", "catalogStatus",
+        "catalogEvidence", "workflowCatalog", "workflowIds",
         "whereSet", "propagation", "tenantRule", "verification", "workOrderIds", "evidenceIds"
       ],
       "properties": {
@@ -528,14 +579,42 @@
         "groupingValue": { "$ref": "#/$defs/slug" },
         "artifact": { "type": "string", "minLength": 3 },
         "summary": { "type": "string", "minLength": 40 },
-        "workflowIds": { "type": "array", "minItems": 2, "items": { "$ref": "#/$defs/slug" } },
+        "catalogStatus": { "enum": ["observed", "none-by-design"] },
+        "catalogEvidence": { "$ref": "#/$defs/substantive" },
+        "workflowCatalog": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/slug" }
+        },
+        "workflowIds": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/slug" }
+        },
         "whereSet": { "type": "string", "minLength": 20 },
         "propagation": { "type": "string", "minLength": 20 },
         "tenantRule": { "type": "string", "minLength": 20 },
         "verification": { "type": "string", "minLength": 20 },
         "workOrderIds": { "$ref": "#/$defs/idList" },
         "evidenceIds": { "$ref": "#/$defs/idList" }
-      }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": { "catalogStatus": { "const": "none-by-design" } },
+            "required": ["catalogStatus"]
+          },
+          "then": {
+            "properties": {
+              "workflowCatalog": { "maxItems": 0 },
+              "workflowIds": { "maxItems": 0 }
+            }
+          },
+          "else": {
+            "properties": { "workflowCatalog": { "minItems": 2 } }
+          }
+        }
+      ]
     },
     "contracts": {
       "type": "object",
@@ -626,16 +705,42 @@
         "cardinality": {
           "type": "object",
           "additionalProperties": false,
-          "required": ["entitlement", "inUse", "reserved", "proposedCost", "headroomAfter", "dimensionEligible", "attributeOnly"],
+          "required": ["budgetStatus", "basis", "entitlement", "inUse", "reserved", "proposedCost", "headroomAfter", "dimensionEligible", "attributeOnly"],
           "properties": {
-            "entitlement": { "type": "integer", "minimum": 1 },
-            "inUse": { "type": "integer", "minimum": 0 },
-            "reserved": { "type": "integer", "minimum": 0 },
+            "budgetStatus": { "enum": ["measured", "supplied", "unavailable"] },
+            "basis": { "$ref": "#/$defs/substantive" },
+            "entitlement": { "type": ["integer", "null"], "minimum": 1 },
+            "inUse": { "type": ["integer", "null"], "minimum": 0 },
+            "reserved": { "type": ["integer", "null"], "minimum": 0 },
             "proposedCost": { "type": "integer", "minimum": 0 },
-            "headroomAfter": { "type": "integer" },
+            "headroomAfter": { "type": ["integer", "null"] },
             "dimensionEligible": { "$ref": "#/$defs/idList" },
             "attributeOnly": { "$ref": "#/$defs/idList" }
-          }
+          },
+          "allOf": [
+            {
+              "if": {
+                "properties": { "budgetStatus": { "const": "unavailable" } },
+                "required": ["budgetStatus"]
+              },
+              "then": {
+                "properties": {
+                  "entitlement": { "type": "null" },
+                  "inUse": { "type": "null" },
+                  "reserved": { "type": "null" },
+                  "headroomAfter": { "type": "null" }
+                }
+              },
+              "else": {
+                "properties": {
+                  "entitlement": { "type": "integer", "minimum": 1 },
+                  "inUse": { "type": "integer", "minimum": 0 },
+                  "reserved": { "type": "integer", "minimum": 0 },
+                  "headroomAfter": { "type": "integer" }
+                }
+              }
+            }
+          ]
         }
       }
     },

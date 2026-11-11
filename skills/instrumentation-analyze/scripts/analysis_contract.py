@@ -828,14 +828,40 @@ def validate_contract(contract: Any) -> list[str]:
             item,
             (
                 "id", "title", "outcome", "status", "dependsOn", "unlocks",
-                "repositoryLegs", "acceptanceCriteria", "verification",
+                "repositoryMapping", "repositoryLegs", "acceptanceCriteria", "verification",
             ),
             path,
             failures,
         ):
             continue
-        for key in ("repositoryLegs", "acceptanceCriteria", "verification"):
+        _list(item.get("repositoryLegs"), f"{path}.repositoryLegs", failures, 0)
+        for key in ("acceptanceCriteria", "verification"):
             _list(item.get(key), f"{path}.{key}", failures)
+        mapping = item.get("repositoryMapping")
+        if _require(
+            mapping, ("status", "evidence"), f"{path}.repositoryMapping", failures
+        ):
+            mapping_status = mapping.get("status")
+            _substantive(
+                mapping.get("evidence"),
+                f"{path}.repositoryMapping.evidence",
+                failures,
+            )
+            if mapping_status == "mapped" and not item.get("repositoryLegs"):
+                failures.append(
+                    f"{path}.repositoryLegs: mapped work order requires a repository leg"
+                )
+            elif mapping_status == "unresolved" and (
+                item.get("repositoryLegs") or item.get("status") != "blocked"
+            ):
+                failures.append(
+                    f"{path}: unresolved repository mapping requires blocked status "
+                    "and no repository legs"
+                )
+            elif mapping_status not in {"mapped", "unresolved"}:
+                failures.append(
+                    f"{path}.repositoryMapping.status: expected mapped or unresolved"
+                )
         for leg_index, leg in enumerate(item.get("repositoryLegs", [])):
             leg_path = f"{path}.repositoryLegs[{leg_index}]"
             if _require(leg, ("repository", "paths", "changes", "tests"), leg_path, failures):
@@ -843,6 +869,11 @@ def validate_contract(contract: Any) -> list[str]:
                     _list(leg.get(key), f"{leg_path}.{key}", failures)
 
     workflow_ids = {item.get("id") for item in workflows if isinstance(item, dict)}
+    workflow_names = {
+        item.get("id"): item.get("name")
+        for item in workflows
+        if isinstance(item, dict)
+    }
     transaction_ids = {item.get("id") for item in transactions if isinstance(item, dict)}
     work_order_ids = {item.get("id") for item in work_orders if isinstance(item, dict)}
     use_case_ids = {item.get("id") for item in use_cases if isinstance(item, dict)}
@@ -878,19 +909,54 @@ def validate_contract(contract: Any) -> list[str]:
         if not _require(
             transaction,
             (
-                "id", "name", "groupingValue", "artifact", "summary", "workflowIds",
+                "id", "name", "groupingValue", "artifact", "summary",
+                "catalogStatus", "catalogEvidence", "workflowCatalog", "workflowIds",
                 "whereSet", "propagation", "tenantRule", "verification", "workOrderIds", "evidenceIds",
             ),
             path,
             failures,
         ):
             continue
+        catalog = _list(
+            transaction.get("workflowCatalog"),
+            f"{path}.workflowCatalog",
+            failures,
+            0,
+        )
+        _substantive(
+            transaction.get("catalogEvidence"),
+            f"{path}.catalogEvidence",
+            failures,
+        )
+        catalog_status = transaction.get("catalogStatus")
         linked = set(transaction.get("workflowIds", []))
-        if len(linked) < 2:
-            failures.append(f"{path}.workflowIds: transaction requires an evidence-derived workflow catalogue")
+        if catalog_status == "observed" and len(catalog) < 2:
+            failures.append(
+                f"{path}.workflowCatalog: observed transaction requires an "
+                "evidence-derived workflow catalogue"
+            )
+        elif catalog_status == "none-by-design" and (catalog or linked):
+            failures.append(
+                f"{path}: none-by-design transaction cannot list workflows"
+            )
+        elif catalog_status not in {"observed", "none-by-design"}:
+            failures.append(
+                f"{path}.catalogStatus: expected observed or none-by-design"
+            )
         unknown = linked - workflow_ids
         if unknown:
             failures.append(f"{path}.workflowIds: unknown ids {sorted(unknown)}")
+        promoted_names = {
+            workflow_names.get(identifier)
+            for identifier in linked
+            if workflow_names.get(identifier)
+        }
+        missing_from_catalog = promoted_names - set(catalog)
+        if missing_from_catalog:
+            failures.append(
+                f"{path}.workflowCatalog: promoted workflow names missing from "
+                f"catalogue {sorted(missing_from_catalog)}"
+            )
         if set(transaction.get("workOrderIds", [])) - work_order_ids:
             failures.append(f"{path}.workOrderIds: contains unknown work order")
 
@@ -901,15 +967,36 @@ def validate_contract(contract: Any) -> list[str]:
             (
                 "id", "name", "narrative", "businessTransactionIds", "spans", "events",
                 "metrics", "joins", "dashboardId", "detectorIds", "objectiveIds",
-                "codeLocations", "verification", "workOrderIds", "evidenceIds",
+                "codeMapping", "codeLocations", "verification", "workOrderIds", "evidenceIds",
             ),
             path,
             failures,
         ):
             continue
         _substantive(workflow.get("narrative"), f"{path}.narrative", failures)
-        for key in ("spans", "events", "metrics", "joins", "codeLocations", "verification"):
+        for key in ("spans", "events", "metrics", "joins", "verification"):
             _list(workflow.get(key), f"{path}.{key}", failures)
+        locations = _list(
+            workflow.get("codeLocations"), f"{path}.codeLocations", failures, 0
+        )
+        mapping = workflow.get("codeMapping")
+        if _require(mapping, ("status", "evidence"), f"{path}.codeMapping", failures):
+            mapping_status = mapping.get("status")
+            if mapping_status not in {"mapped", "unresolved"}:
+                failures.append(
+                    f"{path}.codeMapping.status: expected mapped or unresolved"
+                )
+            _substantive(
+                mapping.get("evidence"), f"{path}.codeMapping.evidence", failures
+            )
+            if mapping_status == "mapped" and not locations:
+                failures.append(
+                    f"{path}.codeLocations: mapped workflow requires a code location"
+                )
+            if mapping_status == "unresolved" and locations:
+                failures.append(
+                    f"{path}.codeLocations: unresolved workflow cannot claim code locations"
+                )
         for location_index, location in enumerate(workflow.get("codeLocations", [])):
             if not isinstance(location, str) or not re.fullmatch(
                 r"(?!/)(?!.*(?:^|/)\.\.(?:/|$))[A-Za-z0-9._/-]+(?::[1-9][0-9]*(?:-[1-9][0-9]*)?)?",
@@ -1260,10 +1347,32 @@ def validate_contract(contract: Any) -> list[str]:
         cardinality = contracts.get("cardinality")
         if _require(
             cardinality,
-            ("entitlement", "inUse", "reserved", "proposedCost", "headroomAfter", "dimensionEligible", "attributeOnly"),
+            (
+                "budgetStatus", "basis", "proposedCost",
+                "dimensionEligible", "attributeOnly",
+            ),
             "contract.contracts.cardinality",
             failures,
         ):
+            for nullable_field in (
+                "entitlement", "inUse", "reserved", "headroomAfter"
+            ):
+                if nullable_field not in cardinality:
+                    failures.append(
+                        "contract.contracts.cardinality: missing required field "
+                        + nullable_field
+                    )
+            budget_status = cardinality.get("budgetStatus")
+            if budget_status not in {"measured", "supplied", "unavailable"}:
+                failures.append(
+                    "contract.contracts.cardinality.budgetStatus: "
+                    "expected measured, supplied, or unavailable"
+                )
+            _substantive(
+                cardinality.get("basis"),
+                "contract.contracts.cardinality.basis",
+                failures,
+            )
             numbers = (
                 cardinality.get("entitlement"),
                 cardinality.get("inUse"),
@@ -1271,7 +1380,16 @@ def validate_contract(contract: Any) -> list[str]:
                 cardinality.get("proposedCost"),
                 cardinality.get("headroomAfter"),
             )
-            if all(isinstance(value, int) for value in numbers):
+            if budget_status == "unavailable":
+                if any(
+                    cardinality.get(key) is not None
+                    for key in ("entitlement", "inUse", "reserved", "headroomAfter")
+                ):
+                    failures.append(
+                        "contract.contracts.cardinality: unavailable budget "
+                        "cannot claim entitlement, usage, reserve, or headroom"
+                    )
+            elif all(isinstance(value, int) for value in numbers):
                 expected = numbers[0] - numbers[1] - numbers[2] - numbers[3]
                 if numbers[4] != expected:
                     failures.append(
