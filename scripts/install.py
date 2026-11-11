@@ -268,12 +268,88 @@ def host_owned_entries(manifest: dict) -> dict[str, dict] | None:
     return owned
 
 
+def legacy_host_owned_entries(
+    manifest: dict,
+    host: Host,
+    scope_root: Path,
+    project: bool,
+) -> dict[str, dict] | None:
+    """Recover ownership only for source-bound paths from the pre-digest manifest."""
+    source_text = manifest.get("source")
+    created = manifest.get("created")
+    expected_scope = "project" if project else "user"
+    if (
+        manifest.get("schema_version") is not None
+        or not isinstance(source_text, str)
+        or not Path(source_text).is_absolute()
+        or manifest.get("scope") != expected_scope
+        or not isinstance(created, list)
+        or not all(isinstance(item, str) and Path(item).is_absolute() for item in created)
+    ):
+        return None
+
+    source = Path(source_text)
+    base = host.base(scope_root, project)
+    legacy_base = Path(host.project_dir if project else host.user_dir)
+    created_paths = [Path(item) for item in created]
+    recovered: dict[str, dict] = {}
+    for path in desired_host_targets(host, scope_root, project):
+        if not (path.exists() or path.is_symlink()):
+            continue
+        relative = Path(_host_relative(base, path))
+        suffix = (*legacy_base.parts, *relative.parts)
+        listed = [
+            item for item in created_paths
+            if len(item.parts) >= len(suffix) and item.parts[-len(suffix):] == suffix
+        ]
+        if len(listed) != 1:
+            continue
+
+        if relative.parts[0] == host.skills_subdir:
+            if not path.is_symlink():
+                continue
+            target_parts = Path(os.readlink(path)).parts
+            expected_suffix = (source.name, "skills", *relative.parts[1:])
+            if (
+                len(target_parts) < len(expected_suffix)
+                or target_parts[-len(expected_suffix):] != expected_suffix
+            ):
+                continue
+        elif relative.parts[0] == host.commands_subdir:
+            if not path.is_file() or path.is_symlink():
+                continue
+            try:
+                text = path.read_text()
+            except (OSError, UnicodeDecodeError):
+                continue
+            if source_text not in text or "$ARGUMENTS" not in text:
+                continue
+        else:
+            continue
+        recovered[relative.as_posix()] = path_ownership(path)
+    return recovered
+
+
+def host_owned_entries_for_install(
+    manifest: dict,
+    host: Host,
+    scope_root: Path,
+    project: bool,
+) -> dict[str, dict] | None:
+    owned = host_owned_entries(manifest)
+    if owned is not None:
+        return owned
+    return legacy_host_owned_entries(manifest, host, scope_root, project)
+
+
 def host_install_conflicts(
     host: Host, scope_root: Path, project: bool
 ) -> list[str]:
     base = host.base(scope_root, project)
     manifest = read_manifest(base / MANIFEST_NAME)
-    owned = host_owned_entries(manifest)
+    owned = host_owned_entries_for_install(
+        manifest, host, scope_root, project
+    )
     conflicts: list[str] = []
     for path in desired_host_targets(host, scope_root, project):
         unsafe_parent = _symlinked_or_escaping_parent(scope_root, path)
@@ -287,7 +363,7 @@ def host_install_conflicts(
         relative = _host_relative(base, path)
         if owned is None:
             conflicts.append(
-                f"{path} is covered only by a legacy manifest without digests"
+                f"{path} is covered only by an unverifiable legacy manifest"
             )
         elif relative not in owned:
             conflicts.append(f"{path} already exists and is not installer-owned")
@@ -315,7 +391,9 @@ def install_host(
     base = host.base(scope_root, project)
     manifest_path = base / MANIFEST_NAME
     previous = read_manifest(manifest_path)
-    previously_owned = host_owned_entries(previous)
+    previously_owned = host_owned_entries_for_install(
+        previous, host, scope_root, project
+    )
     conflicts = host_install_conflicts(host, scope_root, project)
     if conflicts:
         raise InstallConflict("; ".join(conflicts))

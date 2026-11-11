@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import importlib.util
 import json
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -36,6 +37,34 @@ def try_install(project: Path, *args: str) -> subprocess.CompletedProcess[str]:
         capture_output=True,
         text=True,
     )
+
+
+def convert_host_install_to_legacy_manifest(project: Path) -> Path:
+    base = project / ".cursor"
+    manifest_path = base / installer.MANIFEST_NAME
+    manifest = json.loads(manifest_path.read_text())
+    legacy_source = Path("/opt/legacy-workspace/obengineer")
+    legacy_project = Path("/opt/legacy-project")
+    created = []
+    for relative in manifest["owned"]:
+        path = base / relative
+        created.append(str(legacy_project / ".cursor" / relative))
+        if relative.startswith("skills/"):
+            path.unlink()
+            expected = legacy_source / "skills" / Path(relative).relative_to("skills")
+            legacy_path = legacy_project / ".cursor" / relative
+            path.symlink_to(
+                os.path.relpath(expected, legacy_path.parent),
+                target_is_directory=True,
+            )
+        else:
+            path.write_text(path.read_text().replace(str(ROOT), str(legacy_source)))
+    manifest_path.write_text(json.dumps({
+        "source": str(legacy_source),
+        "scope": "project",
+        "created": created,
+    }))
+    return manifest_path
 
 
 def test_project_install_creates_missing_scaffold_and_tracks_ownership(tmp_path):
@@ -230,6 +259,49 @@ def test_reinstall_is_digest_checked_and_modified_command_survives_uninstall(tmp
     run_install(tmp_path, "--cursor", "--uninstall")
     assert command.read_text() == "user-modified command\n"
     assert not (tmp_path / ".cursor/skills/engagement-intake").exists()
+
+
+def test_reinstall_migrates_source_bound_legacy_manifest_to_digests(tmp_path):
+    run_install(tmp_path, "--cursor")
+    manifest_path = convert_host_install_to_legacy_manifest(tmp_path)
+
+    run_install(tmp_path, "--cursor")
+
+    manifest = json.loads(manifest_path.read_text())
+    assert manifest["schema_version"] == 2
+    assert manifest["source"] == str(ROOT)
+    assert all("kind" in ownership for ownership in manifest["owned"].values())
+    assert (
+        tmp_path / ".cursor/commands/ob-start.md"
+    ).read_text().count(str(ROOT)) > 0
+
+
+def test_legacy_manifest_does_not_claim_modified_command(tmp_path):
+    run_install(tmp_path, "--cursor")
+    convert_host_install_to_legacy_manifest(tmp_path)
+    command = tmp_path / ".cursor/commands/ob-start.md"
+    command.write_text("user-defined command\n")
+
+    result = try_install(tmp_path, "--cursor")
+
+    assert result.returncode == 1
+    assert "not installer-owned" in result.stdout
+    assert command.read_text() == "user-defined command\n"
+
+
+def test_legacy_manifest_does_not_claim_retargeted_skill(tmp_path):
+    run_install(tmp_path, "--cursor")
+    convert_host_install_to_legacy_manifest(tmp_path)
+    skill = tmp_path / ".cursor/skills/engagement-intake"
+    skill.unlink()
+    skill.symlink_to("../../user-owned-skill", target_is_directory=True)
+
+    result = try_install(tmp_path, "--cursor")
+
+    assert result.returncode == 1
+    assert "not installer-owned" in result.stdout
+    assert skill.is_symlink()
+    assert os.readlink(skill) == "../../user-owned-skill"
 
 
 def test_gitignore_uninstall_removes_only_tracked_lines(tmp_path):
