@@ -310,7 +310,10 @@ def _symlinked_or_escaping_parent(root: Path, path: Path) -> Path | None:
 def _tree_digest(path: Path) -> str:
     digest = hashlib.sha256()
     for child in sorted(path.rglob("*"), key=lambda candidate: candidate.as_posix()):
-        relative = child.relative_to(path).as_posix().encode()
+        relative_path = child.relative_to(path)
+        if "__pycache__" in relative_path.parts or child.name.endswith(".pyc"):
+            continue
+        relative = relative_path.as_posix().encode()
         if child.is_symlink():
             digest.update(b"L\0" + relative + b"\0" + os.readlink(child).encode())
         elif child.is_file():

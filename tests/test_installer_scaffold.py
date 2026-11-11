@@ -319,6 +319,21 @@ def test_project_codex_copied_start_turn_uses_installed_inputs(tmp_path):
     ).is_file()
 
 
+def test_python_caches_do_not_block_codex_reinstall_or_uninstall(tmp_path):
+    run_install(tmp_path, "--codex")
+    skill = tmp_path / ".agents/skills/engagement-intake"
+    script = skill / "scripts/start_turn.py"
+
+    run_installed_start(script, tmp_path)
+    assert list(skill.rglob("__pycache__"))
+
+    run_install(tmp_path, "--codex")
+    run_installed_start(script, tmp_path)
+    run_install(tmp_path, "--codex", "--uninstall")
+
+    assert not skill.exists()
+
+
 def test_user_codex_copied_start_turn_uses_installed_inputs(tmp_path):
     home = tmp_path / "home"
     home.mkdir()
