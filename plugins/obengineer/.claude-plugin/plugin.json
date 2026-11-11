@@ -1,7 +1,7 @@
 {
   "name": "obengineer",
   "displayName": "obengineer",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Guided, versioned instrumentation analysis for Claude Code: linked side-panel strategy, wiki, work orders, implementation, Terraform planning, and verification.",
   "author": {
     "name": "Splunk Observability Practice"

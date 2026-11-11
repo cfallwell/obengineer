@@ -1,0 +1,7 @@
+interface:
+  display_name: "ob-edit-inputs"
+  short_description: "Edit inputs and run the next analysis"
+  default_prompt: "Use $ob-edit-inputs to edit inputs and run the next analysis."
+
+policy:
+  allow_implicit_invocation: false

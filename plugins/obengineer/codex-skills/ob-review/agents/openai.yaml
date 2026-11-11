@@ -1,0 +1,7 @@
+interface:
+  display_name: "ob-review"
+  short_description: "Review an analysis and its wiki"
+  default_prompt: "Use $ob-review to review an analysis and its wiki."
+
+policy:
+  allow_implicit_invocation: false

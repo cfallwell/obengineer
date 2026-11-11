@@ -21,15 +21,35 @@ import shutil
 import sys
 from pathlib import Path
 
+try:
+    from scripts.codex_workflows import (
+        ROOT_TOKEN as WORKFLOW_ROOT_TOKEN,
+        WORKFLOW_ORDER,
+        render_openai_yaml,
+        render_skill,
+        write_workflow_skills,
+    )
+except ModuleNotFoundError:  # Direct execution from scripts/.
+    from codex_workflows import (  # type: ignore[no-redef]
+        ROOT_TOKEN as WORKFLOW_ROOT_TOKEN,
+        WORKFLOW_ORDER,
+        render_openai_yaml,
+        render_skill,
+        write_workflow_skills,
+    )
+
 ROOT = Path(__file__).resolve().parent.parent
 CANONICAL = ROOT / "skills"
 PLUGIN = ROOT / "plugins" / "obengineer"
 PLUGIN_SKILLS = PLUGIN / "skills"
+PLUGIN_CODEX_SKILLS = PLUGIN / "codex-skills"
 PLUGIN_COMMANDS = PLUGIN / "commands"
 COMMANDS = ROOT / "commands"
 ROOT_TOKEN = "{{OBENGINEER_ROOT}}"
 PLUGIN_ROOT_TOKEN = "${CLAUDE_PLUGIN_ROOT}"
-LINK_DIRS = (ROOT / ".cursor" / "skills", ROOT / ".agents" / "skills")
+CODEX_PLUGIN_ROOT_TOKEN = "${PLUGIN_ROOT}"
+CURSOR_LINKS = ROOT / ".cursor" / "skills"
+CODEX_LINKS = ROOT / ".agents" / "skills"
 IGNORE_NAMES = ["__pycache__", ".pytest_cache", ".DS_Store"]
 IGNORE = shutil.ignore_patterns(*IGNORE_NAMES, "*.pyc")
 # Skills and prompts link to agents, prompts, and the engagement input template, so the bundle carries them too;
@@ -74,6 +94,82 @@ def diff_report(names: list[str]) -> list[str]:
         names + shared_dirs()
     ) if PLUGIN_SKILLS.exists() else set()
     problems += [f"stale directory in plugin: {name}" for name in sorted(extra)]
+    return problems
+
+
+def codex_root_problems(root: Path, expected: set[str]) -> list[str]:
+    problems: list[str] = []
+    if not root.is_dir():
+        return ["missing Codex plugin skills root"]
+    for entry in sorted(root.iterdir(), key=lambda path: path.name):
+        if entry.is_symlink():
+            problems.append(f"unexpected root symlink in Codex plugin skills: {entry.name}")
+        elif not entry.is_dir():
+            problems.append(f"unexpected root file in Codex plugin skills: {entry.name}")
+        elif entry.name not in expected:
+            problems.append(f"stale directory in Codex plugin skills: {entry.name}")
+    return problems
+
+
+def codex_skill_problems(names: list[str]) -> list[str]:
+    problems: list[str] = []
+    expected = set(names + shared_dirs() + list(WORKFLOW_ORDER))
+    problems.extend(codex_root_problems(PLUGIN_CODEX_SKILLS, expected))
+    actual = (
+        {
+            path.name
+            for path in PLUGIN_CODEX_SKILLS.iterdir()
+            if path.is_dir() and not path.is_symlink()
+        }
+        if PLUGIN_CODEX_SKILLS.exists()
+        else set()
+    )
+    for name in sorted(set(names + shared_dirs())):
+        source = CANONICAL / name
+        target = PLUGIN_CODEX_SKILLS / name
+        if not target.is_dir():
+            problems.append(f"missing from Codex plugin skills: {name}")
+            continue
+        comparison = filecmp.dircmp(source, target, ignore=IGNORE_NAMES)
+
+        def walk(node, prefix=""):
+            for filename in node.left_only:
+                problems.append(f"only in canonical: codex-skills/{prefix}{filename}")
+            for filename in node.right_only:
+                problems.append(f"only in Codex plugin: {prefix}{filename}")
+            for filename in node.diff_files:
+                problems.append(f"differs: codex-skills/{prefix}{filename}")
+            for subdir, child in node.subdirs.items():
+                walk(child, f"{prefix}{subdir}/")
+
+        walk(comparison, f"{name}/")
+    for name in WORKFLOW_ORDER:
+        command = COMMANDS / f"{name}.md"
+        skill = PLUGIN_CODEX_SKILLS / name
+        expected_skill = render_skill(command, CODEX_PLUGIN_ROOT_TOKEN)
+        expected_openai = render_openai_yaml(name)
+        if not (skill / "SKILL.md").is_file():
+            problems.append(f"missing from Codex plugin skills: {name}/SKILL.md")
+        elif (skill / "SKILL.md").read_text() != expected_skill:
+            problems.append(f"differs: codex-skills/{name}/SKILL.md")
+        if not (skill / "agents/openai.yaml").is_file():
+            problems.append(
+                f"missing from Codex plugin skills: {name}/agents/openai.yaml"
+            )
+        elif (skill / "agents/openai.yaml").read_text() != expected_openai:
+            problems.append(f"differs: codex-skills/{name}/agents/openai.yaml")
+        actual_files = (
+            {
+                path.relative_to(skill).as_posix()
+                for path in skill.rglob("*")
+                if path.is_file()
+            }
+            if skill.is_dir()
+            else set()
+        )
+        expected_files = {"SKILL.md", "agents/openai.yaml"}
+        for extra in sorted(actual_files - expected_files):
+            problems.append(f"only in Codex plugin: {name}/{extra}")
     return problems
 
 
@@ -157,9 +253,28 @@ def sync(names: list[str]) -> None:
         )
     print("  synced commands/ (plugin root resolved)")
 
+    if PLUGIN_CODEX_SKILLS.exists():
+        shutil.rmtree(PLUGIN_CODEX_SKILLS)
+    PLUGIN_CODEX_SKILLS.mkdir(parents=True)
+    for name in sorted(set(names + shared_dirs())):
+        shutil.copytree(
+            CANONICAL / name,
+            PLUGIN_CODEX_SKILLS / name,
+            ignore=IGNORE,
+        )
+    write_workflow_skills(
+        PLUGIN_CODEX_SKILLS,
+        COMMANDS,
+        root_value=CODEX_PLUGIN_ROOT_TOKEN,
+    )
+    print(
+        f"  synced codex-skills/ ({len(names)} canonical + "
+        f"{len(WORKFLOW_ORDER)} workflows)"
+    )
+
 
 def refresh_links(names: list[str]) -> None:
-    for link_dir in LINK_DIRS:
+    for link_dir in (CURSOR_LINKS, CODEX_LINKS):
         link_dir.mkdir(parents=True, exist_ok=True)
         for existing in link_dir.iterdir():
             if existing.is_symlink() or existing.is_dir():
@@ -168,6 +283,11 @@ def refresh_links(names: list[str]) -> None:
             target = os.path.relpath(CANONICAL / name, link_dir)
             (link_dir / name).symlink_to(target, target_is_directory=True)
         print(f"  linked {len(names)} skills into {link_dir.relative_to(ROOT)}")
+    write_workflow_skills(CODEX_LINKS, COMMANDS, WORKFLOW_ROOT_TOKEN)
+    print(
+        f"  generated {len(WORKFLOW_ORDER)} workflows into "
+        f"{CODEX_LINKS.relative_to(ROOT)}"
+    )
 
 
 def main(argv=None) -> int:
@@ -182,7 +302,12 @@ def main(argv=None) -> int:
         sys.exit("no skills found under skills/")
 
     if args.check:
-        problems = diff_report(names) + companion_problems() + command_problems()
+        problems = (
+            diff_report(names)
+            + codex_skill_problems(names)
+            + companion_problems()
+            + command_problems()
+        )
         if problems:
             print(f"FAIL — plugin skills drifted ({len(problems)}):")
             for p in problems:

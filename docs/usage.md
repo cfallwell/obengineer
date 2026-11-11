@@ -9,6 +9,12 @@ start → analyze + wiki + work orders → review PR → accept and merge
                                                     └─ verify outcomes read-only
 ```
 
+Examples below use Cursor and Claude Code slash-command syntax. For every workflow,
+replace `/ob-*` with `$ob-*` in Codex CLI or `@ob-*` in ChatGPT Desktop. Arguments stay
+after the workflow name, for example `$ob-implement work-order:WO-001` or
+`@ob-implement work-order:WO-001`. Desktop use requires its local executor; ChatGPT
+web/cloud and Work surfaces without local execution are not supported.
+
 ## Start
 
 Run from the artifact repository:

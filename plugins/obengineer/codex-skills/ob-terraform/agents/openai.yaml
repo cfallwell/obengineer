@@ -1,0 +1,7 @@
+interface:
+  display_name: "ob-terraform"
+  short_description: "Generate an accepted Terraform plan"
+  default_prompt: "Use $ob-terraform to generate an accepted Terraform plan."
+
+policy:
+  allow_implicit_invocation: false

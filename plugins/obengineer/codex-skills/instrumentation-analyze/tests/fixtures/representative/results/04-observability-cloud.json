@@ -1,0 +1,35 @@
+{
+  "schemaVersion": 1,
+  "analysisId": "sample-storefront-V1",
+  "jobId": "observability-cloud",
+  "status": "limited",
+  "startedAt": "2026-11-10T20:05:00Z",
+  "completedAt": "2026-11-10T20:09:00Z",
+  "evidence": [
+    {
+      "id": "EV-O11Y-APM",
+      "kind": "measured",
+      "source": "read-only Observability Cloud API",
+      "observedAt": "2026-11-10T20:11:00Z",
+      "summary": "Automatic service spans arrive, but the sampled traces do not contain stable workflow or business-transaction attributes."
+    }
+  ],
+  "facts": [
+    {
+      "id": "FACT-O11Y-GAP",
+      "evidenceIds": ["EV-O11Y-APM"],
+      "statement": "Current APM supports service troubleshooting but cannot answer end-to-end storefront intent questions.",
+      "confidence": "high"
+    }
+  ],
+  "limitations": [
+    "Contractual entitlement was supplied as a fixture assumption rather than queried from a billing source."
+  ],
+  "degradation": {
+    "missingRequiredOutputs": [],
+    "unavailableEvidenceScopes": [
+      "RUM, APM, Infrastructure, Synthetics, MetricSets, and usage"
+    ],
+    "impact": "Usage entitlement evidence remains stated rather than measured, so cardinality headroom requires confirmation."
+  }
+}

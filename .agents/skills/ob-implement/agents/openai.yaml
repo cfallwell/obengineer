@@ -1,0 +1,7 @@
+interface:
+  display_name: "ob-implement"
+  short_description: "Implement one Ready work order"
+  default_prompt: "Use $ob-implement to implement one Ready work order."
+
+policy:
+  allow_implicit_invocation: false

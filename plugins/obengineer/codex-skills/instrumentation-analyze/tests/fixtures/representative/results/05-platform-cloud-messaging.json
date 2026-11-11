@@ -1,0 +1,26 @@
+{
+  "schemaVersion": 1,
+  "analysisId": "sample-storefront-V1",
+  "jobId": "platform-cloud-messaging",
+  "status": "completed",
+  "startedAt": "2026-11-10T20:05:15Z",
+  "completedAt": "2026-11-10T20:09:30Z",
+  "evidence": [
+    {
+      "id": "EV-PLATFORM-LOGS",
+      "kind": "measured",
+      "source": "approved log indexes and cloud configuration",
+      "observedAt": "2026-11-10T20:12:00Z",
+      "summary": "Application logs exist, while trace identifiers and message context are inconsistent at the queue boundary."
+    }
+  ],
+  "facts": [
+    {
+      "id": "FACT-PLATFORM-JOIN",
+      "evidenceIds": ["EV-PLATFORM-LOGS"],
+      "statement": "Log Observer Connect requires trace and span identifiers before raw events can deep-link to the APM waterfall.",
+      "confidence": "confirmed"
+    }
+  ],
+  "limitations": []
+}

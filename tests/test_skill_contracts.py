@@ -8,6 +8,14 @@ import subprocess
 from pathlib import Path
 
 import pytest
+import yaml
+
+from scripts.codex_workflows import (
+    WORKFLOW_ORDER,
+    render_openai_yaml,
+    render_skill,
+)
+from scripts.sync_plugin_skills import codex_root_problems
 
 ROOT = Path(__file__).resolve().parent.parent
 SKILLS = ROOT / "skills"
@@ -436,12 +444,69 @@ def test_plugin_manifests_and_mirrors_agree():
     claude = json.loads((PLUGIN / ".claude-plugin" / "plugin.json").read_text())
     codex = json.loads((PLUGIN / ".codex-plugin" / "plugin.json").read_text())
     assert claude["version"] == codex["version"]
+    assert codex["version"] == "0.2.1"
+    assert claude["skills"] == ["./skills/"]
+    assert codex["skills"] == "./codex-skills/"
+    assert codex["requires_local_executor"] is True
     mirrored = sorted(path.parent.name for path in (PLUGIN / "skills").glob("*/SKILL.md"))
     assert mirrored == CANONICAL_SKILLS
     for skill in CANONICAL_SKILLS:
         assert (
             PLUGIN / "skills" / skill / "SKILL.md"
         ).read_text() == (SKILLS / skill / "SKILL.md").read_text()
+        assert (
+            PLUGIN / "codex-skills" / skill / "SKILL.md"
+        ).read_text() == (SKILLS / skill / "SKILL.md").read_text()
+
+
+def test_codex_workflow_wrappers_match_every_command_and_are_explicit_only():
+    commands = sorted(path.stem for path in COMMANDS.glob("ob-*.md"))
+    assert commands == sorted(WORKFLOW_ORDER)
+    codex_skills = PLUGIN / "codex-skills"
+    generated = ROOT / ".agents/skills"
+
+    for name in WORKFLOW_ORDER:
+        command = COMMANDS / f"{name}.md"
+        plugin_wrapper = codex_skills / name
+        local_wrapper = generated / name
+        plugin_text = (plugin_wrapper / "SKILL.md").read_text()
+        local_text = (local_wrapper / "SKILL.md").read_text()
+        assert plugin_text == render_skill(command, "${PLUGIN_ROOT}")
+        assert "${CLAUDE_PLUGIN_ROOT}" not in plugin_text
+        assert local_text == render_skill(command)
+        data, body = frontmatter(plugin_wrapper / "SKILL.md")
+        assert data["name"] == name
+        assert f"${name}" in data["description"]
+        assert body.lstrip().startswith(f"# {name}")
+        assert f"${name}" in plugin_text
+        assert f"@{name}" in plugin_text
+        assert "$ARGUMENTS" in plugin_text
+        assert "Preserve all user-supplied text" in plugin_text
+        expected_openai = render_openai_yaml(name)
+        assert (
+            plugin_wrapper / "agents/openai.yaml"
+        ).read_text() == expected_openai
+        assert (
+            local_wrapper / "agents/openai.yaml"
+        ).read_text() == expected_openai
+        metadata = yaml.safe_load(expected_openai)
+        assert metadata["policy"]["allow_implicit_invocation"] is False
+        assert f"${name}" in metadata["interface"]["default_prompt"]
+
+
+def test_codex_plugin_drift_rejects_unexpected_root_files_and_symlinks(tmp_path):
+    expected = tmp_path / "expected-skill"
+    expected.mkdir()
+    unexpected_file = tmp_path / "README.tmp"
+    unexpected_file.write_text("unexpected\n")
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    (tmp_path / "linked-skill").symlink_to(outside, target_is_directory=True)
+
+    problems = codex_root_problems(tmp_path, {"expected-skill"})
+
+    assert any("unexpected root file" in problem for problem in problems)
+    assert any("unexpected root symlink" in problem for problem in problems)
 
 
 CREDENTIAL_PATTERNS = [

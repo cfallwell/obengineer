@@ -51,8 +51,13 @@ direct APIs; it is not the only tenant data source.
 Open the artifact repository and run:
 
 ```text
-/ob-start
+Cursor / Claude Code: /ob-start
+Codex CLI:           $ob-start
+ChatGPT Desktop:     @ob-start
 ```
+
+ChatGPT Desktop requires its local executor for these Python-backed workflows. ChatGPT
+web/cloud and Work surfaces without local execution are not supported.
 
 Before any discovery, the guided start immediately asks for the application, an explicit
 production URL or no-browser reason, and what hurts. It then offers numbered optional
@@ -63,8 +68,9 @@ answers do not block analysis.
 At any time:
 
 ```text
-/ob-add-inputs
-/ob-edit-inputs
+Cursor / Claude Code: /ob-add-inputs, /ob-edit-inputs
+Codex CLI:           $ob-add-inputs, $ob-edit-inputs
+ChatGPT Desktop:     @ob-add-inputs, @ob-edit-inputs
 ```
 
 Each addition or edit automatically creates the next immutable `[V<N>]` analysis and one
@@ -78,9 +84,9 @@ Eligible work orders become Ready.
 Continue with:
 
 ```text
-/ob-implement work-order:<id>
-/ob-terraform
-/ob-verify
+Cursor / Claude Code: /ob-implement work-order:<id>, /ob-terraform, /ob-verify
+Codex CLI:           $ob-implement work-order:<id>, $ob-terraform, $ob-verify
+ChatGPT Desktop:     @ob-implement work-order:<id>, @ob-terraform, @ob-verify
 ```
 
 Terraform is plan-only and a human applies it. Verification is read-only.

@@ -8,13 +8,14 @@
     ./install.sh --list                   # what is installed, and where
     ./install.sh --all --uninstall        # remove exactly what was installed
 
-Skills are symlinked by default so an edit to the canonical file takes effect without
-reinstalling. `--copy` writes copies instead, for a host that cannot follow links or a
-bundle that will be distributed.
+Cursor and Claude skills are symlinked by default so canonical edits take effect
+without reinstalling. Codex skills are always materialized because Codex ignores skill
+directory symlinks that resolve outside the target repository. `--copy` selects copies
+for Cursor and Claude too.
 
-Commands are always written as files, because each one carries this bundle's resolved
-path. They are what makes the guided flow invokable — `/ob-start` instead of pasting
-a prompt into the chat.
+Cursor and Claude commands are written as files because each one carries this bundle's
+resolved path. Codex receives explicit-only workflow skills instead: `$ob-start` in the
+CLI or `@ob-start` in ChatGPT Desktop.
 
 Every install writes digested ownership records next to what it created. Reinstall
 refuses unowned or modified collisions, and `--uninstall` removes only unchanged
@@ -37,10 +38,25 @@ import tempfile
 from dataclasses import dataclass, field
 from pathlib import Path
 
+try:
+    from scripts.codex_workflows import (
+        WORKFLOW_ORDER,
+        render_openai_yaml,
+        render_skill,
+    )
+except ModuleNotFoundError:  # Direct execution from scripts/.
+    from codex_workflows import (  # type: ignore[no-redef]
+        WORKFLOW_ORDER,
+        render_openai_yaml,
+        render_skill,
+    )
+
 ROOT = Path(__file__).resolve().parent.parent
 CANONICAL_SKILLS = ROOT / "skills"
 COMMANDS = ROOT / "commands"
+INPUTS = ROOT / "inputs"
 MANIFEST_NAME = ".obengineer-install.json"
+CODEX_INPUTS_SUBDIR = Path("obengineer/inputs")
 SCAFFOLD_MANIFEST = Path(".obengineer/scaffold-manifest.json")
 SCAFFOLD_FILES = (
     (Path("templates/memory-repo/.env.template"), Path(".env.template")),
@@ -50,10 +66,7 @@ SCAFFOLD_FILES = (
     ),
 )
 ROOT_TOKEN = "{{OBENGINEER_ROOT}}"
-COMMAND_ORDER = (
-    "ob-start", "ob-add-inputs", "ob-edit-inputs", "ob-analyze",
-    "ob-review", "ob-implement", "ob-terraform", "ob-verify", "ob-render",
-)
+COMMAND_ORDER = WORKFLOW_ORDER
 LEGACY_COMMAND_STEMS = {
     "ob-start": ("ob-intake", "ob-generate", "ob-wiki"),
     "ob-terraform": ("ob-build-terraform",),
@@ -141,6 +154,8 @@ class Host:
     skills_subdir: str = "skills"
     commands_subdir: str = "commands"
     project_skills_subdir: str | None = None
+    install_commands: bool = True
+    install_workflows: bool = False
     notes: tuple[str, ...] = field(default_factory=tuple)
 
     def base(self, scope_root: Path, project: bool) -> Path:
@@ -176,12 +191,25 @@ HOSTS: dict[str, Host] = {
     "codex": Host(
         key="codex",
         label="Codex",
-        user_dir=".codex",
+        user_dir=".agents",
         project_dir=".agents",
         commands_subdir="prompts",
-        notes=("Codex reads user-defined prompts from ~/.codex/prompts.",),
+        install_commands=False,
+        install_workflows=True,
+        notes=(
+            "Codex CLI: invoke workflows as $ob-start, $ob-implement, ...",
+            "ChatGPT Desktop: invoke workflows as @ob-start, @ob-implement, ...",
+        ),
     ),
 }
+
+LEGACY_CODEX_HOST = Host(
+    key="codex",
+    label="Codex",
+    user_dir=".codex",
+    project_dir=".agents",
+    commands_subdir="prompts",
+)
 
 
 def skill_names() -> list[str]:
@@ -240,7 +268,7 @@ class Planner:
         dst.write_text(text)
 
     def remove(self, dst: Path) -> None:
-        self.note(f"remove retired command {dst}")
+        self.note(f"remove unchanged legacy path {dst}")
         if self.dry_run:
             return
         if dst.is_symlink() or dst.exists():
@@ -311,27 +339,53 @@ def ownership_matches(path: Path, ownership: object) -> bool:
         return False
 
 
+def installs_inputs_companion(host: Host, copy: bool) -> bool:
+    return host.install_workflows or copy
+
+
 def desired_host_targets(
-    host: Host, scope_root: Path, project: bool
+    host: Host,
+    scope_root: Path,
+    project: bool,
+    copy: bool,
 ) -> list[Path]:
     skills_dir = host.skills_dir(scope_root, project)
     commands_dir = host.commands_dir(scope_root, project)
     return [
         *(skills_dir / name for name in skill_names() + shared_reference_dirs()),
-        *(commands_dir / command.name for command in command_files()),
+        *(
+            (commands_dir / command.name for command in command_files())
+            if host.install_commands
+            else ()
+        ),
+        *(
+            (skills_dir / name for name in WORKFLOW_ORDER)
+            if host.install_workflows
+            else ()
+        ),
+        *(
+            [host.base(scope_root, project) / CODEX_INPUTS_SUBDIR]
+            if installs_inputs_companion(host, copy)
+            else []
+        ),
     ]
 
 
 def legacy_host_targets(
     host: Host, scope_root: Path, project: bool
 ) -> list[Path]:
+    skills_dir = host.skills_dir(scope_root, project)
     commands_dir = host.commands_dir(scope_root, project)
     retired = {
         commands_dir / f"{stem}.md"
         for stems in LEGACY_COMMAND_STEMS.values()
         for stem in stems
     }
-    return [*desired_host_targets(host, scope_root, project), *sorted(retired)]
+    return [
+        *(skills_dir / name for name in skill_names() + shared_reference_dirs()),
+        *(commands_dir / command.name for command in command_files()),
+        *sorted(retired),
+    ]
 
 
 def legacy_command_digests(name: str) -> set[str]:
@@ -428,16 +482,35 @@ def host_owned_entries_for_install(
     return legacy_host_owned_entries(manifest, host, scope_root, project)
 
 
+def unsafe_host_manifest_reason(scope_root: Path, manifest_path: Path) -> str | None:
+    if manifest_path.is_symlink():
+        return f"{manifest_path} is a symlink"
+    unsafe_parent = _symlinked_or_escaping_parent(scope_root, manifest_path)
+    if unsafe_parent is not None:
+        return (
+            f"{manifest_path} has symlinked or escaping parent "
+            f"{unsafe_parent}"
+        )
+    return None
+
+
 def host_install_conflicts(
-    host: Host, scope_root: Path, project: bool
+    host: Host,
+    scope_root: Path,
+    project: bool,
+    copy: bool,
 ) -> list[str]:
     base = host.base(scope_root, project)
-    manifest = read_manifest(base / MANIFEST_NAME)
+    manifest_path = base / MANIFEST_NAME
+    unsafe_manifest = unsafe_host_manifest_reason(scope_root, manifest_path)
+    if unsafe_manifest is not None:
+        return [f"unsafe host manifest: {unsafe_manifest}"]
+    manifest = read_manifest(manifest_path)
     owned = host_owned_entries_for_install(
         manifest, host, scope_root, project
     )
     conflicts: list[str] = []
-    for path in desired_host_targets(host, scope_root, project):
+    for path in desired_host_targets(host, scope_root, project, copy):
         unsafe_parent = _symlinked_or_escaping_parent(scope_root, path)
         if unsafe_parent is not None:
             conflicts.append(
@@ -465,6 +538,151 @@ def _remove_path(path: Path) -> None:
         path.unlink()
 
 
+def _owned_host_path(base: Path, relative: str) -> Path | None:
+    candidate = Path(relative)
+    if candidate.is_absolute() or ".." in candidate.parts or candidate == Path("."):
+        return None
+    path = base / candidate
+    if _symlinked_or_escaping_parent(base.parent, path) is not None:
+        return None
+    return path
+
+
+@dataclass
+class StaleCleanup:
+    """Prior-owned paths no longer emitted by the current install."""
+
+    paths: list[Path] = field(default_factory=list)
+    preserved_owned: dict[str, dict] = field(default_factory=dict)
+    notes: list[str] = field(default_factory=list)
+
+
+def _stale_owned_cleanup(
+    base: Path,
+    previously_owned: dict[str, dict],
+    desired: list[Path],
+) -> StaleCleanup:
+    desired_relatives = {
+        _host_relative(base, path)
+        for path in desired
+    }
+    cleanup = StaleCleanup()
+    for relative, ownership in sorted(previously_owned.items()):
+        if relative in desired_relatives:
+            continue
+        path = _owned_host_path(base, relative)
+        if path is None:
+            cleanup.notes.append(
+                f"preserve unsafe stale host manifest entry {relative}"
+            )
+            cleanup.preserved_owned[relative] = ownership
+            continue
+        if not (path.exists() or path.is_symlink()):
+            continue
+        if ownership_matches(path, ownership):
+            cleanup.paths.append(path)
+        else:
+            cleanup.notes.append(f"preserve modified stale installer path {path}")
+            cleanup.preserved_owned[relative] = ownership
+    return cleanup
+
+
+@dataclass
+class LegacyCleanup:
+    """Verified legacy paths that can participate in the install transaction."""
+
+    paths: list[Path] = field(default_factory=list)
+    manifest: Path | None = None
+    manifest_update: tuple[Path, str] | None = None
+    notes: list[str] = field(default_factory=list)
+
+
+def _verified_legacy_cleanup(
+    legacy_host: Host,
+    scope_root: Path,
+    project: bool,
+) -> LegacyCleanup:
+    base = legacy_host.base(scope_root, project)
+    manifest_path = base / MANIFEST_NAME
+    unsafe_manifest = unsafe_host_manifest_reason(scope_root, manifest_path)
+    if unsafe_manifest is not None:
+        return LegacyCleanup(
+            notes=[
+                f"preserve and ignore unsafe legacy Codex manifest: "
+                f"{unsafe_manifest}"
+            ]
+        )
+    manifest = read_manifest(manifest_path)
+    if not manifest:
+        return LegacyCleanup()
+    owned = host_owned_entries_for_install(
+        manifest,
+        legacy_host,
+        scope_root,
+        project,
+    )
+    if owned is None:
+        return LegacyCleanup(
+            notes=[
+                f"preserve unverifiable legacy Codex installation at {base}"
+            ]
+        )
+
+    cleanup = LegacyCleanup()
+    retained_owned: dict[str, dict] = {}
+    for relative, ownership in sorted(owned.items()):
+        path = _owned_host_path(base, relative)
+        if path is None:
+            cleanup.notes.append(
+                f"preserve unsafe legacy Codex manifest entry {relative}"
+            )
+            retained_owned[relative] = ownership
+            continue
+        if not (path.exists() or path.is_symlink()):
+            continue
+        if ownership_matches(path, ownership):
+            cleanup.paths.append(path)
+        else:
+            cleanup.notes.append(f"preserve modified legacy Codex path {path}")
+            retained_owned[relative] = ownership
+
+    manifest_is_safe = (
+        manifest_path.is_file()
+        and not manifest_path.is_symlink()
+        and _symlinked_or_escaping_parent(scope_root, manifest_path) is None
+    )
+    if manifest_is_safe and not retained_owned:
+        cleanup.manifest = manifest_path
+    elif manifest_is_safe:
+        cleanup.notes.append(
+            f"retain legacy Codex manifest for preserved owned paths at {base}"
+        )
+        if host_owned_entries(manifest) is not None:
+            retained_manifest = dict(manifest)
+            retained_manifest["owned"] = dict(sorted(retained_owned.items()))
+            cleanup.manifest_update = (
+                manifest_path,
+                json.dumps(retained_manifest, indent=2, sort_keys=True) + "\n",
+            )
+    else:
+        cleanup.notes.append(
+            f"preserve unsafe legacy Codex manifest {manifest_path}"
+        )
+    return cleanup
+
+
+def _write_workflow(
+    planner: Planner,
+    command: Path,
+    destination: Path,
+) -> None:
+    planner.write(destination / "SKILL.md", render_skill(command, str(ROOT)))
+    planner.write(
+        destination / "agents/openai.yaml",
+        render_openai_yaml(command.stem),
+    )
+
+
 def install_host(
     host: Host,
     scope_root: Path,
@@ -476,66 +694,121 @@ def install_host(
     commands_dir = host.commands_dir(scope_root, project)
     base = host.base(scope_root, project)
     manifest_path = base / MANIFEST_NAME
+    conflicts = host_install_conflicts(host, scope_root, project, copy)
+    if conflicts:
+        raise InstallConflict("; ".join(conflicts))
     previous = read_manifest(manifest_path)
     previously_owned = host_owned_entries_for_install(
         previous, host, scope_root, project
     )
-    conflicts = host_install_conflicts(host, scope_root, project)
-    if conflicts:
-        raise InstallConflict("; ".join(conflicts))
     assert previously_owned is not None
+    targets = desired_host_targets(host, scope_root, project, copy)
+    stale_cleanup = _stale_owned_cleanup(base, previously_owned, targets)
+    for note in stale_cleanup.notes:
+        planner.note(note)
 
-    retired_paths: list[Path] = []
-    for replacement, retired_stems in LEGACY_COMMAND_STEMS.items():
-        if not (COMMANDS / f"{replacement}.md").is_file():
-            continue
-        for retired in retired_stems:
-            retired_path = commands_dir / f"{retired}.md"
-            relative = _host_relative(base, retired_path)
-            ownership = previously_owned.get(relative)
-            if ownership and ownership_matches(retired_path, ownership):
-                retired_paths.append(retired_path)
-            elif ownership and (retired_path.exists() or retired_path.is_symlink()):
-                planner.note(f"preserve modified retired command {retired_path}")
+    external_cleanup = (
+        _verified_legacy_cleanup(
+            LEGACY_CODEX_HOST,
+            scope_root,
+            False,
+        )
+        if host.key == "codex" and not project
+        else LegacyCleanup()
+    )
+    for note in external_cleanup.notes:
+        planner.note(note)
 
-    targets = desired_host_targets(host, scope_root, project)
     if planner.dry_run:
-        for retired_path in retired_paths:
-            planner.remove(retired_path)
-        for name in skill_names() + shared_reference_dirs():
-            planner.link_or_copy(CANONICAL_SKILLS / name, skills_dir / name, copy)
-        for command in command_files():
-            planner.write(
-                commands_dir / command.name,
-                command.read_text().replace(ROOT_TOKEN, str(ROOT)),
+        for stale_path in [*stale_cleanup.paths, *external_cleanup.paths]:
+            planner.remove(stale_path)
+        if external_cleanup.manifest is not None:
+            planner.remove(external_cleanup.manifest)
+        if external_cleanup.manifest_update is not None:
+            planner.note(
+                f"rewrite retained legacy manifest "
+                f"{external_cleanup.manifest_update[0]}"
             )
+        for name in skill_names() + shared_reference_dirs():
+            planner.link_or_copy(
+                CANONICAL_SKILLS / name,
+                skills_dir / name,
+                copy or host.install_workflows,
+            )
+        if installs_inputs_companion(host, copy):
+            planner.link_or_copy(
+                INPUTS,
+                base / CODEX_INPUTS_SUBDIR,
+                True,
+            )
+        if host.install_commands:
+            for command in command_files():
+                planner.write(
+                    commands_dir / command.name,
+                    command.read_text().replace(ROOT_TOKEN, str(ROOT)),
+                )
+        if host.install_workflows:
+            for command in command_files():
+                _write_workflow(planner, command, skills_dir / command.stem)
         return
 
     base.parent.mkdir(parents=True, exist_ok=True)
     staging = Path(tempfile.mkdtemp(prefix=".obengineer-install-", dir=base.parent))
     backups: list[tuple[Path, Path]] = []
     try:
-        for index, path in enumerate([*targets, *retired_paths]):
+        transaction_paths = [
+            *targets,
+            *stale_cleanup.paths,
+            *external_cleanup.paths,
+            *(
+                [external_cleanup.manifest]
+                if external_cleanup.manifest is not None
+                else []
+            ),
+            *(
+                [external_cleanup.manifest_update[0]]
+                if external_cleanup.manifest_update is not None
+                else []
+            ),
+        ]
+        for index, path in enumerate(dict.fromkeys(transaction_paths)):
             if path.exists() or path.is_symlink():
                 backup = staging / str(index)
                 backup.parent.mkdir(parents=True, exist_ok=True)
                 shutil.move(str(path), str(backup))
                 backups.append((path, backup))
 
-        for retired_path in retired_paths:
-            planner.remove(retired_path)
+        for stale_path in [*stale_cleanup.paths, *external_cleanup.paths]:
+            planner.remove(stale_path)
         for name in skill_names() + shared_reference_dirs():
-            planner.link_or_copy(CANONICAL_SKILLS / name, skills_dir / name, copy)
-        for command in command_files():
-            planner.write(
-                commands_dir / command.name,
-                command.read_text().replace(ROOT_TOKEN, str(ROOT)),
+            planner.link_or_copy(
+                CANONICAL_SKILLS / name,
+                skills_dir / name,
+                copy or host.install_workflows,
             )
+        if installs_inputs_companion(host, copy):
+            planner.link_or_copy(
+                INPUTS,
+                base / CODEX_INPUTS_SUBDIR,
+                True,
+            )
+        if host.install_commands:
+            for command in command_files():
+                planner.write(
+                    commands_dir / command.name,
+                    command.read_text().replace(ROOT_TOKEN, str(ROOT)),
+                )
+        if host.install_workflows:
+            for command in command_files():
+                _write_workflow(planner, command, skills_dir / command.stem)
 
+        if external_cleanup.manifest_update is not None:
+            atomic_write(*external_cleanup.manifest_update)
         owned = {
             _host_relative(base, path): path_ownership(path)
             for path in targets
         }
+        owned.update(stale_cleanup.preserved_owned)
         atomic_write(
             manifest_path,
             json.dumps(
@@ -554,6 +827,11 @@ def install_host(
         for path in targets:
             _remove_path(path)
         for path, backup in reversed(backups):
+            if (
+                external_cleanup.manifest_update is not None
+                and path == external_cleanup.manifest_update[0]
+            ):
+                _remove_path(path)
             path.parent.mkdir(parents=True, exist_ok=True)
             shutil.move(str(backup), str(path))
         raise
@@ -562,6 +840,8 @@ def install_host(
 
 
 def read_manifest(path: Path) -> dict:
+    if path.is_symlink():
+        return {}
     try:
         return json.loads(path.read_text())
     except (OSError, json.JSONDecodeError):
@@ -758,16 +1038,6 @@ def _owned_scaffold_path(scope_root: Path, relative: str) -> Path | None:
     return resolved
 
 
-def _owned_host_path(base: Path, relative: str) -> Path | None:
-    candidate = Path(relative)
-    if candidate.is_absolute() or ".." in candidate.parts or candidate == Path("."):
-        return None
-    path = base / candidate
-    if _symlinked_or_escaping_parent(base.parent, path) is not None:
-        return None
-    return path
-
-
 def uninstall_project_scaffold(scope_root: Path, dry_run: bool) -> list[str]:
     """Remove only unchanged files proven to be installer-created; never directories."""
     conflicts = project_scaffold_conflicts(scope_root)
@@ -845,6 +1115,13 @@ def uninstall_project_scaffold(scope_root: Path, dry_run: bool) -> list[str]:
 def uninstall_host(host: Host, scope_root: Path, project: bool, dry_run: bool) -> int:
     base = host.base(scope_root, project)
     manifest_path = base / MANIFEST_NAME
+    unsafe_manifest = unsafe_host_manifest_reason(scope_root, manifest_path)
+    if unsafe_manifest is not None:
+        print(
+            f"  {host.label}: REFUSE unsafe host manifest: {unsafe_manifest}; "
+            "no host files or manifest were removed"
+        )
+        return -1
     manifest = read_manifest(manifest_path)
     if not manifest:
         print(f"  {host.label}: nothing installed by obengineer at {base}")
@@ -904,12 +1181,29 @@ def show_status(scope_root: Path, project: bool) -> None:
         print(f"  Project scaffold {state}")
     for host in HOSTS.values():
         base = host.base(scope_root, project)
-        manifest = read_manifest(base / MANIFEST_NAME)
-        state = "installed" if manifest else ("host present, not installed"
-                                             if base.is_dir() else "host not found")
+        manifest_path = base / MANIFEST_NAME
+        unsafe_manifest = unsafe_host_manifest_reason(scope_root, manifest_path)
+        if unsafe_manifest is not None:
+            manifest = {}
+            state = f"unsafe manifest ({unsafe_manifest})"
+        else:
+            manifest = read_manifest(manifest_path)
+            state = "installed" if manifest else (
+                "host present, not installed"
+                if base.is_dir()
+                else "host not found"
+            )
         print(f"  {host.label:<12} {state}")
         print(f"    skills   {host.skills_dir(scope_root, project)}")
-        print(f"    commands {host.commands_dir(scope_root, project)}")
+        if host.install_commands:
+            print(f"    commands {host.commands_dir(scope_root, project)}")
+        else:
+            print(f"    workflows {host.skills_dir(scope_root, project) / 'ob-*'}")
+        companion = host.base(scope_root, project) / CODEX_INPUTS_SUBDIR
+        if unsafe_manifest is None and companion.exists():
+            print(
+                f"    companion {companion}"
+            )
         if manifest and manifest.get("source") != str(ROOT):
             print(f"    note: installed from a different source: {manifest['source']}")
 
@@ -926,7 +1220,10 @@ def main(argv=None) -> int:
     ap.add_argument("--project", metavar="PATH",
                     help="scope to one repository instead of this user")
     ap.add_argument("--copy", action="store_true",
-                    help="copy skills instead of symlinking them")
+                    help=(
+                        "copy Cursor/Claude skills and inputs "
+                        "(Codex skills are always copied)"
+                    ))
     ap.add_argument("--uninstall", action="store_true",
                     help="remove what a previous install created")
     ap.add_argument("--list", action="store_true", dest="list_only",
@@ -962,7 +1259,9 @@ def main(argv=None) -> int:
                 if host.key not in selected_keys
                 and (host.base(scope_root, True) / MANIFEST_NAME).is_file()
             ]
-            if remaining:
+            if failed:
+                print("  preserve project scaffold: host uninstall was refused")
+            elif remaining:
                 print("  preserve project scaffold: other obengineer hosts remain")
             else:
                 for action in uninstall_project_scaffold(scope_root, args.dry_run):
@@ -970,12 +1269,19 @@ def main(argv=None) -> int:
         return 1 if failed else 0
 
     names = skill_names()
-    print(f"Installing {len(names)} skills and {len(command_files())} commands "
-          f"from {ROOT}")
+    print(
+        f"Installing {len(names)} canonical skills and "
+        f"{len(command_files())} workflows from {ROOT}"
+    )
     print(f"scope: {'project' if project else 'user'} {scope_root}\n")
 
     conflicts = {
-        host.label: host_install_conflicts(host, scope_root, project)
+        host.label: host_install_conflicts(
+            host,
+            scope_root,
+            project,
+            args.copy,
+        )
         for host in selected
     }
     if project:
@@ -1001,16 +1307,26 @@ def main(argv=None) -> int:
         install_host(host, scope_root, project, args.copy, planner)
         print(f"  {host.label}")
         print(f"    skills   -> {host.skills_dir(scope_root, project)}")
-        print(f"    commands -> {host.commands_dir(scope_root, project)}")
+        if host.install_commands:
+            print(f"    commands -> {host.commands_dir(scope_root, project)}")
+        else:
+            print(f"    workflows -> {host.skills_dir(scope_root, project) / 'ob-*'}")
+        if installs_inputs_companion(host, args.copy):
+            print(
+                f"    companion -> "
+                f"{host.base(scope_root, project) / CODEX_INPUTS_SUBDIR}"
+            )
         if args.dry_run:
             for line in planner.log:
                 print(f"      would {line}")
         for note in host.notes:
             print(f"    {note}")
 
-    print("\nInvoke a run with a command, in this order:")
+    print("\nCursor and Claude Code commands, in order:")
     for command in command_files():
         print(f"  /{command.stem}")
+    print("\nCodex CLI uses $ob-start, $ob-add-inputs, ...")
+    print("ChatGPT Desktop uses @ob-start, @ob-add-inputs, ...")
     print("\nOr name a skill directly: $engagement-intake, $baggage-propagation, "
           "$cardinality-budget, ...")
     if project:
