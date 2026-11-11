@@ -77,6 +77,37 @@ def test_dangling_repository_fails(tmp_path):
     )
 
 
+def test_authorized_paths_reject_traversal_absolute_backslash_and_dot(tmp_path):
+    for unsafe in (
+        "../../outside",
+        "/absolute/path",
+        r"..\outside",
+        "./relative",
+        "src/../outside",
+    ):
+        data = valid_map()
+        data["repositories"][0]["authorized_paths"] = [unsafe]
+        assert any(
+            "safe relative paths" in failure
+            for failure in verifier.verify(write(tmp_path, data))
+        )
+
+
+def test_authorized_path_rejects_symlink_escape_when_repository_is_mounted(
+    tmp_path,
+):
+    repository = tmp_path / "web"
+    repository.mkdir()
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    (repository / "src").symlink_to(outside, target_is_directory=True)
+    path = write(tmp_path, valid_map())
+
+    failures = verifier.verify(path, {"web": repository})
+
+    assert any("escapes the repository through a symlink" in failure for failure in failures)
+
+
 def test_duplicate_and_unsupported_selectors_fail(tmp_path):
     data = valid_map()
     duplicate = dict(data["targets"][0])

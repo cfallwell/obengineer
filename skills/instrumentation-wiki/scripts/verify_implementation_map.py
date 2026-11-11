@@ -14,9 +14,31 @@ SELECTOR = re.compile(
 )
 MAPPING_STATUS = {"complete", "incomplete"}
 LEDGER_ID = re.compile(r"^(?:SRC|FACT|CHECK|DEC|UNRES)-[A-Za-z0-9._-]+$")
+REPOSITORY_ID = re.compile(r"^[A-Za-z0-9_.-]+(?:/[A-Za-z0-9_.-]+)?$")
+SAFE_PATH = re.compile(
+    r"^(?!/)(?!.*(?:^|/)\.\.(?:/|$))(?!.*(?:^|/)\.(?:/|$))[A-Za-z0-9._/-]+$"
+)
 
 
-def verify(path: Path) -> list[str]:
+def safe_authorized_path(value: object) -> bool:
+    return (
+        isinstance(value, str)
+        and bool(value)
+        and "\\" not in value
+        and SAFE_PATH.fullmatch(value) is not None
+    )
+
+
+def path_stays_in_repository(root: Path, relative: str) -> bool:
+    resolved_root = root.resolve()
+    resolved = (root / relative).resolve(strict=False)
+    return resolved != resolved_root and resolved_root in resolved.parents
+
+
+def verify(
+    path: Path,
+    repository_roots: dict[str, Path] | None = None,
+) -> list[str]:
     try:
         data = json.loads(path.read_text())
     except (OSError, json.JSONDecodeError) as exc:
@@ -38,7 +60,7 @@ def verify(path: Path) -> list[str]:
             failures.append(f"repositories[{index}] must be an object")
             continue
         repo_id = repository.get("id")
-        if not isinstance(repo_id, str) or not repo_id:
+        if not isinstance(repo_id, str) or not REPOSITORY_ID.fullmatch(repo_id):
             failures.append(f"repositories[{index}].id is required")
         elif repo_id in repository_ids:
             failures.append(f"duplicate repository id: {repo_id}")
@@ -47,12 +69,21 @@ def verify(path: Path) -> list[str]:
         if not isinstance(repository.get("remote"), str) or not repository["remote"]:
             failures.append(f"repositories[{index}].remote is required")
         paths = repository.get("authorized_paths")
-        if not isinstance(paths, list) or not all(
-            isinstance(item, str) and item for item in paths
+        if not isinstance(paths, list) or not paths or not all(
+            safe_authorized_path(item) for item in paths
         ):
             failures.append(
-                f"repositories[{index}].authorized_paths must contain paths"
+                f"repositories[{index}].authorized_paths must contain safe relative paths"
             )
+        elif repository_roots and repo_id in repository_roots:
+            for path_index, relative in enumerate(paths):
+                if not path_stays_in_repository(
+                    repository_roots[repo_id], relative
+                ):
+                    failures.append(
+                        f"repositories[{index}].authorized_paths[{path_index}] "
+                        "escapes the repository through a symlink"
+                    )
 
     targets = data.get("targets")
     if not isinstance(targets, list) or not targets:
@@ -111,8 +142,23 @@ def verify(path: Path) -> list[str]:
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("map", type=Path)
+    parser.add_argument(
+        "--repository-root",
+        action="append",
+        default=[],
+        metavar="ID=PATH",
+        help="resolve authorized paths against a mounted repository root",
+    )
     args = parser.parse_args(argv)
-    failures = verify(args.map)
+    repository_roots: dict[str, Path] = {}
+    for mapping in args.repository_root:
+        if "=" not in mapping:
+            parser.error("--repository-root must use ID=PATH")
+        repository, root = mapping.split("=", 1)
+        if not REPOSITORY_ID.fullmatch(repository) or not root:
+            parser.error("--repository-root must use a valid repository ID and path")
+        repository_roots[repository] = Path(root)
+    failures = verify(args.map, repository_roots)
     if failures:
         for failure in failures:
             print(f"FAIL — {failure}")

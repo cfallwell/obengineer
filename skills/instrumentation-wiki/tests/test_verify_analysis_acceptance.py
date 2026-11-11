@@ -168,6 +168,29 @@ def add_v2(repo: Path) -> tuple[Path, Path, str, str]:
     return analysis, record, commit, digest
 
 
+def test_acceptance_companion_rejects_traversal_authorization(tmp_path):
+    path = tmp_path / "implementation-map.json"
+    path.write_text(json.dumps({
+        "schema_version": 1,
+        "repositories": [{
+            "id": "app",
+            "remote": "owner/app",
+            "authorized_paths": ["../../outside"],
+        }],
+        "targets": [{
+            "selector": "workflow:account.update",
+            "work_order": "WO-001",
+            "repositories": ["app"],
+            "mapping_status": "complete",
+            "evidence": ["SRC-account-route"],
+        }],
+    }))
+
+    failures = verify_acceptance.implementation_map_verifier()(path)
+
+    assert any("safe relative paths" in failure for failure in failures)
+
+
 def test_content_bound_artifacts_pass(tmp_path):
     repo, analysis, _, commit, digest = accepted_repo(tmp_path)
     assert verify_acceptance.verify(repo, analysis, "V1", digest, commit) == []
