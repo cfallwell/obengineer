@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import copy
 import json
 import re
 from datetime import datetime
@@ -658,14 +659,260 @@ def validate_run_timing(
     return sorted(set(failures))
 
 
+def migrate_contract(contract: Any) -> Any:
+    """Return a deterministic schema-v2 projection of a schema-v1 contract."""
+    if not isinstance(contract, dict) or contract.get("schemaVersion") != 1:
+        return contract
+    migrated = copy.deepcopy(contract)
+    migrated["schemaVersion"] = 2
+
+    workflow_names = {
+        item.get("id"): item.get("name")
+        for item in migrated.get("workflows", [])
+        if isinstance(item, dict)
+    }
+    for workflow in migrated.get("workflows", []):
+        if not isinstance(workflow, dict):
+            continue
+        locations = workflow.get("codeLocations", [])
+        workflow.setdefault("codeMapping", {
+            "status": "mapped" if locations else "unresolved",
+            "evidence": (
+                "Migrated from schema v1: existing repository-relative code locations "
+                "were preserved as mapped evidence."
+                if locations
+                else
+                "Migrated from schema v1: no application code location was present, "
+                "so repository mapping remains unresolved without an invented path."
+            ),
+        })
+
+    for transaction in migrated.get("businessTransactions", []):
+        if not isinstance(transaction, dict):
+            continue
+        catalog = [
+            workflow_names[identifier]
+            for identifier in transaction.get("workflowIds", [])
+            if workflow_names.get(identifier)
+        ]
+        transaction.setdefault(
+            "catalogStatus", "observed" if catalog else "unresolved"
+        )
+        transaction.setdefault("workflowCatalog", catalog)
+        transaction.setdefault(
+            "catalogEvidence",
+            (
+                "Migrated from schema v1: the catalogue preserves every promoted "
+                "workflow name linked by the earlier contract; later evidence may add "
+                "unpromoted names."
+                if catalog
+                else
+                "Migrated from schema v1: the empty workflow list did not prove that "
+                "this transaction intentionally owns no workflows, so status remains "
+                "unresolved pending target evidence."
+            ),
+        )
+
+    for order in migrated.get("workOrders", []):
+        if not isinstance(order, dict):
+            continue
+        legs = order.get("repositoryLegs", [])
+        order.setdefault("repositoryMapping", {
+            "status": "mapped" if legs else "unresolved",
+            "evidence": (
+                "Migrated from schema v1: existing repository legs were retained as "
+                "the implementation mapping recorded by the earlier contract."
+                if legs
+                else
+                "Migrated from schema v1: no repository leg was present, so the work "
+                "order remains blocked without an invented repository or path."
+            ),
+        })
+        if not legs:
+            order["status"] = "blocked"
+
+    cardinality = (migrated.get("contracts") or {}).get("cardinality")
+    if isinstance(cardinality, dict):
+        unavailable = any(
+            cardinality.get(key) is None
+            for key in ("entitlement", "inUse", "reserved", "headroomAfter")
+        )
+        cardinality.setdefault(
+            "budgetStatus", "unavailable" if unavailable else "supplied"
+        )
+        cardinality.setdefault(
+            "basis",
+            "Migrated from schema v1: numeric budget fields are preserved as supplied "
+            "inputs, while absent values remain unavailable rather than being inferred.",
+        )
+    return migrated
+
+
+def validate_implementation_mapping(
+    contract: Any, implementation_map: Any
+) -> list[str]:
+    failures: list[str] = []
+    contract = migrate_contract(contract)
+    if not isinstance(contract, dict) or not isinstance(implementation_map, dict):
+        return ["implementation mapping validation requires two objects"]
+    if implementation_map.get("schema_version") != 1:
+        failures.append("implementation-map.schema_version: expected 1")
+    repository_items = implementation_map.get("repositories")
+    if not isinstance(repository_items, list):
+        failures.append("implementation-map.repositories: expected array")
+        repository_items = []
+    repositories: dict[str, list[str]] = {}
+    for index, item in enumerate(repository_items):
+        path = f"implementation-map.repositories[{index}]"
+        if not isinstance(item, dict):
+            failures.append(f"{path}: expected object")
+            continue
+        repository = item.get("id")
+        remote = item.get("remote")
+        authorized = item.get("authorized_paths")
+        if not isinstance(repository, str) or not re.fullmatch(
+            r"[A-Za-z0-9_.-]+(?:/[A-Za-z0-9_.-]+)?", repository
+        ):
+            failures.append(f"{path}.id: invalid repository id")
+            continue
+        if repository in repositories:
+            failures.append(f"{path}.id: duplicate repository id")
+        if not isinstance(remote, str) or not remote:
+            failures.append(f"{path}.remote: required")
+        if not isinstance(authorized, list) or not authorized:
+            failures.append(f"{path}.authorized_paths: expected non-empty array")
+            authorized = []
+        for path_index, candidate in enumerate(authorized):
+            if not isinstance(candidate, str) or not re.fullmatch(
+                r"(?!/)(?!.*(?:^|/)\.\.(?:/|$))[A-Za-z0-9._/-]+",
+                candidate,
+            ):
+                failures.append(
+                    f"{path}.authorized_paths[{path_index}]: invalid relative path"
+                )
+        repositories[repository] = authorized
+
+    target_items = implementation_map.get("targets")
+    if not isinstance(target_items, list) or not target_items:
+        failures.append("implementation-map.targets: expected non-empty array")
+        target_items = []
+    mapped_by_order: dict[str, set[str]] = {}
+    statuses_by_order: dict[str, set[str]] = {}
+    selectors: set[str] = set()
+    for index, target in enumerate(target_items):
+        path = f"implementation-map.targets[{index}]"
+        if not isinstance(target, dict):
+            failures.append(f"{path}: expected object")
+            continue
+        selector = target.get("selector")
+        work_order = target.get("work_order")
+        status = target.get("mapping_status")
+        target_repositories = target.get("repositories")
+        evidence = target.get("evidence")
+        if not isinstance(selector, str) or not re.fullmatch(
+            r"(?:work-order|business-transaction|workflow|use-case|detector|objective|config):[^:]+",
+            selector,
+        ):
+            failures.append(f"{path}.selector: invalid selector")
+        elif selector in selectors:
+            failures.append(f"{path}.selector: duplicate selector")
+        else:
+            selectors.add(selector)
+        if not isinstance(work_order, str) or not re.fullmatch(
+            r"WO-[0-9]{3,}", work_order
+        ):
+            failures.append(f"{path}.work_order: invalid work-order id")
+            continue
+        if status not in {"complete", "incomplete"}:
+            failures.append(f"{path}.mapping_status: expected complete or incomplete")
+        if not isinstance(target_repositories, list):
+            failures.append(f"{path}.repositories: expected array")
+            target_repositories = []
+        unknown = set(target_repositories) - set(repositories)
+        if unknown:
+            failures.append(
+                f"{path}.repositories: unknown repositories {sorted(unknown)}"
+            )
+        if status == "complete" and not target_repositories:
+            failures.append(f"{path}: complete mapping requires repositories")
+        if not isinstance(evidence, list) or not evidence or not all(
+            isinstance(item, str)
+            and re.fullmatch(r"(?:SRC|FACT|CHECK|DEC|UNRES)-[A-Za-z0-9._-]+", item)
+            for item in evidence
+        ):
+            failures.append(f"{path}.evidence: expected provenance-ledger ids")
+        mapped_by_order.setdefault(work_order, set()).update(target_repositories)
+        statuses_by_order.setdefault(work_order, set()).add(status)
+
+    for index, order in enumerate(contract.get("workOrders", [])):
+        if not isinstance(order, dict):
+            continue
+        path = f"contract.workOrders[{index}]"
+        order_id = order.get("id", f"index-{index}")
+        mapping = order.get("repositoryMapping", {})
+        legs = order.get("repositoryLegs", [])
+        actual_repositories = {
+            leg.get("repository")
+            for leg in legs
+            if isinstance(leg, dict) and isinstance(leg.get("repository"), str)
+        }
+        mapped_repositories = mapped_by_order.get(order_id, set())
+        map_statuses = statuses_by_order.get(order_id, set())
+        if not map_statuses:
+            failures.append(f"{path}: implementation map has no target selectors")
+        if mapping.get("status") == "unresolved":
+            if actual_repositories or mapped_repositories:
+                failures.append(
+                    f"{path}: unresolved mapping cannot claim mapped repositories"
+                )
+            if map_statuses - {"incomplete"}:
+                failures.append(
+                    f"{path}: unresolved contract requires incomplete map targets"
+                )
+            continue
+        if map_statuses != {"complete"}:
+            failures.append(
+                f"{path}: mapped contract requires complete map targets"
+            )
+        if actual_repositories != mapped_repositories:
+            failures.append(
+                f"{path}.repositoryLegs: repositories {sorted(actual_repositories)} "
+                f"do not match implementation map {sorted(mapped_repositories)}"
+            )
+        for leg_index, leg in enumerate(legs):
+            if not isinstance(leg, dict):
+                continue
+            repository = leg.get("repository")
+            allowed = repositories.get(repository)
+            if allowed is None:
+                failures.append(
+                    f"{path}.repositoryLegs[{leg_index}]: unknown repository "
+                    f"{repository!r} in implementation map"
+                )
+                continue
+            for path_index, candidate in enumerate(leg.get("paths", [])):
+                if not isinstance(candidate, str) or not any(
+                    candidate == prefix.rstrip("/")
+                    or candidate.startswith(prefix.rstrip("/") + "/")
+                    for prefix in allowed
+                    if isinstance(prefix, str) and prefix
+                ):
+                    failures.append(
+                        f"{path}.repositoryLegs[{leg_index}].paths[{path_index}]: "
+                        "path is outside implementation-map authorization"
+                    )
+    return sorted(set(failures))
+
+
 def validate_contract(contract: Any) -> list[str]:
+    contract = migrate_contract(contract)
     failures = validate_contract_schema(contract)
     if not isinstance(contract, dict):
         return failures
     if not _require(contract, TOP_LEVEL_KEYS, "contract", failures):
         return failures
-    if contract.get("schemaVersion") != 1:
-        failures.append("contract.schemaVersion: expected 1")
+    if contract.get("schemaVersion") != 2:
+        failures.append("contract.schemaVersion: expected 2")
     app = contract.get("application")
     _require(app, ("id", "name", "version", "status", "scope", "changes", "nextSteps"), "contract.application", failures)
     _substantive(app.get("scope") if isinstance(app, dict) else None, "contract.application.scope", failures)
@@ -867,6 +1114,22 @@ def validate_contract(contract: Any) -> list[str]:
             if _require(leg, ("repository", "paths", "changes", "tests"), leg_path, failures):
                 for key in ("paths", "changes", "tests"):
                     _list(leg.get(key), f"{leg_path}.{key}", failures)
+                repository = leg.get("repository")
+                if not isinstance(repository, str) or not re.fullmatch(
+                    r"[A-Za-z0-9_.-]+(?:/[A-Za-z0-9_.-]+)?", repository
+                ):
+                    failures.append(
+                        f"{leg_path}.repository: expected repository id or owner/name"
+                    )
+                for path_index, repository_path in enumerate(leg.get("paths", [])):
+                    if not isinstance(repository_path, str) or not re.fullmatch(
+                        r"(?!/)(?!.*(?:^|/)\.\.(?:/|$))[A-Za-z0-9._/-]+",
+                        repository_path,
+                    ):
+                        failures.append(
+                            f"{leg_path}.paths[{path_index}]: "
+                            "expected authorized relative path"
+                        )
 
     workflow_ids = {item.get("id") for item in workflows if isinstance(item, dict)}
     workflow_names = {
@@ -930,18 +1193,18 @@ def validate_contract(contract: Any) -> list[str]:
         )
         catalog_status = transaction.get("catalogStatus")
         linked = set(transaction.get("workflowIds", []))
-        if catalog_status == "observed" and len(catalog) < 2:
+        if catalog_status == "observed" and not catalog:
             failures.append(
                 f"{path}.workflowCatalog: observed transaction requires an "
                 "evidence-derived workflow catalogue"
             )
-        elif catalog_status == "none-by-design" and (catalog or linked):
+        elif catalog_status in {"none-by-design", "unresolved"} and (catalog or linked):
             failures.append(
-                f"{path}: none-by-design transaction cannot list workflows"
+                f"{path}: {catalog_status} transaction cannot list workflows"
             )
-        elif catalog_status not in {"observed", "none-by-design"}:
+        elif catalog_status not in {"observed", "none-by-design", "unresolved"}:
             failures.append(
-                f"{path}.catalogStatus: expected observed or none-by-design"
+                f"{path}.catalogStatus: expected observed, none-by-design, or unresolved"
             )
         unknown = linked - workflow_ids
         if unknown:

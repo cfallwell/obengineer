@@ -58,6 +58,71 @@ LEGACY_COMMAND_STEMS = {
     "ob-start": ("ob-intake", "ob-generate", "ob-wiki"),
     "ob-terraform": ("ob-build-terraform",),
 }
+LEGACY_COMMAND_DIGESTS = {
+    "ob-add-inputs.md": {
+        "41903bfcaba8877ee1cd1808bb096445be5af924e268ccf6834f9fed92da21fe",
+        "7b291c4721eab69744d0abde091cb23d357071f7f87e469097b8fa94e610585c",
+        "7b3b08989f741c398e8ed5a3d4a4134b487ba56b9380e1eff03e49ced5341360",
+        "a967cb53e0992efde45dea0a7b849a2d10cd051fc2e1e21637bdeba58d10d3d7",
+    },
+    "ob-analyze.md": {
+        "41ce324344fc0823616d650dc954465a779e0bfb16e954e9ff4b25e6edca672e",
+        "5814b6a3ae7a880e1294a120648ef2f4c29be5b0f3c42eeca5a96512c531f615",
+        "58176e1e5ab35f4a74d651378262e74a7c99e6fe2ef1b0f4c1b79b5428a1111a",
+        "aa6526cd18ba76fe8be5a4b80ebeb5fe45e6b6f74de4b787296c038c47a91f00",
+        "beb70d9a0d5e57090ae159e7cdf0985419d5fe8adfeefb535db63c9c9bff6ef4",
+        "c0ef56511504a7ce6be6a1cf7733468f5710e521531a3fd060581fd86f98aabe",
+        "f6c0231f5ccc97e1fd6337499f13e42e87283915055cc4f07344aaa2a7911555",
+        "fa3036ffe90bbe9c99247d60f473803341e24b92560f0179a62f698fb2dc0e24",
+    },
+    "ob-build-terraform.md": {"4ff68bea8d3c47857fab2fe09414f5d649b98c9b2215fc674f8c09643a8d2b97"},
+    "ob-edit-inputs.md": {
+        "309d6e10260af3138e689a41991103318b1a7261f543f4ae2d0641ddc23afb93",
+        "79fdee5312175a03dc6b33cb101cf2a8c2e5fa9bd2f0c01c79b51f04a8a09634",
+        "9bbc42c8e6f356e51fa5c62df46f2ae18cd1f1ea5911d2a913380396c27fe545",
+        "e90e4dacca1508d1955971a102b83f7b7e6a8f1b40f784973abb2383ddb105f1",
+    },
+    "ob-generate.md": {
+        "43c414fa1232a4bb2bbf20835b13e7c40a8a4f968b14aea93db80c6806932e57",
+        "b9aedb4cbf08bcfd28b47ead3a6e3305b2216c56dbe4f4cfd118f1b738b79d71",
+    },
+    "ob-implement.md": {
+        "46d6eda31ded85b76ea12fdd07560ebfbe0fefda933709d74191582dd1be4b0c",
+        "83d4479d66d138fc040cbbaf07a63a9923894859e21f115051cafda992dd79ca",
+        "b79d149f6c4f31ba7ede20162cdee956b6197a8c3d078427793c80f73f54e7a7",
+        "e04b7e8f80a71459d93f9fde76d0a14d10fd8534cb289dd534714c7416afa8b2",
+    },
+    "ob-intake.md": {
+        "882ec30b0b1d87bd09902ee59b9f99455055f4a89f46209cf1829dfb3c083ea4",
+        "9aca0d698be7c552937849f71452ae39eca53774d8fd57f5c291edd9aa0ca04c",
+        "b377b59b842a61c1c14c452a49460178627ba648a359b51f0f74bad9d6920512",
+    },
+    "ob-render.md": {
+        "29db4f6eca1942fe114a12e07c7d3124614ed9bfe10e4b8ce2f10ad067b26fe3",
+        "a15f685ec2efeb373226b4dfb7d7635b35638bb00f7e04c43e2e3c3daff293c8",
+    },
+    "ob-review.md": {
+        "b84f975270e292ffd677e8a40447d54dc5f104c40635222172f796e9d9252e8a",
+        "c14cca38f954a8c53bec01b6c58e6278383f75e2326d9e7da11d0d96dd2e8770",
+        "d522ac4cb635a0b32b1e5750a7d1bd444ea0291ea91e0a5c3ef9cd3663d10f29",
+    },
+    "ob-start.md": {
+        "385314e5cb15838d7cea0ca4e75e961d2e515eee981b2fe8d91ee0462f9bb5a5",
+        "5f667844a3d0063574277fcdde4ed870af4cb0d1ad908acf4dac876c1559c173",
+        "993a6a0f5ab146d6c8a9978d7e384bc7bd46206bf2006a57b6a20f961eed5727",
+        "a71a0ed85bd0f5a3af9a77eb17b75b5ecf5e6e21d3877ae7b8d181b9ad48fc7a",
+    },
+    "ob-terraform.md": {
+        "159e7f36f358474fb5d2a214edabb24bd46e9c3574008ba9c358b5696c09c133",
+        "3964502b267f728116636c69d350830254d81a6900f8317b292601bdb6c35162",
+        "4cad06bfb9917d33d63567cafda7e7d7c485036a7fbd30659459df963762f4ef",
+    },
+    "ob-verify.md": {"309b6fdf99dbe0f31945652ac1854ccee0dbe4031e4c491773ad708111843ac9"},
+    "ob-wiki.md": {
+        "6c730509fb0145555a7319f2d53bfd303edd9ce6adcc66307191fdbfef002c37",
+        "a0e33eb1a091ba523ca43d015ac299c5677def116c13b470e0b819e744d52886",
+    },
+}
 
 
 @dataclass(frozen=True)
@@ -257,6 +322,26 @@ def desired_host_targets(
     ]
 
 
+def legacy_host_targets(
+    host: Host, scope_root: Path, project: bool
+) -> list[Path]:
+    commands_dir = host.commands_dir(scope_root, project)
+    retired = {
+        commands_dir / f"{stem}.md"
+        for stems in LEGACY_COMMAND_STEMS.values()
+        for stem in stems
+    }
+    return [*desired_host_targets(host, scope_root, project), *sorted(retired)]
+
+
+def legacy_command_digests(name: str) -> set[str]:
+    digests = set(LEGACY_COMMAND_DIGESTS.get(name, set()))
+    current = COMMANDS / name
+    if current.is_file():
+        digests.add(hashlib.sha256(current.read_bytes()).hexdigest())
+    return digests
+
+
 def host_owned_entries(manifest: dict) -> dict[str, dict] | None:
     if not manifest:
         return {}
@@ -293,7 +378,7 @@ def legacy_host_owned_entries(
     legacy_base = Path(host.project_dir if project else host.user_dir)
     created_paths = [Path(item) for item in created]
     recovered: dict[str, dict] = {}
-    for path in desired_host_targets(host, scope_root, project):
+    for path in legacy_host_targets(host, scope_root, project):
         if not (path.exists() or path.is_symlink()):
             continue
         relative = Path(_host_relative(base, path))
@@ -308,12 +393,11 @@ def legacy_host_owned_entries(
         if relative.parts[0] == host.skills_subdir:
             if not path.is_symlink():
                 continue
-            target_parts = Path(os.readlink(path)).parts
-            expected_suffix = (source.name, "skills", *relative.parts[1:])
-            if (
-                len(target_parts) < len(expected_suffix)
-                or target_parts[-len(expected_suffix):] != expected_suffix
-            ):
+            expected_target = os.path.relpath(
+                source / "skills" / Path(*relative.parts[1:]),
+                listed[0].parent,
+            )
+            if os.readlink(path) != expected_target:
                 continue
         elif relative.parts[0] == host.commands_subdir:
             if not path.is_file() or path.is_symlink():
@@ -322,7 +406,9 @@ def legacy_host_owned_entries(
                 text = path.read_text()
             except (OSError, UnicodeDecodeError):
                 continue
-            if source_text not in text or "$ARGUMENTS" not in text:
+            normalized = text.replace(source_text, ROOT_TOKEN)
+            digest = hashlib.sha256(normalized.encode()).hexdigest()
+            if digest not in legacy_command_digests(path.name):
                 continue
         else:
             continue

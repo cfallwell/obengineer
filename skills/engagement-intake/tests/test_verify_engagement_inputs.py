@@ -127,3 +127,76 @@ def test_login_and_password_reference_must_be_supplied_together():
         "must be supplied together" in failure
         for failure in verifier.verify_text(migrated)
     )
+
+
+def test_artifact_paths_must_stay_inside_project():
+    migrated = verifier.migrate_v2(v2()).replace(
+        '  front_end_scan_notes: ""',
+        '  front_end_scan_notes: ""\n'
+        "  location: artifacts\n"
+        "  diagrams: [artifacts/context.drawio]\n"
+        "  narrative: artifacts/architecture.md\n"
+        "  prior_contract: artifacts/guide.pdf\n"
+        "  prior_schema: artifacts/schema.json\n"
+        "  prior_scans: [artifacts/scan.json]\n"
+        "  house_style_docx: artifacts/style.docx",
+    )
+    assert verifier.verify_text(migrated) == []
+
+    for unsafe in ("../../outside", "/etc/passwd", r"..\secret"):
+        invalid = migrated.replace(
+            "  prior_contract: artifacts/guide.pdf",
+            f"  prior_contract: '{unsafe}'",
+        )
+        assert any(
+            "artifacts.prior_contract must be a project-relative path" in failure
+            for failure in verifier.verify_text(invalid)
+        )
+
+
+def test_artifact_symlink_escape_is_rejected_at_validation_time(tmp_path):
+    artifacts = tmp_path / "artifacts"
+    artifacts.mkdir()
+    outside = tmp_path.parent / f"{tmp_path.name}-outside"
+    outside.mkdir()
+    (artifacts / "link").symlink_to(outside, target_is_directory=True)
+    migrated = verifier.migrate_v2(v2()).replace(
+        '  front_end_scan_notes: ""',
+        '  front_end_scan_notes: ""\n'
+        "  prior_contract: artifacts/link/guide.pdf",
+    )
+
+    assert any(
+        "resolves outside the project" in failure
+        for failure in verifier.verify_text(migrated, tmp_path)
+    )
+
+
+def test_cli_contains_root_level_input_and_symlinked_parent(tmp_path):
+    inputs = tmp_path / "inputs.yaml"
+    inputs.write_text(verifier.migrate_v2(v2()))
+    assert verifier.main([
+        str(inputs),
+        "--project-root",
+        str(tmp_path),
+    ]) == 0
+
+    outside = tmp_path.parent / f"{tmp_path.name}-external-inputs"
+    outside.mkdir()
+    escaped = outside / "inputs.yaml"
+    escaped.write_text(verifier.migrate_v2(v2()))
+    link = tmp_path / "linked-inputs.yaml"
+    link.symlink_to(escaped)
+    assert verifier.main([
+        str(link),
+        "--project-root",
+        str(tmp_path),
+    ]) == 1
+
+    docs = tmp_path / "docs"
+    docs.symlink_to(outside, target_is_directory=True)
+    assert verifier.main([
+        str(docs / "inputs.yaml"),
+        "--project-root",
+        str(tmp_path),
+    ]) == 1

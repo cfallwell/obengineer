@@ -10,7 +10,7 @@ import sys
 from pathlib import Path
 from typing import Any, Iterable
 
-from analysis_contract import load_json, validate_contract
+from analysis_contract import load_json, migrate_contract, validate_contract
 
 SECTIONS = (
     ("Architecture", "architecture", "overview/index.md"),
@@ -79,7 +79,7 @@ def finish(related: Iterable[tuple[str, str]], next_link: tuple[str, str]) -> st
 
 class Renderer:
     def __init__(self, contract: dict[str, Any], output: Path) -> None:
-        self.c = contract
+        self.c = migrate_contract(contract)
         self.output = output.resolve()
         self.written: set[Path] = set()
 
@@ -493,6 +493,8 @@ class Renderer:
                 w["outcome"],
                 ", ".join(w["dependsOn"]) or "None",
                 w["status"],
+                w["repositoryMapping"]["status"],
+                w["repositoryMapping"]["evidence"],
                 ", ".join(w["unlocks"]) or "None",
                 f"[Open canonical work order]({wiki_root}/{w['id']}.md)",
             )
@@ -501,7 +503,13 @@ class Renderer:
         index = (
             f"{breadcrumb(current='Work orders')}\n\n# Work orders\n\n"
             f"{self.c['summaries']['workOrders']}\n\n"
-            + table(("ID", "Outcome", "Depends on", "Status", "Unlocks", "Detail"), rows)
+            + table(
+                (
+                    "ID", "Outcome", "Depends on", "Status", "Repository mapping",
+                    "Mapping evidence", "Unlocks", "Detail",
+                ),
+                rows,
+            )
             + finish(
                 (("Implementation path", "../implementation/index.md"), ("Use cases", "../use-cases/index.md")),
                 ("Continue to Use cases", "../use-cases/index.md"),
@@ -656,11 +664,12 @@ class Renderer:
         )
         self.write("business-transactions/index.md", index)
         for item in self.c["businessTransactions"]:
-            catalog = (
-                bullets(item["workflowCatalog"])
-                if item["workflowCatalog"]
-                else "- None by design; this artifact owns platform bootstrap only."
-            )
+            if item["workflowCatalog"]:
+                catalog = bullets(item["workflowCatalog"])
+            elif item["catalogStatus"] == "none-by-design":
+                catalog = "- None by design; this artifact owns platform bootstrap only."
+            else:
+                catalog = "- Unresolved; current evidence does not establish workflow ownership."
             promoted = (
                 "\n".join(
                     f"- [{workflow_labels[workflow_id]}](../workflows/{workflow_id}.md)"

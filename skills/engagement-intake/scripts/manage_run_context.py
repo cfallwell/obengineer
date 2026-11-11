@@ -55,6 +55,7 @@ OPTIONAL_INPUT_PATHS = {
         "artifacts.prior_contract",
         "artifacts.prior_schema",
         "artifacts.prior_scans",
+        "artifacts.house_style_docx",
     ),
     2: (
         "security_assessment.mode",

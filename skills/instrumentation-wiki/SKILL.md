@@ -107,6 +107,8 @@ Create the complete queue during analysis. Each work order contains:
 - selectors;
 - repository ids and authorized paths, or an explicit unresolved mapping with no invented
   leg and blocked status;
+- repository-mapping evidence in frontmatter so validation can distinguish unresolved
+  source from a missing required field;
 - dependencies;
 - shared contracts consumed;
 - allowed and forbidden changes;

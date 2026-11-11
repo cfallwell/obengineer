@@ -152,7 +152,9 @@ The project scaffold begins `.env.template` with `PRODUCTION_URL`, `TEST_LOGIN_I
 `PASSWORD_REF`, then maps optional start inputs to engagement-input fields.
 `ARTIFACTS_DIR=artifacts` is prefilled; `ARTIFACT_DIAGRAMS`, `ARTIFACT_NARRATIVE`,
 `PRIOR_CONTRACT`, `PRIOR_SCHEMA`, `PRIOR_SCANS`, and `HOUSE_STYLE_DOCX` persist supplied
-artifact paths. `PASSWORD_REF` must be a `${VAR}` reference; there is no raw-password
+artifact paths. Artifact paths are project-relative and cannot traverse outside the
+project; host-uploaded files use their project artifact reference rather than a machine
+absolute path. `PASSWORD_REF` must be a `${VAR}` reference; there is no raw-password
 variable.
 
 For interactive read-only Splunk credentials, from the memory repository run:

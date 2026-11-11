@@ -115,6 +115,8 @@ The executable fields are canonical YAML frontmatter parsed with `safe_load`:
 work_order_id: WO-014
 selectors: [use-case:account-update]
 depends_on: [WO-013]
+repository_mapping: mapped
+repository_mapping_evidence: The accepted implementation map authorizes this repository and parent path.
 repository_legs:
   - repository: web
     paths: [src/account/]
@@ -126,6 +128,8 @@ Selectors use only the grammar listed above. Repository IDs must exist in
 `implementation-map.json`; every path is repository-relative, traversal-free, and under
 one of that repository's `authorized_paths`. Changes and tests describe meaningful work.
 Every dependency exists in the same version, and the dependency graph is acyclic.
+An unresolved order uses `repository_mapping: unresolved`, meaningful
+`repository_mapping_evidence`, `repository_legs: []`, and `status: blocked`.
 
 One work order can produce several pull requests. Every PR title and body includes the
 work-order ID and reciprocal links to the coordination PR and sibling PRs. The artifact

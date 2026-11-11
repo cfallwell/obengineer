@@ -35,32 +35,39 @@
     },
     "ARTIFACTS_DIR": {
       "type": "string",
+      "x-format": "project-relative-path",
       "x-target": "artifacts.location"
     },
     "ARTIFACT_DIAGRAMS": {
       "type": "string",
+      "x-format": "project-relative-path",
       "x-shape": "csv-list",
       "x-target": "artifacts.diagrams"
     },
     "ARTIFACT_NARRATIVE": {
       "type": "string",
+      "x-format": "project-relative-path",
       "x-target": "artifacts.narrative"
     },
     "PRIOR_CONTRACT": {
       "type": "string",
+      "x-format": "project-relative-path",
       "x-target": "artifacts.prior_contract"
     },
     "PRIOR_SCHEMA": {
       "type": "string",
+      "x-format": "project-relative-path",
       "x-target": "artifacts.prior_schema"
     },
     "PRIOR_SCANS": {
       "type": "string",
+      "x-format": "project-relative-path",
       "x-shape": "csv-list",
       "x-target": "artifacts.prior_scans"
     },
     "HOUSE_STYLE_DOCX": {
       "type": "string",
+      "x-format": "project-relative-path",
       "x-target": "artifacts.house_style_docx"
     },
     "SECURITY_ASSESSMENT_MODE": {

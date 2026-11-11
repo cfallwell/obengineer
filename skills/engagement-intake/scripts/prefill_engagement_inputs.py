@@ -9,7 +9,7 @@ import os
 import re
 import sys
 import tempfile
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from urllib.parse import urlparse
 
 try:
@@ -150,6 +150,55 @@ def _uri_is_absolute(value: str) -> bool:
     return parsed.scheme in {"http", "https"} and bool(parsed.netloc)
 
 
+def _project_relative_path(value: str) -> bool:
+    normalized = value.strip().replace("\\", "/")
+    if (
+        not normalized
+        or normalized.startswith(("/", "//"))
+        or re.match(r"^[A-Za-z]:", normalized)
+        or "\x00" in normalized
+    ):
+        return False
+    parts = PurePosixPath(normalized).parts
+    return bool(parts) and all(part not in {"", ".", ".."} for part in parts)
+
+
+def resolve_project_artifact(project_root: Path, value: str) -> Path:
+    if not _project_relative_path(value):
+        raise PrefillError("artifact path must be project-relative without traversal")
+    root = project_root.resolve()
+    candidate = (root / value).resolve(strict=False)
+    if candidate == root or root not in candidate.parents:
+        raise PrefillError(
+            "artifact path resolves outside the project through a symlink"
+        )
+    return candidate
+
+
+def validate_artifact_containment(data: dict, project_root: Path) -> None:
+    artifacts = data.get("artifacts")
+    if not isinstance(artifacts, dict):
+        return
+    values = [
+        artifacts.get(field)
+        for field in (
+            "location", "narrative", "prior_contract", "prior_schema",
+            "house_style_docx",
+        )
+    ]
+    for field in ("diagrams", "prior_scans"):
+        entries = artifacts.get(field) or []
+        if not isinstance(entries, list):
+            raise PrefillError(f"artifacts.{field} must be a list")
+        values.extend(entries)
+    notes = artifacts.get("front_end_scan_notes")
+    if isinstance(notes, str) and notes and not notes.lower().startswith("no browser:"):
+        values.append(notes)
+    for value in values:
+        if isinstance(value, str) and value:
+            resolve_project_artifact(project_root, value)
+
+
 def convert_value(name: str, raw: str, rule: dict) -> object:
     if "enum" in rule and raw not in rule["enum"]:
         raise PrefillError(f"{name} is not one of the allowed values")
@@ -158,6 +207,18 @@ def convert_value(name: str, raw: str, rule: dict) -> object:
         raise PrefillError(f"{name} has an invalid format")
     if rule.get("format") == "uri" and not _uri_is_absolute(raw):
         raise PrefillError(f"{name} must be an absolute http(s) URL")
+    if rule.get("x-format") == "project-relative-path":
+        candidates = (
+            [item.strip() for item in raw.split(",")]
+            if rule.get("x-shape") == "csv-list"
+            else [raw.strip()]
+        )
+        if not candidates or any(
+            not _project_relative_path(candidate) for candidate in candidates
+        ):
+            raise PrefillError(
+                f"{name} must contain project-relative paths without traversal"
+            )
 
     if reference := rule.get("x-reference-if-set"):
         return reference
@@ -319,6 +380,7 @@ def prefill(
         force_names=set(supplied or {}) if overwrite_existing else set(),
         clear_names=clear_names,
     )
+    validate_artifact_containment(data, project_root)
     if changed or not output.exists():
         atomic_dump_yaml(output, data)
     return changed

@@ -195,6 +195,8 @@ Validate:
 
 - job manifest, worker intervals, host capacity, and coordinator reservation;
 - canonical analysis contract and deterministic repeated rendering;
+- schema-v1 analysis contracts migrate deterministically with
+  `scripts/migrate_analysis_contract.py`; newly generated contracts use schema v2;
 - provenance ledger and analysis seal;
 - schema version 2 analysis contract and content-bound acceptance inputs;
 - schema and implementation map;

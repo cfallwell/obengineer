@@ -15,7 +15,9 @@ sys.path.insert(0, str(SCRIPTS))
 
 from analysis_contract import (  # noqa: E402
     load_json,
+    migrate_contract,
     validate_contract,
+    validate_implementation_mapping,
     validate_manifest,
     validate_run_timing,
     validate_worker_results,
@@ -26,6 +28,22 @@ from validate_analysis import main as validate_analysis_main  # noqa: E402
 
 def contract():
     return load_json(FIXTURE / "analysis-contract.json")
+
+
+def schema_v1_contract():
+    value = contract()
+    value["schemaVersion"] = 1
+    for workflow in value["workflows"]:
+        workflow.pop("codeMapping")
+    for transaction in value["businessTransactions"]:
+        transaction.pop("catalogStatus")
+        transaction.pop("catalogEvidence")
+        transaction.pop("workflowCatalog")
+    for order in value["workOrders"]:
+        order.pop("repositoryMapping")
+    value["contracts"]["cardinality"].pop("budgetStatus")
+    value["contracts"]["cardinality"].pop("basis")
+    return value
 
 
 def manifest():
@@ -49,6 +67,13 @@ def test_final_worker_validation_requires_run_timing():
             str(FIXTURE / "results"),
         ])
     assert exc.value.code == 2
+
+
+def test_contract_cli_requires_implementation_map():
+    assert validate_analysis_main([
+        "--contract",
+        str(FIXTURE / "analysis-contract.json"),
+    ]) == 1
 
 
 def digest_tree(root: Path) -> str:
@@ -163,6 +188,36 @@ def test_published_schema_rejects_unknown_properties_before_semantics():
     assert failures == ["contract.unknown: additional property is not allowed"]
 
 
+def test_schema_v1_contract_migrates_deterministically_before_validation():
+    old = schema_v1_contract()
+    migrated = migrate_contract(old)
+
+    assert old["schemaVersion"] == 1
+    assert migrated["schemaVersion"] == 2
+    assert migrated["workflows"][0]["codeMapping"]["status"] == "mapped"
+    assert migrated["businessTransactions"][0]["workflowCatalog"] == [
+        "checkout.payment.authorize",
+        "checkout.order.submit",
+    ]
+    assert migrated["workOrders"][0]["repositoryMapping"]["status"] == "mapped"
+    assert migrated["contracts"]["cardinality"]["budgetStatus"] == "supplied"
+    assert validate_contract(old) == []
+    assert migrate_contract(migrated) == migrated
+
+
+def test_schema_v1_empty_transaction_catalog_migrates_as_unresolved():
+    old = schema_v1_contract()
+    old["businessTransactions"][0]["workflowIds"] = []
+
+    migrated = migrate_contract(old)
+
+    transaction = migrated["businessTransactions"][0]
+    assert transaction["catalogStatus"] == "unresolved"
+    assert transaction["workflowCatalog"] == []
+    assert "did not prove" in transaction["catalogEvidence"]
+    assert validate_contract(old) == []
+
+
 def test_published_schema_rejects_path_traversal_ids():
     value = contract()
     value["findings"][0]["id"] = "../../escaped-finding"
@@ -222,9 +277,14 @@ def test_unavailable_cardinality_budget_preserves_cost_without_invented_headroom
 
 def test_transaction_catalog_keeps_unpromoted_names_and_allows_bootstrap_only_bundle():
     value = contract()
-    value["businessTransactions"][0]["workflowCatalog"].append("checkout.review")
+    transaction = value["businessTransactions"][0]
+    transaction["workflowCatalog"] = ["checkout.payment.authorize"]
+    transaction["workflowIds"] = ["checkout-payment-authorize"]
+    assert validate_contract(value) == []
 
-    bootstrap = copy.deepcopy(value["businessTransactions"][0])
+    transaction["workflowCatalog"].append("checkout.review")
+
+    bootstrap = copy.deepcopy(transaction)
     bootstrap.update({
         "id": "global",
         "name": "Global bootstrap",
@@ -269,6 +329,45 @@ def test_unresolved_work_order_mapping_stays_blocked_without_invented_legs():
         "unresolved repository mapping requires blocked status" in failure
         or "expected constant 'blocked'" in failure
         for failure in failures
+    )
+
+
+def test_mapped_work_order_paths_are_safe_and_match_implementation_authorization():
+    value = contract()
+    implementation_map = {
+        "schema_version": 1,
+        "repositories": [
+            {"id": "sample-web", "remote": "owner/sample-web", "authorized_paths": ["src/", "test/"]},
+            {"id": "sample-platform", "remote": "owner/sample-platform", "authorized_paths": ["collector/", "test/"]},
+            {"id": "sample-services", "remote": "owner/sample-services", "authorized_paths": ["services/", "packages/"]},
+            {"id": "sample-observability", "remote": "owner/sample-observability", "authorized_paths": ["terraform/", "verification/"]},
+        ],
+        "targets": [
+            {
+                "selector": f"work-order:{order['id']}",
+                "work_order": order["id"],
+                "repositories": [
+                    leg["repository"] for leg in order["repositoryLegs"]
+                ],
+                "mapping_status": "complete",
+                "evidence": ["FACT-source-contract"],
+            }
+            for order in value["workOrders"]
+        ],
+    }
+    assert validate_implementation_mapping(value, implementation_map) == []
+
+    value["workOrders"][0]["repositoryLegs"][0]["paths"] = ["../../outside"]
+    assert any(
+        "authorized relative path" in failure
+        for failure in validate_contract(value)
+    )
+
+    value = contract()
+    implementation_map["targets"][0]["repositories"] = ["invented-repository"]
+    assert any(
+        "do not match implementation map" in failure
+        for failure in validate_implementation_mapping(value, implementation_map)
     )
 
 
@@ -456,6 +555,7 @@ def test_published_json_schemas_capture_bounded_jobs_and_required_objects():
         "contracts",
         "operations",
     }
+    assert contract_schema["properties"]["schemaVersion"]["const"] == 2
     definitions = contract_schema["$defs"]
     assert {"applicationScope", "observedFrom", "observedTo", "readAt", "source",
             "provenance", "portfolioEvidence"} <= set(

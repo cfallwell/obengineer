@@ -110,11 +110,13 @@ def test_start_does_not_reask_inputs_prefilled_from_project_context(tmp_path):
     data["analysis_access"]["login_id"] = "qa-user"
     data["analysis_access"]["password_ref"] = "${OBENGINEER_TEST_PASSWORD}"
     data["analysis_access"]["rotate_on_completion"] = True
+    data["artifacts"]["house_style_docx"] = "artifacts/style.docx"
     data["standards"]["percentile"] = "p95"
     inputs.write_text(yaml.safe_dump(data, sort_keys=False))
     state = context.start(context.new_context(), inputs)
     assert state["state"] == "optional-review"
     assert all(value == "complete" for value in state["required"].values())
+    assert state["optional"]["items"]["1"] == "complete"
     assert state["optional"]["items"]["3"] == "complete"
     assert state["optional"]["items"]["9"] == "complete"
     prompt = context.render_required_prompt(state)

@@ -223,3 +223,39 @@ def test_prefill_rejects_conflicting_production_surface_and_unknown_names(tmp_pa
             tmp_path / "inputs.yaml",
             supplied={"RAW_PASSWORD": "must-not-be-accepted"},
         )
+
+
+@pytest.mark.parametrize(
+    ("name", "value"),
+    (
+        ("ARTIFACTS_DIR", "../../outside"),
+        ("ARTIFACT_DIAGRAMS", "artifacts/context.drawio,../secret.png"),
+        ("ARTIFACT_NARRATIVE", "/etc/passwd"),
+        ("PRIOR_CONTRACT", r"..\secret.pdf"),
+        ("PRIOR_SCHEMA", "C:/secrets/schema.json"),
+        ("PRIOR_SCANS", "artifacts/scan.json,/etc/shadow"),
+        ("HOUSE_STYLE_DOCX", "../house-style.docx"),
+    ),
+)
+def test_prefill_rejects_unsafe_artifact_paths(tmp_path, name, value):
+    with pytest.raises(prefill.PrefillError, match="project-relative paths"):
+        prefill.prefill(
+            tmp_path,
+            tmp_path / "inputs.yaml",
+            supplied={name: value},
+        )
+
+
+def test_prefill_rejects_artifact_symlink_escape(tmp_path):
+    artifacts = tmp_path / "artifacts"
+    artifacts.mkdir()
+    outside = tmp_path.parent / f"{tmp_path.name}-outside-artifacts"
+    outside.mkdir()
+    (artifacts / "link").symlink_to(outside, target_is_directory=True)
+
+    with pytest.raises(prefill.PrefillError, match="outside the project"):
+        prefill.prefill(
+            tmp_path,
+            tmp_path / "inputs.yaml",
+            supplied={"PRIOR_CONTRACT": "artifacts/link/secret.pdf"},
+        )

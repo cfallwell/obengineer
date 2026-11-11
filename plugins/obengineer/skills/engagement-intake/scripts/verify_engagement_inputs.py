@@ -6,7 +6,7 @@ from __future__ import annotations
 import argparse
 import re
 import sys
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from urllib.parse import urlparse
 
 try:
@@ -42,6 +42,27 @@ def absolute_http_url(value) -> bool:
         return False
     parsed = urlparse(value)
     return parsed.scheme in {"http", "https"} and bool(parsed.netloc)
+
+
+def project_relative_path(value) -> bool:
+    if not isinstance(value, str):
+        return False
+    normalized = value.strip().replace("\\", "/")
+    if (
+        not normalized
+        or normalized.startswith(("/", "//"))
+        or re.match(r"^[A-Za-z]:", normalized)
+        or "\x00" in normalized
+    ):
+        return False
+    parts = PurePosixPath(normalized).parts
+    return bool(parts) and all(part not in {"", ".", ".."} for part in parts)
+
+
+def path_is_contained(project_root: Path, value: str) -> bool:
+    root = project_root.resolve()
+    candidate = (root / value).resolve(strict=False)
+    return candidate != root and root in candidate.parents
 
 
 def migrate_v2(text: str) -> str:
@@ -87,7 +108,7 @@ def migrate_v2(text: str) -> str:
     return text
 
 
-def verify_text(text: str) -> list[str]:
+def verify_text(text: str, project_root: Path | None = None) -> list[str]:
     failures: list[str] = []
     try:
         data = yaml.safe_load(text)
@@ -125,6 +146,56 @@ def verify_text(text: str) -> list[str]:
         failures.append(
             "provide production_urls or front_end_scan_notes as "
             "'no browser: <reason>', but not both"
+        )
+    for field in (
+        "location", "narrative", "prior_contract", "prior_schema", "house_style_docx"
+    ):
+        value = artifacts.get(field)
+        if supplied(value) and not project_relative_path(value):
+            failures.append(
+                f"artifacts.{field} must be a project-relative path without traversal"
+            )
+        elif (
+            supplied(value)
+            and project_root is not None
+            and not path_is_contained(project_root, value)
+        ):
+            failures.append(
+                f"artifacts.{field} resolves outside the project through a symlink"
+            )
+    for field in ("diagrams", "prior_scans"):
+        values = artifacts.get(field)
+        if supplied(values) and (
+            not isinstance(values, list)
+            or not all(project_relative_path(value) for value in values)
+        ):
+            failures.append(
+                f"artifacts.{field} must contain project-relative paths without traversal"
+            )
+        elif (
+            supplied(values)
+            and project_root is not None
+            and any(not path_is_contained(project_root, value) for value in values)
+        ):
+            failures.append(
+                f"artifacts.{field} resolves outside the project through a symlink"
+            )
+    if supplied(no_browser) and not valid_no_browser and not project_relative_path(
+        no_browser
+    ):
+        failures.append(
+            "artifacts.front_end_scan_notes must be a project-relative path "
+            "or 'no browser: <reason>'"
+        )
+    elif (
+        supplied(no_browser)
+        and not valid_no_browser
+        and project_root is not None
+        and not path_is_contained(project_root, no_browser)
+    ):
+        failures.append(
+            "artifacts.front_end_scan_notes resolves outside the project "
+            "through a symlink"
         )
     business_context = data.get("business_context")
     if not isinstance(business_context, dict) or not supplied(
@@ -191,19 +262,30 @@ def main(argv=None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("inputs", type=Path)
     parser.add_argument("--migrate", action="store_true")
+    parser.add_argument(
+        "--project-root",
+        type=Path,
+        default=Path.cwd(),
+        help="workspace root used to contain the input and every artifact path",
+    )
     args = parser.parse_args(argv)
+    project_root = args.project_root.resolve()
+    inputs = args.inputs.resolve()
+    if inputs == project_root or project_root not in inputs.parents:
+        print("FAIL — engagement inputs resolve outside --project-root")
+        return 1
     try:
-        text = args.inputs.read_text()
+        text = inputs.read_text()
     except OSError as exc:
         print(f"FAIL — cannot read engagement inputs: {exc}")
         return 1
     if args.migrate:
         migrated = migrate_v2(text)
         if migrated != text:
-            args.inputs.write_text(migrated)
+            inputs.write_text(migrated)
             text = migrated
             print("migrated engagement inputs from schema v2 to v3")
-    failures = verify_text(text)
+    failures = verify_text(text, project_root)
     if failures:
         for failure in failures:
             print(f"FAIL — {failure}")

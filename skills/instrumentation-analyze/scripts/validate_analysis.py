@@ -10,6 +10,7 @@ from pathlib import Path
 from analysis_contract import (
     load_json,
     validate_contract,
+    validate_implementation_mapping,
     validate_manifest,
     validate_run_timing,
     validate_worker_results,
@@ -19,6 +20,11 @@ from analysis_contract import (
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--contract", type=Path)
+    parser.add_argument(
+        "--implementation-map",
+        type=Path,
+        help="Repository authorization map; inferred beside the contract when present",
+    )
     parser.add_argument("--manifest", type=Path)
     parser.add_argument(
         "--results",
@@ -33,8 +39,25 @@ def main(argv: list[str] | None = None) -> int:
         parser.error("--timing is required whenever --results are validated")
     failures: list[str] = []
     worker_results = None
+    contract = None
+    implementation_map = args.implementation_map
     if args.contract:
-        failures.extend(validate_contract(load_json(args.contract)))
+        contract = load_json(args.contract)
+        failures.extend(validate_contract(contract))
+        if implementation_map is None:
+            candidate = args.contract.parent / "implementation-map.json"
+            if candidate.is_file():
+                implementation_map = candidate
+        if implementation_map is None:
+            failures.append(
+                "implementation mapping: required beside every analysis contract"
+            )
+        else:
+            failures.extend(
+                validate_implementation_mapping(
+                    contract, load_json(implementation_map)
+                )
+            )
     if args.manifest:
         manifest = load_json(args.manifest)
         if args.results:
@@ -72,6 +95,7 @@ def main(argv: list[str] | None = None) -> int:
         name
         for name, value in (
             ("contract", args.contract),
+            ("implementation mapping", implementation_map),
             ("manifest", args.manifest),
             ("worker intervals", args.results),
             ("run timing", args.timing),

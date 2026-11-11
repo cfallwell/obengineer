@@ -13,6 +13,7 @@ import pytest
 ROOT = Path(__file__).resolve().parent.parent
 INSTALL = ROOT / "install.sh"
 INSTALL_SCRIPT = ROOT / "scripts/install.py"
+LEGACY_COMMAND_FIXTURES = ROOT / "tests/fixtures/legacy-commands"
 spec = importlib.util.spec_from_file_location("obengineer_installer", INSTALL_SCRIPT)
 installer = importlib.util.module_from_spec(spec)
 sys.modules[spec.name] = installer
@@ -264,6 +265,13 @@ def test_reinstall_is_digest_checked_and_modified_command_survives_uninstall(tmp
 def test_reinstall_migrates_source_bound_legacy_manifest_to_digests(tmp_path):
     run_install(tmp_path, "--cursor")
     manifest_path = convert_host_install_to_legacy_manifest(tmp_path)
+    legacy = json.loads(manifest_path.read_text())
+    start = tmp_path / ".cursor/commands/ob-start.md"
+    start.write_text(
+        (LEGACY_COMMAND_FIXTURES / "ob-start.md").read_text().replace(
+            installer.ROOT_TOKEN, legacy["source"]
+        )
+    )
 
     run_install(tmp_path, "--cursor")
 
@@ -280,13 +288,14 @@ def test_legacy_manifest_does_not_claim_modified_command(tmp_path):
     run_install(tmp_path, "--cursor")
     convert_host_install_to_legacy_manifest(tmp_path)
     command = tmp_path / ".cursor/commands/ob-start.md"
-    command.write_text("user-defined command\n")
+    modified = command.read_text() + "\nUser customization that must survive.\n"
+    command.write_text(modified)
 
     result = try_install(tmp_path, "--cursor")
 
     assert result.returncode == 1
     assert "not installer-owned" in result.stdout
-    assert command.read_text() == "user-defined command\n"
+    assert command.read_text() == modified
 
 
 def test_legacy_manifest_does_not_claim_retargeted_skill(tmp_path):
@@ -294,14 +303,44 @@ def test_legacy_manifest_does_not_claim_retargeted_skill(tmp_path):
     convert_host_install_to_legacy_manifest(tmp_path)
     skill = tmp_path / ".cursor/skills/engagement-intake"
     skill.unlink()
-    skill.symlink_to("../../user-owned-skill", target_is_directory=True)
+    spoofed = "/tmp/attacker/obengineer/skills/engagement-intake"
+    skill.symlink_to(spoofed, target_is_directory=True)
 
     result = try_install(tmp_path, "--cursor")
 
     assert result.returncode == 1
     assert "not installer-owned" in result.stdout
     assert skill.is_symlink()
-    assert os.readlink(skill) == "../../user-owned-skill"
+    assert os.readlink(skill) == spoofed
+
+
+def test_legacy_manifest_removes_verified_retired_command(tmp_path):
+    run_install(tmp_path, "--cursor")
+    manifest_path = convert_host_install_to_legacy_manifest(tmp_path)
+    manifest = json.loads(manifest_path.read_text())
+    retired = tmp_path / ".cursor/commands/ob-intake.md"
+    legacy_source = manifest["source"]
+    retired.write_text(
+        (LEGACY_COMMAND_FIXTURES / "ob-intake.md").read_text().replace(
+            installer.ROOT_TOKEN, legacy_source
+        )
+    )
+    manifest["created"].append(
+        "/opt/legacy-project/.cursor/commands/ob-intake.md"
+    )
+    manifest_path.write_text(json.dumps(manifest))
+
+    installer.install_host(
+        installer.HOSTS["cursor"],
+        tmp_path,
+        True,
+        False,
+        installer.Planner(False),
+    )
+
+    assert not retired.exists()
+    upgraded = json.loads(manifest_path.read_text())
+    assert "commands/ob-intake.md" not in upgraded["owned"]
 
 
 def test_gitignore_uninstall_removes_only_tracked_lines(tmp_path):

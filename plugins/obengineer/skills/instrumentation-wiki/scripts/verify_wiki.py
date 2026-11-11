@@ -456,10 +456,28 @@ def check(target: Path, repo_root: Path, index_max_lines: int) -> list[str]:
         ):
             failures.append(f"{rel[p]}: depends_on must contain work-order IDs")
 
+        repository_mapping = fm.get("repository_mapping")
+        if repository_mapping not in {"mapped", "unresolved"}:
+            failures.append(
+                f"{rel[p]}: repository_mapping must be mapped or unresolved"
+            )
+        mapping_evidence = fm.get("repository_mapping_evidence")
+        if not meaningful(mapping_evidence):
+            failures.append(
+                f"{rel[p]}: repository_mapping_evidence is not meaningful"
+            )
         legs = fm.get("repository_legs")
-        if not isinstance(legs, list) or not legs:
-            failures.append(f"{rel[p]}: repository_legs must be a non-empty YAML list")
+        if not isinstance(legs, list):
+            failures.append(f"{rel[p]}: repository_legs must be a YAML list")
             legs = []
+        elif repository_mapping == "mapped" and not legs:
+            failures.append(
+                f"{rel[p]}: mapped repository_legs must be non-empty"
+            )
+        elif repository_mapping == "unresolved" and legs:
+            failures.append(
+                f"{rel[p]}: unresolved mapping cannot claim repository_legs"
+            )
         for index, leg in enumerate(legs):
             leg_path = f"{rel[p]}: repository_legs[{index}]"
             if not isinstance(leg, dict):
@@ -519,14 +537,23 @@ def check(target: Path, repo_root: Path, index_max_lines: int) -> list[str]:
             failures.append(
                 f"{rel[p]}: accepted versions cannot leave work orders proposed"
             )
-        if is_accepted and status == "blocked" and not dependencies:
+        if (
+            is_accepted
+            and status == "blocked"
+            and not dependencies
+            and repository_mapping != "unresolved"
+        ):
             failures.append(
                 f"{rel[p]}: accepted dependency-free work order must be ready"
             )
         if not is_accepted and status == "ready":
             failures.append(f"{rel[p]}: work orders cannot be ready before acceptance")
         if not is_accepted:
-            expected = "blocked" if dependencies else "proposed"
+            expected = (
+                "blocked"
+                if dependencies or repository_mapping == "unresolved"
+                else "proposed"
+            )
             if status != expected:
                 failures.append(
                     f"{rel[p]}: before acceptance status must be {expected}"

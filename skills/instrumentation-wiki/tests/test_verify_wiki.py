@@ -161,6 +161,8 @@ Copy this work order into the configured issue tracker without changing scope.
         extra_frontmatter="""work_order_id: WO-001
 selectors: [workflow:checkout.submit]
 depends_on: []
+repository_mapping: mapped
+repository_mapping_evidence: Application source authorization maps this workflow to the payments repository src tree.
 repository_legs:
   - repository: payments
     paths: [src/]
@@ -305,6 +307,39 @@ def test_work_order_rejects_unauthorized_repository_path(wiki):
     path = wiki.parents[1] / "implementation" / "work-orders" / "WO-001.md"
     path.write_text(path.read_text().replace("paths: [src/]", "paths: [../secrets/]"))
     assert any("authorized relative paths" in failure for failure in failures(wiki))
+
+
+def test_unresolved_repository_mapping_is_blocked_without_fake_legs(wiki):
+    path = wiki.parents[1] / "implementation" / "work-orders" / "WO-001.md"
+    text = path.read_text()
+    text = text.replace("status: proposed", "status: blocked")
+    text = text.replace("repository_mapping: mapped", "repository_mapping: unresolved")
+    text = text.replace(
+        "repository_mapping_evidence: Application source authorization maps this workflow to the payments repository src tree.",
+        "repository_mapping_evidence: Application source and authorized implementation paths were not supplied for this workflow.",
+    )
+    text = text.replace(
+        """repository_legs:
+  - repository: payments
+    paths: [src/]
+    changes: [Implement bounded checkout workflow instrumentation in the authorized source tree.]
+    tests: [Run deterministic propagation and workflow contract tests for the repository leg.]
+""",
+        "repository_legs: []\n",
+    )
+    text = text.replace(
+        "- Change the payments repository only under its authorized `src/` parent.",
+        "- Repository mapping is unresolved; no implementation repository or path is claimed.",
+    )
+    path.write_text(text)
+
+    implementation_map = wiki.parents[6] / "docs" / "observability" / "implementation-map.json"
+    data = json.loads(implementation_map.read_text())
+    data["targets"][0]["repositories"] = []
+    data["targets"][0]["mapping_status"] = "incomplete"
+    implementation_map.write_text(json.dumps(data))
+
+    assert failures(wiki) == []
 
 
 def test_work_order_reverse_links_are_reciprocal(wiki):

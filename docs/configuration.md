@@ -99,7 +99,7 @@ Validate or deterministically migrate v2 with:
 
 ```bash
 python3 /path/to/obengineer/skills/engagement-intake/scripts/verify_engagement_inputs.py \
-  docs/observability/engagement-inputs.yaml --migrate
+  docs/observability/engagement-inputs.yaml --project-root . --migrate
 ```
 
 Humans never need to type `unknown` or edit this file. `/ob-add-inputs` and

@@ -45,6 +45,11 @@ systems and direct API behavior live in
    `scripts/manage_run_context.py` for the state transition and checked list. Use
    `scripts/prefill_engagement_inputs.py` for allowlisted `.env` or JSON prefill. Never
    hand-set the analysis authorization flag.
+8. **Contain artifact paths.** Persist project-relative paths without `..`; resolve and
+   read them only inside the project artifact boundary. Host uploads use a project
+   artifact reference, never a machine-specific absolute path. Immediately before each
+   read, call `resolve_project_artifact(project_root, path)` from
+   `scripts/prefill_engagement_inputs.py` so a later symlink substitution cannot escape.
 
 ## Modes
 
@@ -170,7 +175,7 @@ Run:
 
 ```bash
 python3 <obengineer>/skills/engagement-intake/scripts/verify_engagement_inputs.py \
-  docs/observability/engagement-inputs.yaml --migrate
+  docs/observability/engagement-inputs.yaml --project-root . --migrate
 ```
 
 Report deterministic migrations. Do not delete unknown extension fields.
