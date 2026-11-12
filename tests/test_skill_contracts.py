@@ -107,7 +107,7 @@ def test_start_validates_before_discovery_and_gates_analysis():
         assert "exact `no`" in text or "Exact `no`" in text
     assert "one-shot authorization" in analyze
     assert "artifact-tree digest" in analyze
-    assert analyze.index(" show --command") < analyze.index(
+    assert analyze.index(" claim --command") < analyze.index(
         "direct-api --phase analysis"
     )
 
@@ -455,7 +455,9 @@ def test_plugin_manifests_and_mirrors_agree():
     claude = json.loads((PLUGIN / ".claude-plugin" / "plugin.json").read_text())
     codex = json.loads((PLUGIN / ".codex-plugin" / "plugin.json").read_text())
     assert claude["version"] == codex["version"]
-    assert codex["version"] == "0.2.1"
+    assert codex["version"] == "0.3.0"
+    assert "guided" not in (claude["description"] + codex["description"]).lower()
+    assert "optional inputs" not in codex["interface"]["longDescription"].lower()
     assert claude["skills"] == ["./skills/"]
     assert codex["skills"] == "./codex-skills/"
     assert codex["requires_local_executor"] is True

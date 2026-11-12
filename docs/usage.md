@@ -18,8 +18,8 @@ The rerun:
 5. asks `Proceed with analysis using this configuration? (yes/no)`.
 
 Exact `no` performs no network or analysis action. Exact `yes` binds one-shot
-authorization to the config and artifact bytes and starts the next immutable analysis.
-Changing either input before dispatch returns to a new summary.
+authorization to the config and full artifact snapshot. Analysis atomically claims it;
+changing either input prevents API/PR dispatch. Concurrent/repeated claims fail.
 
 ## Analysis and review
 
@@ -28,16 +28,19 @@ historical versions, and runs six bounded evidence workstreams. Configured Splun
 products receive mandatory direct read attempts; MCP sources supplement them. Failures
 are explicit redacted dispositions, never fabricated success.
 
-After the one-shot authorization check, analysis runs:
+After claiming with the originating command and intended version, analysis runs:
 
 ```text
-python3 <obengineer-root>/skills/engagement-intake/scripts/manage_obconfig.py --project-root . direct-api --phase analysis
+python3 <obengineer-root>/skills/engagement-intake/scripts/manage_obconfig.py --project-root . direct-api --phase analysis --command <origin> --intended-version V<N>
+python3 <obengineer-root>/skills/engagement-intake/scripts/manage_obconfig.py --project-root . safe-active --command <origin> --intended-version V<N>
 ```
 
 Its centralized-redacted JSON feeds provenance. `/ob-verify` runs the same supported
 path with `--phase verification` after acceptance/plan validation and feeds those rows
 to verification evidence and provenance. Neither workflow imports the adapter directly
-or puts credentials in command arguments.
+or puts credentials in command arguments. Passive/none makes zero safe-active requests.
+Only successful final claim consumption advances the artifact baseline; failure/decline
+leaves it unchanged for retry.
 
 The result is one reviewed PR containing linked Markdown analysis, canonical contract,
 sanitized provenance, verification plan, versioned wiki, and all work orders. Review in

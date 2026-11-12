@@ -30,6 +30,11 @@ Never accept configurable exclusions, paths, methods, request counts, or rate ce
 An active request is permitted only when its normalized origin exactly matches the
 validated allowlist. Wildcards, paths, credentials, loopback/private/link-local hosts,
 redirect credential forwarding, and non-HTTPS origins are rejected.
+The supported `manage_obconfig.py safe-active` executor owns the two fixed paths and
+HEAD method, one request/second and 100-request total ceilings. It rejects an origin if
+any DNS answer is non-global, connects only to a vetted address with hostname TLS
+verification, checks the actual peer against that set before sending, and never follows
+redirects.
 An observation that would require one of those actions is **Not in evidence** and names
 the safe test environment or owner needed to settle it.
 

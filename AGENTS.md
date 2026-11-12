@@ -10,8 +10,8 @@ belong in the artifact repository, not this toolkit.
 - `agents/` — operating doctrine and routing.
 - `skills/` — canonical skill sources.
 - `skills/references/` — one authority per cross-skill fact.
-- `inputs/` — engagement input schema.
-- `scripts/` — installer, sync, and guided credential setup.
+- `obconfig.yaml.template` — canonical local engagement configuration contract.
+- `scripts/` — installer and mirror synchronization.
 - `plugins/obengineer/` — generated self-contained plugin mirror.
 - `.cursor/skills/`, `.agents/skills/` — generated links to canonical skills.
 - `tests/` — deterministic contracts over the agentry.
@@ -21,7 +21,8 @@ belong in the artifact repository, not this toolkit.
 
 ```text
 /ob-start
-  → local obconfig validation + digest-bound proceed gate
+  → local obconfig validation + digest-bound proceed gate + atomic claim
+  → configured direct API and authorized safe-active attempts
   → analysis V<N> + versioned wiki + all work orders
   → one reviewed PR
   → explicit yes: content-bound acceptance and merge
@@ -67,9 +68,10 @@ Agent files and commands route to these authorities; they do not restate them.
 - Keep examples generic unless source evidence names a target.
 - Never commit credentials, tokens, customer PII, or personal paths.
 - MCP is one data source; direct APIs remain first-class.
-- Analysis and verification invoke direct APIs only through
-  `manage_obconfig.py direct-api --phase analysis|verification`; its redacted JSON feeds
-  provenance.
+- Analysis claims the gate before invoking
+  `manage_obconfig.py direct-api --phase analysis --command <command> --intended-version <Vn>`
+  or `manage_obconfig.py safe-active` and consumes it only after success. Verification
+  invokes `direct-api --phase verification`. Only their redacted JSON feeds provenance.
 - Do not require humans to type `unknown`, copy a SHA, or provide names of engineers,
   owners, or accepters. Engagement inputs are edited only in local `obconfig.yaml`.
 

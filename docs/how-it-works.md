@@ -9,7 +9,8 @@ outputs, changes, and verification.
 ```text
 /ob-start
   → local obconfig validation, artifact hash, and proceed gate
-  → authorized manage_obconfig.py direct-api --phase analysis
+  → atomic config/artifact claim
+  → claim-bound direct-api and safe-active commands
   → parallel evidence collection
   → linked analysis V<N>
   → versioned wiki and all work orders
@@ -34,10 +35,12 @@ Measured evidence wins over stated descriptions. Splunk APIs and MCP integration
 complementary. A missing MCP server does not disable direct API inventory. A missing
 optional answer does not block analysis.
 
-The supported direct evidence boundary is `manage_obconfig.py direct-api --phase
-analysis|verification`. It securely loads local config, emits centralized-redacted JSON,
-and supplies provenance dispositions/aggregate measurements. Missing config is explicit
-`not-configured`; process environment is never a fallback.
+The supported evidence boundary is `manage_obconfig.py direct-api` plus the analysis-only
+`safe-active` subcommand. Analysis passes its originating command and intended version
+to both so each revalidates the claim around network work. They securely load local
+config, emit centralized-redacted JSON, and supply provenance dispositions/aggregates.
+Missing direct configuration is explicit `not-configured`; process environment is never
+a fallback. Passive/none safe-active mode makes zero requests.
 
 Independent sources run with maximum safe sub-agent parallelism. Naming and schema
 reconciliation remain serial so concurrent workers do not create competing taxonomies.

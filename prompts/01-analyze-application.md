@@ -16,19 +16,25 @@ legacy monolithic template.
 Use `../templates/analysis-site/index.md` and `detail.md` as the approved layout. Do not
 replace the long linked index with duplicated object detail.
 
-If config does not exist, invoke `/ob-start`. Do not begin collection unless
-`manage_obconfig.py show` verifies the unconsumed one-shot binding for schema version,
-config digest, artifact-tree digest, originating command, and intended version.
-After that check and before workers start, invoke exactly:
+If config does not exist, invoke `/ob-start`. Do not begin collection unless the atomic
+`manage_obconfig.py claim --command <origin> --intended-version V<N>` succeeds for the
+schema version, config digest, full artifact manifest/delta and tree digest, originating
+command, and intended version. Use its sanitized delta as the only artifact-change input.
+After that claim and before workers start, invoke exactly:
 
 ```text
-python3 <obengineer-root>/skills/engagement-intake/scripts/manage_obconfig.py --project-root . direct-api --phase analysis
+python3 <obengineer-root>/skills/engagement-intake/scripts/manage_obconfig.py --project-root . direct-api --phase analysis --command <origin> --intended-version V<N>
+python3 <obengineer-root>/skills/engagement-intake/scripts/manage_obconfig.py --project-root . safe-active --command <origin> --intended-version V<N>
 ```
 
 Consume its centralized-redacted JSON only. Append each source disposition and measured
 aggregate to `provenance-ledger.json`; record failed or `not-configured` rows as source
 limitations/unresolved evidence. Never import `direct_api.py` in place of this command,
 read process environment, or put a credential in command arguments.
+The second command makes zero requests in passive/none and records fixed-policy
+safe-active outcomes otherwise. Both commands revalidate the claim before and after
+network work. Consume the claim only after successful analysis and PR dispatch; failure
+or decline leaves the artifact baseline unchanged for retry.
 
 ## Evidence collection
 

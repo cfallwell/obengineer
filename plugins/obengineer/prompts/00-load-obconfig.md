@@ -38,9 +38,11 @@ the local manifest, then show only `obconfig.summary()` output. Ask exactly:
 > Proceed with analysis using this configuration? (yes/no)
 
 Only exact `yes` writes one-shot local authorization bound to schema version, config
-digest, artifact-tree digest, command, and intended version. Exact `no` performs no
-network/API/analysis action. Any other answer repeats the gate. Recheck every binding
-immediately before dispatch; changed config or artifacts returns to a new summary.
+digest, full artifact manifest/delta and tree digest, command, and intended version.
+Exact `no` performs no network/API/analysis action. Analysis atomically claims the
+authorization before dispatch; concurrent/repeated claims fail. Revalidate the claim
+around every consumer and advance the artifact baseline only on successful final
+consume. Changed config/artifacts invalidates it.
 
 All output goes through the schema-derived redactor. Never show tokens, password, login
 ID, full index names, config digest, unknown-extension values, or source lines.

@@ -35,8 +35,9 @@ Proceed with analysis using this configuration? (yes/no)
 ```
 
 Exact `yes` creates one-shot authorization bound to schema version, config digest,
-artifact-tree digest, originating command, and intended immutable version. Any input
-change invalidates it before analysis.
+full artifact manifest/delta and tree digest, originating command, and intended immutable
+version. Analysis atomically claims that authorization. Any input change invalidates the
+claim before API/PR work; concurrent or repeated claims fail.
 
 ## Access behavior
 
@@ -48,11 +49,14 @@ indexes. MCP evidence is supplemental.
 The supported production commands are:
 
 ```bash
-python3 skills/engagement-intake/scripts/manage_obconfig.py --project-root . direct-api --phase analysis
+python3 skills/engagement-intake/scripts/manage_obconfig.py --project-root . direct-api --phase analysis --command <origin> --intended-version V<N>
+python3 skills/engagement-intake/scripts/manage_obconfig.py --project-root . safe-active --command <origin> --intended-version V<N>
 python3 skills/engagement-intake/scripts/manage_obconfig.py --project-root . direct-api --phase verification
 ```
 
 They securely load ignored mode-0600 config and emit only centralized-redacted JSON.
+Safe-active uses fixed HEAD paths/rates/ceilings with DNS and peer-address defenses;
+passive/none makes no request. Successful final consume advances the artifact baseline.
 Analysis and verification append its dispositions and parsed aggregate measurements to
 provenance. Missing config emits explicit `not-configured` dispositions; it does not
 read `.env` or process environment.

@@ -1,7 +1,7 @@
 {
   "name": "obengineer",
-  "version": "0.2.1",
-  "description": "Guided, versioned instrumentation analysis for Codex: linked strategy, wiki, work orders, implementation, Terraform planning, and verification.",
+  "version": "0.3.0",
+  "description": "Versioned instrumentation analysis for Codex using validated local configuration, linked strategy, wiki, work orders, implementation, Terraform planning, and verification.",
   "author": {
     "name": "Splunk Observability Practice"
   },
@@ -22,8 +22,8 @@
   "hooks": "./hooks/codex-hooks.json",
   "interface": {
     "displayName": "obengineer",
-    "shortDescription": "Guided, versioned instrumentation strategies and work orders.",
-    "longDescription": "obengineer turns a production application into a versioned instrumentation strategy a team can review, implement, and verify.\n\nRun $ob-start in Codex CLI or @ob-start in ChatGPT Desktop with its local executor. The Python-backed workflows are not supported on ChatGPT surfaces without local execution. The guided flow discovers source, production, direct Splunk APIs, and connected MCP tools; asks only for useful optional inputs; and opens one PR containing linked Markdown for the host side panel, a versioned agent wiki, schema, verification criteria, and the complete proposed work-order queue. Use cases lead to workflows and business transactions. Every detail page has breadcrumbs, and no browser or localhost server is required.\n\nReply yes after PR review to bind acceptance to the content, merge, and activate the first Ready work order. Continue with $ob-implement, $ob-terraform, and $ob-verify in Codex CLI, or the matching @ob-* workflows in Desktop with local execution. Word is an optional summary under 20 pages.",
+    "shortDescription": "Versioned instrumentation strategies and work orders from validated local configuration.",
+    "longDescription": "obengineer turns a production application into a versioned instrumentation strategy a team can review, implement, and verify.\n\nRun $ob-start in Codex CLI or @ob-start in ChatGPT Desktop with its local executor. The Python-backed workflows are not supported on ChatGPT surfaces without local execution. The workflow validates ignored local obconfig, discovers source and production evidence, attempts configured direct Splunk APIs, uses connected MCP tools, and opens one PR containing linked Markdown for the host side panel, a versioned agent wiki, schema, verification criteria, and the complete proposed work-order queue. Use cases lead to workflows and business transactions. Every detail page has breadcrumbs, and no browser or localhost server is required.\n\nReply yes after PR review to bind acceptance to the content, merge, and activate the first Ready work order. Continue with $ob-implement, $ob-terraform, and $ob-verify in Codex CLI, or the matching @ob-* workflows in Desktop with local execution. Word is an optional summary under 20 pages.",
     "developerName": "Splunk Observability Practice",
     "category": "Productivity",
     "capabilities": [

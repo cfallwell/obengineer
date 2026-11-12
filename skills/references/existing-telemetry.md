@@ -13,7 +13,7 @@ both directly call the exact validated HTTPS host and search only its validated 
 allowlist. The only supported production entry points are:
 
 ```text
-python3 <obengineer-root>/skills/engagement-intake/scripts/manage_obconfig.py --project-root . direct-api --phase analysis
+python3 <obengineer-root>/skills/engagement-intake/scripts/manage_obconfig.py --project-root . direct-api --phase analysis --command <origin> --intended-version V<N>
 python3 <obengineer-root>/skills/engagement-intake/scripts/manage_obconfig.py --project-root . direct-api --phase verification
 ```
 
@@ -47,7 +47,7 @@ facts are never called direct tenant measurement.
 
 ## Observability Cloud usage and enforced limits
 
-Use `POST https://stream.<realm>.observability.splunkcloud.com/v2/signalflow/execute`
+Use `POST https://api.<realm>.observability.splunkcloud.com/v2/signalflow/execute`
 for the fixed approved organization-metric registry:
 
 | Fact | Metric |
@@ -81,6 +81,8 @@ search (index="<each exact allowlisted index>")
 ```
 
 The adapter constructs this expression; models do not interpolate config values.
+It fixes the observation window to `earliest_time=-5m`, `latest_time=now`, a 30-second
+execution limit, and 10,000-result ceiling.
 Generated examples retain placeholders and never contain actual index names or raw
 events. Add application constraints only from validated source evidence and escape them.
 

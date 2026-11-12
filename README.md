@@ -38,9 +38,9 @@ content or owns an actual `obconfig.yaml`.
 
 obengineer also uses relevant MCP tools already connected to the host. MCP supplements
 direct APIs; it is not the only tenant data source.
-Analysis and verification invoke the supported
-`manage_obconfig.py direct-api --phase analysis|verification` path; its redacted JSON
-dispositions and aggregate measurements feed provenance.
+Analysis atomically claims its authorized snapshot and invokes supported `direct-api`
+and `safe-active` subcommands; verification invokes `direct-api --phase verification`.
+Only centralized-redacted dispositions and aggregate measurements feed provenance.
 
 ## Use
 
@@ -58,7 +58,8 @@ web/cloud and Work surfaces without local execution are not supported.
 `/ob-start` creates ignored mode-0600 `obconfig.yaml` from the canonical root template
 when missing, then stops for editing. On rerun it validates, hashes the complete artifact
 directory, displays a redacted summary, and asks whether to proceed. Only exact `yes`
-creates digest-bound one-shot analysis authorization.
+creates digest-bound one-shot analysis authorization. Analysis then atomically claims
+that snapshot; successful final consumption advances the artifact baseline.
 
 At any time:
 

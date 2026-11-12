@@ -23,8 +23,8 @@ The deterministic implementation is:
 - `scripts/obconfig.py` — secure loading, marked validation, centralized redaction,
   bounded repair, artifact tree hashing, summary, and authorization binding;
 - `scripts/manage_obconfig.py` — `init`, `validate`, `repair`, `summary`, `changed`,
-  `authorize`, `show`, `consume`, `direct-api --phase analysis|verification`, and
-  `migrate-legacy` commands;
+  `authorize`, atomic `claim`, `consume`, claim-bound `direct-api`, fixed-policy
+  `safe-active`, and `migrate-legacy` commands;
 - `scripts/direct_api.py` — fixed read-only Observability Cloud and Platform request
   adapters; and
 - `schemas/obconfig.schema.json` — machine shape and schema-derived secret registry.
@@ -42,8 +42,10 @@ Follow [`../../prompts/00-load-obconfig.md`](../../prompts/00-load-obconfig.md).
    reusable.
 4. Show the condensed redacted summary and ask exactly
    `Proceed with analysis using this configuration? (yes/no)`.
-5. Exact `yes` writes one-shot authorization bound to config and artifact-tree digests,
-   schema, command, and intended version. Revalidate immediately before analysis.
+5. Exact `yes` writes one-shot authorization bound to config, full artifact
+   manifest/delta and tree digest, schema, command, and intended version. Analysis must
+   atomically claim it; each network/dispatch consumer revalidates it. Advance the
+   artifact baseline only on successful final consume.
 
 `/ob-add-inputs` and `/ob-edit-inputs` are compatibility entry points. They never edit
 YAML or ask field questions. Unchanged config prints
@@ -60,13 +62,14 @@ YAML or ask field questions. Unchanged config prints
 - Artifact paths are project-relative and directory-only. Traversal, symlinks, special
   files, unreadable files, and stat/open/read races fail closed.
 - `passive` performs no safe-active probes. `safe-active` requires normalized exact
-  public HTTPS origins and fixed non-mutating methods/rate ceilings. `none` records a
-  coverage gap.
+  public HTTPS origins and the supported executor's fixed non-mutating paths/method,
+  DNS/peer checks, request/rate ceilings, and no redirects. `none` records a coverage gap.
 - Observability realm/token and Platform HTTPS host/token/index allowlist are paired.
   Wildcard indexes and cross-origin redirect credential forwarding are forbidden.
 - Direct API attempts are mandatory in analysis and verification when configured.
   The supported production entry point is `manage_obconfig.py --project-root .
-  direct-api --phase <analysis|verification>`; it emits centralized-redacted JSON for
+  direct-api --phase <analysis|verification>` (with claim command/version in analysis);
+  it emits centralized-redacted JSON for
   provenance. Tokens exist only in request headers. MCP evidence supplements but never
   replaces or relabels the direct attempt.
 - `.env`, process environment, and legacy engagement input are never runtime fallback

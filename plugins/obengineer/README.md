@@ -34,9 +34,9 @@ SHA or named accepter is required.
 
 obengineer combines direct Observability Cloud and Splunk Platform APIs with relevant MCP
 tools already connected to the host. MCP is not the only source.
-Analysis and verification use the supported
-`manage_obconfig.py direct-api --phase analysis|verification` command and feed its
-centralized-redacted JSON dispositions/aggregates into provenance.
+Analysis atomically claims its snapshot and uses claim-bound `direct-api` and
+`safe-active` commands. Verification uses `direct-api --phase verification`. Only their
+centralized-redacted JSON dispositions/aggregates feed provenance.
 
 Read-only API credentials remain only in local `obconfig.yaml` and are sent only in
 validated HTTPS request headers. The committed `obconfig.yaml.template` is the sole
