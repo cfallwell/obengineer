@@ -2914,6 +2914,117 @@ def summary(data: Mapping[str, Any], tree: Mapping[str, Any]) -> str:
     return "\n".join(Redactor(data).text(line) for line in lines)
 
 
+def analysis_config_projection(
+    data: Mapping[str, Any],
+    claim: Mapping[str, Any],
+) -> dict[str, Any]:
+    """Return the fixed non-secret configuration surface used by analysis."""
+    observability = get_path(data, "splunk.observability", {})
+    platform = get_path(data, "splunk.platform", {})
+    dummy_login = get_path(data, "analysis_access.dummy_login", {})
+    production_urls = get_path(data, "surfaces.production_urls", [])
+    no_browser_reason = get_path(data, "surfaces.no_browser_reason", "")
+    artifact_manifest = claim.get("artifact_manifest", {})
+    artifact_delta = claim.get("artifact_delta", {})
+    projection = {
+        "schema_version": 1,
+        "engagement": copy.deepcopy(data.get("engagement", {})),
+        "initial_scope": copy.deepcopy(data.get("initial_scope", {})),
+        "cloud_diagrams": copy.deepcopy(data.get("cloud_diagrams", {})),
+        "surfaces": copy.deepcopy(data.get("surfaces", {})),
+        "backends": copy.deepcopy(data.get("backends", {})),
+        "tenancy": copy.deepcopy(data.get("tenancy", {})),
+        "standards": copy.deepcopy(data.get("standards", {})),
+        "constraints": copy.deepcopy(data.get("constraints", {})),
+        "outcomes": copy.deepcopy(data.get("outcomes", {})),
+        "traffic_baseline": copy.deepcopy(
+            data.get("traffic_baseline", {})
+        ),
+        "business_context": copy.deepcopy(
+            data.get("business_context", {})
+        ),
+        "public_evidence": copy.deepcopy(data.get("public_evidence", {})),
+        "developer_tools": copy.deepcopy(data.get("developer_tools", {})),
+        "security_assessment": copy.deepcopy(
+            data.get("security_assessment", {})
+        ),
+        "artifacts": {
+            "directory": get_path(data, "artifacts.directory", ""),
+            "file_count": artifact_manifest.get("file_count", 0),
+            "total_bytes": artifact_manifest.get("total_bytes", 0),
+            "delta": copy.deepcopy(artifact_delta),
+        },
+        "availability": {
+            "production_browser": (
+                "configured"
+                if isinstance(production_urls, list) and production_urls
+                else (
+                    "not-applicable"
+                    if isinstance(no_browser_reason, str)
+                    and no_browser_reason
+                    else "not-configured"
+                )
+            ),
+            "dummy_login": (
+                "configured"
+                if isinstance(dummy_login, Mapping)
+                and bool(dummy_login.get("login_id"))
+                and bool(dummy_login.get("password"))
+                else "not-configured"
+            ),
+            "splunk_observability": (
+                "configured"
+                if isinstance(observability, Mapping)
+                and bool(observability.get("realm"))
+                and bool(observability.get("read_token"))
+                else "not-configured"
+            ),
+            "splunk_platform": (
+                "configured"
+                if isinstance(platform, Mapping)
+                and bool(platform.get("host"))
+                and bool(platform.get("read_token"))
+                and bool(platform.get("index_allowlist"))
+                else "not-configured"
+            ),
+        },
+        "splunk": {
+            "observability": {
+                "realm": (
+                    observability.get("realm", "")
+                    if isinstance(observability, Mapping)
+                    else ""
+                ),
+                "configured": (
+                    isinstance(observability, Mapping)
+                    and bool(observability.get("realm"))
+                    and bool(observability.get("read_token"))
+                ),
+            },
+            "platform": {
+                "host": (
+                    platform.get("host", "")
+                    if isinstance(platform, Mapping)
+                    else ""
+                ),
+                "configured": (
+                    isinstance(platform, Mapping)
+                    and bool(platform.get("host"))
+                    and bool(platform.get("read_token"))
+                    and bool(platform.get("index_allowlist"))
+                ),
+                "index_count": (
+                    len(platform.get("index_allowlist", []))
+                    if isinstance(platform, Mapping)
+                    and isinstance(platform.get("index_allowlist"), list)
+                    else 0
+                ),
+            },
+        },
+    }
+    return Redactor(data).value(projection)
+
+
 def _authorization_path(project_root: Path) -> Path:
     return project_root / STATE_DIRECTORY / "authorization.json"
 

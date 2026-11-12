@@ -3,7 +3,7 @@
 **Agent:** [`../agents/instrumentation-architect.agent.md`](../agents/instrumentation-architect.agent.md)  
 **Skills:** `instrumentation-analyze`, `instrumentation-wiki`,
 `baggage-propagation`, `cardinality-budget`, `deliverable-review`
-**Input:** digest-authorized local root `obconfig.yaml` and its complete artifact tree
+**Input:** claim-bound non-secret configuration projection and complete artifact tree
 **Output:** one immutable analysis version and its wiki in one reviewed PR
 
 ## Contract
@@ -23,14 +23,19 @@ command, and intended version. Use its sanitized delta as the only artifact-chan
 After that claim and before workers start, invoke exactly:
 
 ```text
+python3 <obengineer-root>/skills/engagement-intake/scripts/manage_obconfig.py --project-root . config-projection --command <origin> --intended-version V<N>
 python3 <obengineer-root>/skills/engagement-intake/scripts/manage_obconfig.py --project-root . direct-api --phase analysis --command <origin> --intended-version V<N>
 python3 <obengineer-root>/skills/engagement-intake/scripts/manage_obconfig.py --project-root . safe-active --command <origin> --intended-version V<N>
 ```
 
-Consume its centralized-redacted JSON only. Append each source disposition and measured
+Use the first command's centralized-redacted JSON as the only downstream configuration
+input. It supplies production targets, constraints, scope, standards, outcomes, context,
+artifact metadata/delta, and availability without exposing credentials. Never read raw
+`obconfig.yaml`, `.env`, process environment, or legacy engagement inputs in analysis.
+Consume the network commands' centralized-redacted JSON only. Append each source disposition and measured
 aggregate to `provenance-ledger.json`; record failed or `not-configured` rows as source
 limitations/unresolved evidence. Never import `direct_api.py` in place of this command,
-read process environment, or put a credential in command arguments.
+or put a credential in command arguments.
 The second command makes zero requests in passive/none and records fixed-policy
 safe-active outcomes otherwise. Both commands revalidate the claim before and after
 network work. After all analysis, network, render, and validation work, invoke

@@ -31,6 +31,7 @@ are explicit redacted dispositions, never fabricated success.
 After claiming with the originating command and intended version, analysis runs:
 
 ```text
+python3 <obengineer-root>/skills/engagement-intake/scripts/manage_obconfig.py --project-root . config-projection --command <origin> --intended-version V<N>
 python3 <obengineer-root>/skills/engagement-intake/scripts/manage_obconfig.py --project-root . direct-api --phase analysis --command <origin> --intended-version V<N>
 python3 <obengineer-root>/skills/engagement-intake/scripts/manage_obconfig.py --project-root . safe-active --command <origin> --intended-version V<N>
 python3 <obengineer-root>/skills/engagement-intake/scripts/manage_obconfig.py --project-root . finalize --command <origin> --intended-version V<N> --output docs/observability --output wiki/apps/<app>/versions/V<N>
@@ -38,7 +39,9 @@ python3 <obengineer-root>/skills/engagement-intake/scripts/manage_obconfig.py --
 python3 <obengineer-root>/skills/engagement-intake/scripts/manage_obconfig.py --project-root . verify-dispatch --command <origin> --intended-version V<N>
 ```
 
-Its centralized-redacted JSON feeds provenance. `/ob-verify` runs the same supported
+The projection's centralized-redacted JSON is analysis's only configuration input;
+analysis never reads raw `obconfig.yaml`. The network commands' centralized-redacted
+JSON feeds provenance. `/ob-verify` runs the same supported
 path with `--phase verification` after acceptance/plan validation and feeds those rows
 to verification evidence and provenance. Neither workflow imports the adapter directly
 or puts credentials in command arguments. Passive/none makes zero safe-active requests.

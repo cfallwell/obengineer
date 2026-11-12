@@ -405,7 +405,14 @@ def urllib_transport(request: RequestSpec) -> Response:
     parsed = urllib.parse.urlsplit(request.url)
     if parsed.scheme != "https" or not parsed.hostname:
         raise ValueError("direct API request requires HTTPS")
-    origin_text = f"https://{parsed.hostname}{f':{parsed.port}' if parsed.port else ''}"
+    hostname = (
+        f"[{parsed.hostname}]"
+        if ":" in parsed.hostname
+        else parsed.hostname
+    )
+    origin_text = (
+        f"https://{hostname}{f':{parsed.port}' if parsed.port else ''}"
+    )
     expected_origin = (
         validate_platform_host(origin_text)
         if request.source == "splunk-platform-direct"

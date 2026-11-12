@@ -57,6 +57,7 @@ indexes. MCP evidence is supplemental.
 The supported production commands are:
 
 ```bash
+python3 skills/engagement-intake/scripts/manage_obconfig.py --project-root . config-projection --command <origin> --intended-version V<N>
 python3 skills/engagement-intake/scripts/manage_obconfig.py --project-root . direct-api --phase analysis --command <origin> --intended-version V<N>
 python3 skills/engagement-intake/scripts/manage_obconfig.py --project-root . safe-active --command <origin> --intended-version V<N>
 python3 skills/engagement-intake/scripts/manage_obconfig.py --project-root . finalize --command <origin> --intended-version V<N> --output docs/observability --output wiki/apps/<app>/versions/V<N>
@@ -65,7 +66,10 @@ python3 skills/engagement-intake/scripts/manage_obconfig.py --project-root . ver
 python3 skills/engagement-intake/scripts/manage_obconfig.py --project-root . direct-api --phase verification
 ```
 
-They securely load ignored mode-0600 config and emit only centralized-redacted JSON.
+The claim-bound projection is the sole supported downstream analysis configuration
+source; it exposes required non-secret targets, constraints, context, artifact metadata,
+and availability without credentials. Analysis must not read raw `obconfig.yaml`.
+The commands securely load ignored mode-0600 config and emit only centralized-redacted JSON.
 Safe-active uses fixed HEAD paths/rates/ceilings with DNS and peer-address defenses;
 passive/none makes no request. Dispatch begins only after staged-tree finalization, exact
 commit, and commit verification succeed. Successful final consume re-verifies the commit

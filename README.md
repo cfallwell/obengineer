@@ -38,8 +38,9 @@ content or owns an actual `obconfig.yaml`.
 
 obengineer also uses relevant MCP tools already connected to the host. MCP supplements
 direct APIs; it is not the only tenant data source.
-Analysis atomically claims its authorized snapshot and invokes supported `direct-api`
-and `safe-active` subcommands; verification invokes `direct-api --phase verification`.
+Analysis atomically claims its authorized snapshot, loads the supported non-secret
+`config-projection`, and invokes supported `direct-api` and `safe-active` subcommands;
+verification invokes `direct-api --phase verification`.
 Only centralized-redacted dispositions and aggregate measurements feed provenance.
 
 ## Use

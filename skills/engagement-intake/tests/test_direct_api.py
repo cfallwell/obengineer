@@ -181,6 +181,64 @@ def test_request_builders_reject_unvalidated_realms_and_indexes():
         )
 
 
+@pytest.mark.parametrize(
+    ("host", "origin"),
+    (
+        (
+            "https://[2606:4700:4700::1111]",
+            "https://[2606:4700:4700::1111]",
+        ),
+        (
+            "https://[2606:4700:4700::1111]:8089",
+            "https://[2606:4700:4700::1111]:8089",
+        ),
+    ),
+)
+def test_platform_ipv6_url_and_transport_origin_are_bracketed(
+    monkeypatch, host, origin
+):
+    request = direct_api.platform_request(
+        host, secrets.token_urlsafe(33), ["app_main"]
+    )
+    assert request.url == origin + "/services/search/v2/jobs/export"
+    validated = []
+    original_validate = direct_api.validate_platform_host
+
+    def capture_origin(value):
+        validated.append(value)
+        return original_validate(value)
+
+    class FakeResponse:
+        status = 200
+        headers = {}
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return False
+
+        def read(self, limit):
+            return b'{"result":{"events":"1","bytes":"2"}}'
+
+    class FakeOpener:
+        def open(self, outgoing, timeout):
+            assert outgoing.full_url == request.url
+            return FakeResponse()
+
+    monkeypatch.setattr(
+        direct_api, "validate_platform_host", capture_origin
+    )
+    monkeypatch.setattr(
+        direct_api.urllib.request,
+        "build_opener",
+        lambda *handlers: FakeOpener(),
+    )
+    response = direct_api.urllib_transport(request)
+    assert response.status == 200
+    assert validated == [origin]
+
+
 def test_transient_read_failures_retry_only_to_fixed_bound():
     request = direct_api.observability_request("us1", secrets.token_urlsafe(33))
     statuses = iter((503, 429, 200))
@@ -581,6 +639,105 @@ def test_supported_abort_cli_releases_mutated_claim_without_baseline(
     assert not (tmp_path / ".obengineer/analysis-claim.json").exists()
     assert not (tmp_path / ".obengineer/artifact-manifest.json").exists()
     assert not (tmp_path / ".obengineer/last-analysis-binding.json").exists()
+
+
+def test_config_projection_exposes_targets_and_constraints_without_secrets(
+    tmp_path, capsys
+):
+    canaries = configured_project(tmp_path)
+    data = yaml.safe_load((tmp_path / "obconfig.yaml").read_text())
+    production_url = "https://shop.example.test"
+    index_canary = "idx_" + secrets.token_hex(20)
+    extension_canary = secrets.token_urlsafe(36)
+    data["surfaces"]["production_urls"] = [production_url]
+    data["surfaces"]["no_browser_reason"] = ""
+    data["constraints"]["privacy_regimes"] = ["gdpr", "pci"]
+    data["constraints"]["data_residency"] = "eu-only"
+    data["engagement"]["deployment_environment"] = "production"
+    data["initial_scope"]["repositories"] = ["storefront"]
+    data["outcomes"]["first_journey"] = "checkout"
+    data["splunk"]["platform"]["index_allowlist"] = [index_canary]
+    data["extensions"] = {
+        "private_customer_context": extension_canary,
+    }
+    path = tmp_path / "obconfig.yaml"
+    path.write_text(yaml.safe_dump(data, sort_keys=False))
+    path.chmod(0o600)
+    (tmp_path / "artifacts/input.txt").write_text("evidence\n")
+    obconfig.authorize(tmp_path, command="ob-start", intended_version="V1")
+    obconfig.claim_authorization(
+        tmp_path, command="ob-start", intended_version="V1"
+    )
+    argv = [
+        "--project-root",
+        str(tmp_path),
+        "config-projection",
+        "--command",
+        "ob-start",
+        "--intended-version",
+        "V1",
+    ]
+    assert manage_obconfig.main(argv) == 0
+    terminal = capsys.readouterr()
+    projection = json.loads(terminal.out)
+    assert projection["surfaces"]["production_urls"] == [production_url]
+    assert projection["constraints"]["privacy_regimes"] == ["gdpr", "pci"]
+    assert projection["constraints"]["data_residency"] == "eu-only"
+    assert projection["engagement"]["deployment_environment"] == "production"
+    assert projection["initial_scope"]["repositories"] == ["storefront"]
+    assert projection["outcomes"]["first_journey"] == "checkout"
+    assert projection["artifacts"]["file_count"] == 1
+    assert projection["artifacts"]["delta"]["added"] == ["input.txt"]
+    assert projection["splunk"]["observability"]["realm"] == "us1"
+    assert projection["splunk"]["observability"]["configured"] is True
+    assert projection["splunk"]["platform"]["host"] == (
+        "https://splunk.example.test:8089"
+    )
+    assert projection["splunk"]["platform"]["index_count"] == 1
+    assert projection["availability"]["dummy_login"] == "configured"
+    assert "extensions" not in projection
+    combined = terminal.out + terminal.err + json.dumps(projection)
+    for canary in [*canaries, index_canary, extension_canary]:
+        assert canary not in combined
+    assert "login_id" not in combined
+    assert "read_token" not in combined
+    assert "index_allowlist" not in combined
+    assert "password" not in combined
+
+
+def test_config_projection_emits_nothing_when_artifacts_change_mid_projection(
+    tmp_path, capsys, monkeypatch
+):
+    canaries = configured_project(tmp_path)
+    obconfig.authorize(tmp_path, command="ob-start", intended_version="V1")
+    obconfig.claim_authorization(
+        tmp_path, command="ob-start", intended_version="V1"
+    )
+    original = manage_obconfig.analysis_config_projection
+
+    def mutate_after_projection(data, claim):
+        payload = original(data, claim)
+        (tmp_path / "artifacts/raced.txt").write_text("changed\n")
+        return payload
+
+    monkeypatch.setattr(
+        manage_obconfig,
+        "analysis_config_projection",
+        mutate_after_projection,
+    )
+    assert manage_obconfig.main([
+        "--project-root",
+        str(tmp_path),
+        "config-projection",
+        "--command",
+        "ob-start",
+        "--intended-version",
+        "V1",
+    ]) == 1
+    terminal = capsys.readouterr()
+    assert terminal.out == ""
+    for canary in canaries:
+        assert canary not in terminal.err
 
 
 def test_finalize_cli_binds_runtime_outputs_before_dispatch_and_consume(

@@ -25,7 +25,7 @@ The deterministic implementation is:
 - `scripts/manage_obconfig.py` — `init`, `validate`, `repair`, `summary`, `changed`,
   `authorize`, atomic `claim`, baseline-neutral `abort`, journaled `consume`,
   index-bound `finalize`, commit-bound `dispatch`/`verify-dispatch`, claim-bound
-  `direct-api`, fixed-policy
+  non-secret `config-projection`, `direct-api`, fixed-policy
   `safe-active`, and `migrate-legacy` commands;
 - `scripts/direct_api.py` — fixed read-only Observability Cloud and Platform request
   adapters; and
@@ -46,7 +46,9 @@ Follow [`../../prompts/00-load-obconfig.md`](../../prompts/00-load-obconfig.md).
    `Proceed with analysis using this configuration? (yes/no)`.
 5. Exact `yes` writes one-shot authorization bound to config, full artifact
    manifest/delta and tree digest, schema, command, and intended version. Analysis must
-   atomically claim it; each network consumer revalidates it. After analysis and render,
+   atomically claim it. The claim-bound `config-projection` command is the sole supported
+   downstream configuration input; raw config is never read by analysis. Each network
+   consumer revalidates the claim. After analysis and render,
    stage intended outputs; `finalize` revalidates inputs and binds the complete Git index
    tree plus explicit contained output blobs. Commit exactly that tree, then record and
    verify dispatch against immutable Git objects before push/PR work. Consume only a

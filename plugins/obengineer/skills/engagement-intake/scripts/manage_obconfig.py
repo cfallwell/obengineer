@@ -25,6 +25,7 @@ from obconfig import (
     atomic_write,
     atomic_write_json,
     abort_claim,
+    analysis_config_projection,
     authorize,
     binding,
     capture_config_binding,
@@ -617,6 +618,9 @@ def main(
     claim_parser = sub.add_parser("claim")
     claim_parser.add_argument("--command", required=True)
     claim_parser.add_argument("--intended-version", required=True)
+    projection_parser = sub.add_parser("config-projection")
+    projection_parser.add_argument("--command", required=True)
+    projection_parser.add_argument("--intended-version", required=True)
     abort_parser = sub.add_parser("abort")
     abort_parser.add_argument("--command", required=True)
     abort_parser.add_argument("--intended-version", required=True)
@@ -781,6 +785,46 @@ def main(
                 }
             )
             print(json.dumps(payload, sort_keys=True, separators=(",", ":")))
+            return 0
+
+        if args.operation == "config-projection":
+            claimed_before = validate_claim(
+                root,
+                command=args.command,
+                intended_version=args.intended_version,
+                enforce_git=enforce_git,
+            )
+            data, _, raw, _ = load_config(root, enforce_git=enforce_git)
+            if config_digest(raw) != claimed_before.get("config_sha256"):
+                raise ObconfigError(
+                    ConfigIssue(
+                        1,
+                        1,
+                        "",
+                        "configuration projection does not match analysis claim",
+                    )
+                )
+            payload = analysis_config_projection(data, claimed_before)
+            claimed_after = validate_claim(
+                root,
+                command=args.command,
+                intended_version=args.intended_version,
+                enforce_git=enforce_git,
+            )
+            if claimed_after != claimed_before:
+                raise ObconfigError(
+                    ConfigIssue(
+                        1,
+                        1,
+                        "",
+                        "analysis claim changed during configuration projection",
+                    )
+                )
+            print(
+                json.dumps(
+                    payload, sort_keys=True, separators=(",", ":")
+                )
+            )
             return 0
 
         if args.operation == "abort":
