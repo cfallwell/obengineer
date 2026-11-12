@@ -3,7 +3,6 @@ from __future__ import annotations
 import copy
 import hashlib
 import json
-import subprocess
 import sys
 from pathlib import Path
 
@@ -12,7 +11,6 @@ import pytest
 SKILL = Path(__file__).resolve().parent.parent
 SCRIPTS = SKILL / "scripts"
 FIXTURE = Path(__file__).resolve().parent / "fixtures" / "representative"
-REPOSITORY = SKILL.parents[1]
 sys.path.insert(0, str(SCRIPTS))
 
 from analysis_contract import (  # noqa: E402
@@ -32,15 +30,6 @@ from validate_analysis import main as validate_analysis_main  # noqa: E402
 
 def contract():
     return load_json(FIXTURE / "analysis-contract.json")
-
-
-def git_show_origin_main(relative: str) -> bytes:
-    return subprocess.run(
-        ["git", "show", f"origin/main:{relative}"],
-        cwd=REPOSITORY,
-        check=True,
-        stdout=subprocess.PIPE,
-    ).stdout
 
 
 def schema_v1_contract():
@@ -236,15 +225,9 @@ def test_frozen_parent_schema_v2_validates_and_normalizes_without_mutation():
         / "analysis-contract.json"
     )
     frozen_schema = SKILL / "schemas" / "analysis-contract-v2.schema.json"
-    fixture_bytes = git_show_origin_main(
-        "skills/instrumentation-analyze/tests/fixtures/representative/"
-        "analysis-contract.json"
-    )
-    schema_bytes = git_show_origin_main(
-        "skills/instrumentation-analyze/schemas/analysis-contract.schema.json"
-    )
-    assert fixture.read_bytes() == fixture_bytes
-    assert frozen_schema.read_bytes() == schema_bytes
+    fixture_bytes = fixture.read_bytes()
+    schema_bytes = frozen_schema.read_bytes()
+    # Pin the exact parent/main bytes without requiring a remote ref in shallow CI.
     assert hashlib.sha256(fixture_bytes).hexdigest() == (
         "fda17b65c6b5a2cd026aeb42e891356bd93c069c5edac515756b8ad1ced36ab8"
     )
