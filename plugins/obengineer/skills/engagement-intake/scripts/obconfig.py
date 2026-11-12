@@ -46,6 +46,7 @@ SAFE_ACTIVE_REQUESTS_PER_SECOND = 1
 SAFE_ACTIVE_METHODS = frozenset({"GET", "HEAD", "OPTIONS"})
 SAFE_ACTIVE_PATHS = ("/robots.txt", "/.well-known/security.txt")
 RENAME_EXCHANGE = 2
+RENAME_NOREPLACE = 1
 SCHEMA_PATH = Path(__file__).resolve().parents[1] / "schemas/obconfig.schema.json"
 _FALLBACK_GATE_LOCKS: dict[str, threading.RLock] = {}
 _FALLBACK_GATE_LOCKS_GUARD = threading.Lock()
@@ -1955,16 +1956,18 @@ def _descriptor_digest(
         os.close(descriptor)
 
 
-def _rename_exchange(directory: int, left: str, right: str) -> None:
+def _renameat2(
+    directory: int, left: str, right: str, flags: int, operation: str
+) -> None:
     if os.name != "posix":
         raise ObconfigError(
-            ConfigIssue(1, 1, "", "atomic repair exchange is unsupported")
+            ConfigIssue(1, 1, "", f"atomic {operation} is unsupported")
         )
     libc = ctypes.CDLL(None, use_errno=True)
     renameat2 = getattr(libc, "renameat2", None)
     if renameat2 is None:
         raise ObconfigError(
-            ConfigIssue(1, 1, "", "atomic repair exchange is unsupported")
+            ConfigIssue(1, 1, "", f"atomic {operation} is unsupported")
         )
     renameat2.argtypes = [
         ctypes.c_int,
@@ -1979,7 +1982,7 @@ def _rename_exchange(directory: int, left: str, right: str) -> None:
         os.fsencode(left),
         directory,
         os.fsencode(right),
-        RENAME_EXCHANGE,
+        flags,
     )
     if result != 0:
         error = ctypes.get_errno()
@@ -1989,11 +1992,186 @@ def _rename_exchange(directory: int, left: str, right: str) -> None:
             getattr(errno, "EOPNOTSUPP", errno.EINVAL),
         }:
             raise ObconfigError(
-                ConfigIssue(1, 1, "", "atomic repair exchange is unsupported")
+                ConfigIssue(1, 1, "", f"atomic {operation} is unsupported")
             )
+        if error == errno.EEXIST and flags == RENAME_NOREPLACE:
+            raise FileExistsError(right)
         raise ObconfigError(
-            ConfigIssue(1, 1, "", "atomic repair exchange failed")
+            ConfigIssue(1, 1, "", f"atomic {operation} failed")
         )
+
+
+def _rename_exchange(directory: int, left: str, right: str) -> None:
+    _renameat2(directory, left, right, RENAME_EXCHANGE, "rename exchange")
+
+
+def _rename_noreplace(directory: int, left: str, right: str) -> None:
+    _renameat2(directory, left, right, RENAME_NOREPLACE, "rename no-replace")
+
+
+def _exchange_remove_name(
+    directory: int,
+    name: str,
+    *,
+    expected_identity: tuple[int, int],
+    expected_digest: str,
+    expected_mode: int,
+) -> None:
+    placeholder = f".{name}.remove.{os.getpid()}.{time.time_ns()}"
+    descriptor = os.open(
+        placeholder,
+        os.O_WRONLY
+        | os.O_CREAT
+        | os.O_EXCL
+        | getattr(os, "O_NOFOLLOW", 0),
+        0o600,
+        dir_fd=directory,
+    )
+    placeholder_info = os.fstat(descriptor)
+    os.close(descriptor)
+    placeholder_identity = (
+        placeholder_info.st_dev,
+        placeholder_info.st_ino,
+    )
+    exchanged = False
+    try:
+        _rename_exchange(directory, placeholder, name)
+        exchanged = True
+        removed = os.stat(
+            placeholder, dir_fd=directory, follow_symlinks=False
+        )
+        replacement = os.stat(
+            name, dir_fd=directory, follow_symlinks=False
+        )
+        removed_matches = (
+            (removed.st_dev, removed.st_ino) == expected_identity
+            and stat.S_IMODE(removed.st_mode) == expected_mode
+            and stat.S_ISREG(removed.st_mode)
+            and _descriptor_digest(directory, placeholder, removed)
+            == expected_digest
+        )
+        placeholder_matches = (
+            replacement.st_dev,
+            replacement.st_ino,
+        ) == placeholder_identity
+        if not removed_matches or not placeholder_matches:
+            if placeholder_matches:
+                _rename_exchange(directory, placeholder, name)
+                exchanged = False
+            raise ObconfigError(
+                ConfigIssue(
+                    1,
+                    1,
+                    "",
+                    f"{name} changed at atomic removal",
+                )
+            )
+
+        tombstone = f".{name}.tombstone.{os.getpid()}.{time.time_ns()}"
+        _rename_noreplace(directory, name, tombstone)
+        moved_placeholder = os.stat(
+            tombstone, dir_fd=directory, follow_symlinks=False
+        )
+        if (
+            moved_placeholder.st_dev,
+            moved_placeholder.st_ino,
+        ) != placeholder_identity or not stat.S_ISREG(
+            moved_placeholder.st_mode
+        ) or stat.S_IMODE(moved_placeholder.st_mode) != 0o600 or (
+            _descriptor_digest(directory, tombstone, moved_placeholder)
+            != hashlib.sha256(b"").hexdigest()
+        ):
+            try:
+                _rename_noreplace(directory, tombstone, name)
+            except (FileExistsError, ObconfigError):
+                pass
+            raise ObconfigError(
+                ConfigIssue(1, 1, "", f"{name} changed at final removal")
+            )
+        os.unlink(tombstone, dir_fd=directory)
+        os.unlink(placeholder, dir_fd=directory)
+        exchanged = False
+        os.fsync(directory)
+    finally:
+        if exchanged:
+            # A matching old target remains under the random placeholder if a
+            # concurrent pathname replacement prevented safe completion.
+            try:
+                os.fsync(directory)
+            except OSError:
+                pass
+        else:
+            try:
+                current = os.stat(
+                    placeholder,
+                    dir_fd=directory,
+                    follow_symlinks=False,
+                )
+                if (
+                    current.st_dev,
+                    current.st_ino,
+                ) == placeholder_identity:
+                    os.unlink(placeholder, dir_fd=directory)
+            except OSError:
+                pass
+
+
+def _restore_exchange(
+    directory: int,
+    temporary_name: str,
+    target_name: str,
+    *,
+    restored_target_identity: tuple[int, int],
+    restored_temporary_identity: tuple[int, int],
+    restored_target_mode: int,
+    restored_temporary_mode: int,
+    restored_target_digest: str | None,
+    restored_temporary_digest: str,
+) -> bool:
+    """Exchange back, then undo that exchange if a final-syscall race won."""
+    _rename_exchange(directory, temporary_name, target_name)
+    restored_target = os.stat(
+        target_name, dir_fd=directory, follow_symlinks=False
+    )
+    restored_temporary = os.stat(
+        temporary_name, dir_fd=directory, follow_symlinks=False
+    )
+    target_matches = (
+        restored_target.st_dev,
+        restored_target.st_ino,
+    ) == restored_target_identity and stat.S_IMODE(
+        restored_target.st_mode
+    ) == restored_target_mode
+    temporary_matches = (
+        restored_temporary.st_dev,
+        restored_temporary.st_ino,
+    ) == restored_temporary_identity and stat.S_IMODE(
+        restored_temporary.st_mode
+    ) == restored_temporary_mode and stat.S_ISREG(
+        restored_temporary.st_mode
+    ) and (
+        _descriptor_digest(
+            directory, temporary_name, restored_temporary
+        )
+        == restored_temporary_digest
+    )
+    if (
+        target_matches
+        and (
+            restored_target_digest is None
+            or (
+                stat.S_ISREG(restored_target.st_mode)
+                and _descriptor_digest(
+                    directory, target_name, restored_target
+                )
+                == restored_target_digest
+            )
+        )
+        and temporary_matches
+    ):
+        return True
+    _rename_exchange(directory, temporary_name, target_name)
+    return False
 
 
 def atomic_write(
@@ -2024,6 +2202,8 @@ def atomic_write(
     temporary_identity: tuple[int, int] | None = None
     created_path = False
     existing: os.stat_result | None = None
+    existing_digest: str | None = None
+    exchanged = False
     temporary_name = f".{path.name}.{os.getpid()}.{time.time_ns()}"
     try:
         opened_parent = os.fstat(parent_descriptor)
@@ -2047,6 +2227,10 @@ def atomic_write(
                 ConfigIssue(
                     1, 1, "", f"{path.name} must be a regular file, not a symlink"
                 )
+            )
+        if existing is not None:
+            existing_digest = _descriptor_digest(
+                parent_descriptor, path.name, existing
             )
         if expect_absent and existing is not None:
             raise ObconfigError(
@@ -2141,13 +2325,73 @@ def atomic_write(
             os.unlink(temporary_name, dir_fd=parent_descriptor)
             created_path = True
         else:
-            os.replace(
-                temporary_name,
-                path.name,
-                src_dir_fd=parent_descriptor,
-                dst_dir_fd=parent_descriptor,
+            _rename_exchange(
+                parent_descriptor, temporary_name, path.name
             )
-            created_path = True
+            exchanged = True
+            exchanged_old = os.stat(
+                temporary_name,
+                dir_fd=parent_descriptor,
+                follow_symlinks=False,
+            )
+            exchanged_new = os.stat(
+                path.name,
+                dir_fd=parent_descriptor,
+                follow_symlinks=False,
+            )
+            exchanged_old_digest = (
+                _descriptor_digest(
+                    parent_descriptor, temporary_name, exchanged_old
+                )
+                if stat.S_ISREG(exchanged_old.st_mode)
+                else None
+            )
+            old_matches = (
+                exchanged_old.st_dev,
+                exchanged_old.st_ino,
+            ) == (existing.st_dev, existing.st_ino) and (
+                stat.S_IMODE(exchanged_old.st_mode)
+                == stat.S_IMODE(existing.st_mode)
+            ) and (
+                existing_digest is not None
+                and _descriptor_digest(
+                    parent_descriptor, temporary_name, exchanged_old
+                )
+                == existing_digest
+            )
+            new_matches = (
+                exchanged_new.st_dev,
+                exchanged_new.st_ino,
+            ) == temporary_identity
+            if not old_matches or not new_matches:
+                if new_matches:
+                    restored = _restore_exchange(
+                        parent_descriptor,
+                        temporary_name,
+                        path.name,
+                        restored_target_identity=(
+                            exchanged_old.st_dev,
+                            exchanged_old.st_ino,
+                        ),
+                        restored_temporary_identity=temporary_identity,
+                        restored_target_mode=stat.S_IMODE(
+                            exchanged_old.st_mode
+                        ),
+                        restored_temporary_mode=mode,
+                        restored_target_digest=exchanged_old_digest,
+                        restored_temporary_digest=hashlib.sha256(
+                            data
+                        ).hexdigest(),
+                    )
+                    exchanged = not restored
+                raise ObconfigError(
+                    ConfigIssue(
+                        1,
+                        1,
+                        "",
+                        f"{path.name} changed at atomic exchange",
+                    )
+                )
         os.fsync(parent_descriptor)
         final = os.stat(path.name, dir_fd=parent_descriptor, follow_symlinks=False)
         if (
@@ -2170,6 +2414,18 @@ def atomic_write(
             raise ObconfigError(
                 ConfigIssue(1, 1, "", f"{path.name} parent changed during write")
             )
+        if exchanged:
+            assert existing is not None and existing_digest is not None
+            _exchange_remove_name(
+                parent_descriptor,
+                temporary_name,
+                expected_identity=(existing.st_dev, existing.st_ino),
+                expected_digest=existing_digest,
+                expected_mode=stat.S_IMODE(existing.st_mode),
+            )
+            exchanged = False
+            created_path = True
+            os.fsync(parent_descriptor)
         return RegularFileVersion(
             final.st_dev,
             final.st_ino,
@@ -2185,10 +2441,60 @@ def atomic_write(
                 os.close(descriptor)
         except OSError:
             pass
-        try:
-            os.unlink(temporary_name, dir_fd=parent_descriptor)
-        except OSError:
-            pass
+        if exchanged and existing is not None and temporary_identity is not None:
+            try:
+                current_new = os.stat(
+                    path.name,
+                    dir_fd=parent_descriptor,
+                    follow_symlinks=False,
+                )
+                current_old = os.stat(
+                    temporary_name,
+                    dir_fd=parent_descriptor,
+                    follow_symlinks=False,
+                )
+                if (
+                    current_new.st_dev,
+                    current_new.st_ino,
+                ) == temporary_identity and (
+                    current_old.st_dev,
+                    current_old.st_ino,
+                ) == (existing.st_dev, existing.st_ino):
+                    restored = _restore_exchange(
+                        parent_descriptor,
+                        temporary_name,
+                        path.name,
+                        restored_target_identity=(
+                            existing.st_dev,
+                            existing.st_ino,
+                        ),
+                        restored_temporary_identity=temporary_identity,
+                        restored_target_mode=stat.S_IMODE(
+                            existing.st_mode
+                        ),
+                        restored_temporary_mode=mode,
+                        restored_target_digest=existing_digest,
+                        restored_temporary_digest=hashlib.sha256(
+                            data
+                        ).hexdigest(),
+                    )
+                    exchanged = not restored
+            except (OSError, ObconfigError):
+                pass
+        if not exchanged and temporary_identity is not None:
+            try:
+                temporary_current = os.stat(
+                    temporary_name,
+                    dir_fd=parent_descriptor,
+                    follow_symlinks=False,
+                )
+                if (
+                    temporary_current.st_dev,
+                    temporary_current.st_ino,
+                ) == temporary_identity:
+                    os.unlink(temporary_name, dir_fd=parent_descriptor)
+            except OSError:
+                pass
         if created_path and existing is None and temporary_identity is not None:
             try:
                 current = os.stat(
@@ -2197,8 +2503,13 @@ def atomic_write(
                     follow_symlinks=False,
                 )
                 if (current.st_dev, current.st_ino) == temporary_identity:
-                    os.unlink(path.name, dir_fd=parent_descriptor)
-                    os.fsync(parent_descriptor)
+                    _exchange_remove_name(
+                        parent_descriptor,
+                        path.name,
+                        expected_identity=temporary_identity,
+                        expected_digest=hashlib.sha256(data).hexdigest(),
+                        expected_mode=mode,
+                    )
             except (FileNotFoundError, OSError):
                 pass
         raise
@@ -2258,6 +2569,15 @@ def secure_unlink(
             raise ObconfigError(
                 ConfigIssue(1, 1, "", f"{path.name} is not a regular file")
             )
+        if stat.S_ISLNK(info.st_mode):
+            raise ObconfigError(
+                ConfigIssue(
+                    1,
+                    1,
+                    "",
+                    f"{path.name} symlink removal is not identity-safe",
+                )
+            )
         if expected_identity is not None and (info.st_dev, info.st_ino) != expected_identity:
             raise ObconfigError(
                 ConfigIssue(1, 1, "", f"{path.name} changed before secure removal")
@@ -2269,18 +2589,21 @@ def secure_unlink(
             raise ObconfigError(
                 ConfigIssue(1, 1, "", f"{path.name} mode changed before removal")
             )
+        current_digest = _descriptor_digest(descriptor, path.name, info)
         if expected_digest is not None:
-            if stat.S_ISLNK(info.st_mode) or (
-                _descriptor_digest(descriptor, path.name, info)
-                != expected_digest
-            ):
+            if current_digest != expected_digest:
                 raise ObconfigError(
                     ConfigIssue(
                         1, 1, "", f"{path.name} content changed before removal"
                     )
                 )
-        os.unlink(path.name, dir_fd=descriptor)
-        os.fsync(descriptor)
+        _exchange_remove_name(
+            descriptor,
+            path.name,
+            expected_identity=(info.st_dev, info.st_ino),
+            expected_digest=current_digest,
+            expected_mode=stat.S_IMODE(info.st_mode),
+        )
         current_parent = path.parent.lstat()
         opened_parent = os.fstat(descriptor)
         if (current_parent.st_dev, current_parent.st_ino) != (

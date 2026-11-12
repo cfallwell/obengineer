@@ -575,6 +575,7 @@ def replace_path_for_race(path: Path, replacement_type: str) -> bytes:
         path.write_bytes(marker)
     elif replacement_type == "symlink":
         target = path.parent / "concurrent-target"
+        target.parent.mkdir(parents=True, exist_ok=True)
         target.write_bytes(marker)
         path.symlink_to(target.name)
     else:
@@ -630,6 +631,48 @@ def test_inner_rollback_preserves_concurrent_replacement_and_backup(
         )
     assert first_target is not None
     assert_race_replacement(first_target, replacement_type, marker)
+    staging = Path(str(raised.value).rsplit("backups retained at ", 1)[1])
+    assert staging.is_dir()
+    if preexisting:
+        assert any(staging.iterdir())
+
+
+@pytest.mark.parametrize("preexisting", (False, True))
+@pytest.mark.parametrize("replacement_type", ("file", "symlink", "directory"))
+def test_initial_installer_mutation_never_overwrites_raced_target(
+    tmp_path, monkeypatch, preexisting, replacement_type
+):
+    if preexisting:
+        run_install(tmp_path, "--cursor", "--copy")
+    target = (
+        tmp_path
+        / ".cursor"
+        / "skills"
+        / installer.skill_names()[0]
+    )
+    original_vacate = installer._vacate_install_paths
+    marker = b""
+    injected = False
+
+    def vacate_then_replace(transaction):
+        nonlocal marker, injected
+        original_vacate(transaction)
+        if not injected:
+            injected = True
+            marker = replace_path_for_race(target, replacement_type)
+
+    monkeypatch.setattr(
+        installer, "_vacate_install_paths", vacate_then_replace
+    )
+    with pytest.raises(installer.IncompleteRollback) as raised:
+        installer.install_host(
+            installer.HOSTS["cursor"],
+            tmp_path,
+            True,
+            True,
+            installer.Planner(False),
+        )
+    assert_race_replacement(target, replacement_type, marker)
     staging = Path(str(raised.value).rsplit("backups retained at ", 1)[1])
     assert staging.is_dir()
     if preexisting:

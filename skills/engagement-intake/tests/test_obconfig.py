@@ -1161,6 +1161,114 @@ def test_legacy_migration_rolls_back_config_and_state_on_commit_failure(
     assert canary not in repr(list((tmp_path / ".obengineer").glob("*")))
 
 
+def test_migration_rollback_final_exchange_preserves_replacement(
+    tmp_path, monkeypatch
+):
+    prepare_config_creation(tmp_path)
+    (tmp_path / "artifacts").mkdir()
+    legacy = tmp_path / "docs/observability/engagement-inputs.yaml"
+    legacy.parent.mkdir(parents=True)
+    legacy.write_text(
+        yaml.safe_dump(
+            {
+                "schema_version": 3,
+                "engagement": {"application": "rollback-exchange-fixture"},
+                "artifacts": {
+                    "location": "artifacts",
+                    "front_end_scan_notes": "no browser: rollback exchange",
+                },
+            }
+        )
+    )
+
+    def fail_state(*args, **kwargs):
+        raise OSError("injected state commit failure")
+
+    original_exchange = obconfig._rename_exchange
+    replacement = b"concurrent rollback replacement\n"
+    substituted = False
+
+    def substitute_at_unlink(directory, left, right):
+        nonlocal substituted
+        if right == "obconfig.yaml" and not substituted:
+            substituted = True
+            os.unlink(right, dir_fd=directory)
+            descriptor = os.open(
+                right,
+                os.O_WRONLY | os.O_CREAT | os.O_EXCL,
+                0o600,
+                dir_fd=directory,
+            )
+            os.write(descriptor, replacement)
+            os.close(descriptor)
+        return original_exchange(directory, left, right)
+
+    monkeypatch.setattr(manage_obconfig, "atomic_write_json", fail_state)
+    monkeypatch.setattr(
+        obconfig, "_rename_exchange", substitute_at_unlink
+    )
+    with pytest.raises(
+        obconfig.ObconfigError, match="replacement was preserved"
+    ):
+        manage_obconfig.migrate_legacy(tmp_path, TEMPLATE)
+    assert (tmp_path / "obconfig.yaml").read_bytes() == replacement
+
+
+def test_migration_json_final_exchange_preserves_replacement(
+    tmp_path, monkeypatch
+):
+    prepare_config_creation(tmp_path)
+    (tmp_path / "artifacts").mkdir()
+    legacy = tmp_path / "docs/observability/engagement-inputs.yaml"
+    legacy.parent.mkdir(parents=True)
+    legacy.write_text(
+        yaml.safe_dump(
+            {
+                "schema_version": 3,
+                "engagement": {"application": "state-exchange-fixture"},
+                "artifacts": {
+                    "location": "artifacts",
+                    "front_end_scan_notes": "no browser: state exchange",
+                },
+            }
+        )
+    )
+    state = tmp_path / ".obengineer"
+    state.mkdir(mode=0o700)
+    migration = state / "migration.json"
+    migration.write_bytes(b'{"previous":true}\n')
+    migration.chmod(0o600)
+    replacement = b"concurrent migration state replacement\n"
+    original_exchange = obconfig._rename_exchange
+    substituted = False
+
+    def substitute_state_at_exchange(directory, left, right):
+        nonlocal substituted
+        if right == "migration.json" and not substituted:
+            substituted = True
+            os.unlink(right, dir_fd=directory)
+            descriptor = os.open(
+                right,
+                os.O_WRONLY | os.O_CREAT | os.O_EXCL,
+                0o600,
+                dir_fd=directory,
+            )
+            os.write(descriptor, replacement)
+            os.close(descriptor)
+        return original_exchange(directory, left, right)
+
+    monkeypatch.setattr(
+        obconfig, "_rename_exchange", substitute_state_at_exchange
+    )
+    with pytest.raises(
+        obconfig.ObconfigError,
+        match="replacement was preserved|atomic exchange",
+    ):
+        manage_obconfig.migrate_legacy(tmp_path, TEMPLATE)
+    assert migration.read_bytes() == replacement
+    assert not (tmp_path / "obconfig.yaml").exists()
+
+
 def test_init_and_migration_reject_local_state_symlink_before_secrets(tmp_path):
     prepare_config_creation(tmp_path)
     external = tmp_path / "external-state"
@@ -1308,6 +1416,241 @@ def test_atomic_creation_preserves_replacement_after_link(
         assert config.is_dir()
         assert (config / "marker").read_bytes() == replacement
     assert not (tmp_path / ".obengineer/migration.json").exists()
+
+
+@pytest.mark.parametrize("operation", ("update", "unlink"))
+@pytest.mark.parametrize("replacement_type", ("file", "symlink", "directory"))
+def test_identity_bound_final_exchange_preserves_replacement(
+    tmp_path, monkeypatch, operation, replacement_type
+):
+    root = project(tmp_path)
+    state = root / ".obengineer"
+    state.mkdir(mode=0o700)
+    target = state / "migration.json"
+    target.write_bytes(b'{"before":true}\n')
+    target.chmod(0o600)
+    _, version = obconfig._capture_regular_version(
+        target, "migration state", required_mode=0o600
+    )
+    replacement = b"concurrent final-syscall replacement\n"
+    original_exchange = obconfig._rename_exchange
+    substituted = False
+
+    def substitute_at_exchange(directory, left, right):
+        nonlocal substituted
+        if right == "migration.json" and not substituted:
+            substituted = True
+            os.unlink(right, dir_fd=directory)
+            if replacement_type == "file":
+                descriptor = os.open(
+                    right,
+                    os.O_WRONLY | os.O_CREAT | os.O_EXCL,
+                    0o600,
+                    dir_fd=directory,
+                )
+                os.write(descriptor, replacement)
+                os.close(descriptor)
+            elif replacement_type == "symlink":
+                external = root / "concurrent-state-target"
+                external.write_bytes(replacement)
+                os.symlink(
+                    os.path.relpath(external, state),
+                    right,
+                    dir_fd=directory,
+                )
+            else:
+                os.mkdir(right, 0o700, dir_fd=directory)
+                (target / "marker").write_bytes(replacement)
+        return original_exchange(directory, left, right)
+
+    monkeypatch.setattr(obconfig, "_rename_exchange", substitute_at_exchange)
+    with pytest.raises(obconfig.ObconfigError, match="atomic exchange|atomic removal"):
+        if operation == "update":
+            obconfig.atomic_write(
+                target,
+                b'{"after":true}\n',
+                expected_identity=(version.device, version.inode),
+                expected_digest=version.digest,
+                expected_mode=version.mode,
+            )
+        else:
+            obconfig.secure_unlink(
+                target,
+                expected_identity=(version.device, version.inode),
+                expected_digest=version.digest,
+                expected_mode=version.mode,
+            )
+    if replacement_type == "file":
+        assert target.read_bytes() == replacement
+    elif replacement_type == "symlink":
+        assert target.is_symlink()
+        assert target.resolve().read_bytes() == replacement
+    else:
+        assert target.is_dir()
+        assert (target / "marker").read_bytes() == replacement
+
+
+@pytest.mark.parametrize("operation", ("update", "unlink"))
+def test_identity_bound_mutation_fails_closed_without_exchange_support(
+    tmp_path, monkeypatch, operation
+):
+    root = project(tmp_path)
+    state = root / ".obengineer"
+    state.mkdir(mode=0o700)
+    target = state / "migration.json"
+    original = b'{"preserve":true}\n'
+    target.write_bytes(original)
+    target.chmod(0o600)
+    _, version = obconfig._capture_regular_version(
+        target, "migration state", required_mode=0o600
+    )
+
+    def unsupported(*args, **kwargs):
+        raise obconfig.ObconfigError(
+            obconfig.ConfigIssue(
+                1, 1, "", "atomic rename exchange is unsupported"
+            )
+        )
+
+    monkeypatch.setattr(obconfig, "_rename_exchange", unsupported)
+    with pytest.raises(obconfig.ObconfigError, match="unsupported"):
+        if operation == "update":
+            obconfig.atomic_write(
+                target,
+                b'{"changed":true}\n',
+                expected_identity=(version.device, version.inode),
+                expected_digest=version.digest,
+                expected_mode=version.mode,
+            )
+        else:
+            obconfig.secure_unlink(
+                target,
+                expected_identity=(version.device, version.inode),
+                expected_digest=version.digest,
+                expected_mode=version.mode,
+            )
+    assert target.read_bytes() == original
+
+
+@pytest.mark.parametrize("replacement_type", ("file", "symlink", "directory"))
+def test_secure_unlink_final_noreplace_preserves_raced_path(
+    tmp_path, monkeypatch, replacement_type
+):
+    root = project(tmp_path)
+    state = root / ".obengineer"
+    state.mkdir(mode=0o700)
+    target = state / "migration.json"
+    target.write_bytes(b'{"owned":true}\n')
+    target.chmod(0o600)
+    _, version = obconfig._capture_regular_version(
+        target, "migration state", required_mode=0o600
+    )
+    replacement = b"replacement at final no-replace\n"
+    original_noreplace = obconfig._rename_noreplace
+    substituted = False
+
+    def substitute_at_final_rename(directory, left, right):
+        nonlocal substituted
+        if left == "migration.json" and not substituted:
+            substituted = True
+            os.unlink(left, dir_fd=directory)
+            if replacement_type == "file":
+                descriptor = os.open(
+                    left,
+                    os.O_WRONLY | os.O_CREAT | os.O_EXCL,
+                    0o600,
+                    dir_fd=directory,
+                )
+                os.write(descriptor, replacement)
+                os.close(descriptor)
+            elif replacement_type == "symlink":
+                external = root / "final-unlink-target"
+                external.write_bytes(replacement)
+                os.symlink(
+                    os.path.relpath(external, state),
+                    left,
+                    dir_fd=directory,
+                )
+            else:
+                os.mkdir(left, 0o700, dir_fd=directory)
+                (target / "marker").write_bytes(replacement)
+        return original_noreplace(directory, left, right)
+
+    monkeypatch.setattr(
+        obconfig, "_rename_noreplace", substitute_at_final_rename
+    )
+    with pytest.raises(obconfig.ObconfigError, match="final removal"):
+        obconfig.secure_unlink(
+            target,
+            expected_identity=(version.device, version.inode),
+            expected_digest=version.digest,
+            expected_mode=version.mode,
+        )
+    if replacement_type == "file":
+        assert target.read_bytes() == replacement
+    elif replacement_type == "symlink":
+        assert target.is_symlink()
+        assert target.resolve().read_bytes() == replacement
+    else:
+        assert target.is_dir()
+        assert (target / "marker").read_bytes() == replacement
+
+
+def test_atomic_update_rollback_exchange_preserves_final_race(
+    tmp_path, monkeypatch
+):
+    root = project(tmp_path)
+    state = root / ".obengineer"
+    state.mkdir(mode=0o700)
+    target = state / "migration.json"
+    target.write_bytes(b'{"before":true}\n')
+    target.chmod(0o600)
+    _, version = obconfig._capture_regular_version(
+        target, "migration state", required_mode=0o600
+    )
+    replacement = b"rollback final exchange replacement\n"
+    original_lstat = Path.lstat
+    parent_stats = 0
+
+    def fail_post_exchange_parent_check(self):
+        nonlocal parent_stats
+        if self == state:
+            parent_stats += 1
+            if parent_stats == 2:
+                raise OSError("injected post-exchange validation failure")
+        return original_lstat(self)
+
+    original_exchange = obconfig._rename_exchange
+    exchanges = 0
+
+    def substitute_at_rollback(directory, left, right):
+        nonlocal exchanges
+        exchanges += 1
+        if exchanges == 2:
+            os.unlink(right, dir_fd=directory)
+            descriptor = os.open(
+                right,
+                os.O_WRONLY | os.O_CREAT | os.O_EXCL,
+                0o600,
+                dir_fd=directory,
+            )
+            os.write(descriptor, replacement)
+            os.close(descriptor)
+        return original_exchange(directory, left, right)
+
+    monkeypatch.setattr(Path, "lstat", fail_post_exchange_parent_check)
+    monkeypatch.setattr(
+        obconfig, "_rename_exchange", substitute_at_rollback
+    )
+    with pytest.raises(OSError, match="post-exchange"):
+        obconfig.atomic_write(
+            target,
+            b'{"after":true}\n',
+            expected_identity=(version.device, version.inode),
+            expected_digest=version.digest,
+            expected_mode=version.mode,
+        )
+    assert target.read_bytes() == replacement
 
 
 @pytest.mark.parametrize("race", ("ignore", "index"))

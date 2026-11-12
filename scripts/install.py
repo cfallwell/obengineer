@@ -251,12 +251,33 @@ class Planner:
         if self.dry_run:
             return
         dst.parent.mkdir(parents=True, exist_ok=True)
-        if dst.is_symlink() or dst.exists():
-            shutil.rmtree(dst) if dst.is_dir() and not dst.is_symlink() else dst.unlink()
         if copy:
-            shutil.copytree(src, dst, ignore=shutil.ignore_patterns("__pycache__", "*.pyc"))
+            try:
+                os.mkdir(dst, 0o755)
+            except FileExistsError:
+                raise IncompleteRollback(
+                    f"installer target appeared before exclusive copy: {dst}"
+                ) from None
+            _mark_installer_mutation(dst)
+            try:
+                shutil.copytree(
+                    src,
+                    dst,
+                    dirs_exist_ok=True,
+                    ignore=shutil.ignore_patterns("__pycache__", "*.pyc"),
+                )
+            finally:
+                _mark_installer_mutation(dst)
         else:
-            dst.symlink_to(os.path.relpath(src, dst.parent), target_is_directory=True)
+            try:
+                dst.symlink_to(
+                    os.path.relpath(src, dst.parent),
+                    target_is_directory=True,
+                )
+            except FileExistsError:
+                raise IncompleteRollback(
+                    f"installer target appeared before exclusive link: {dst}"
+                ) from None
         _mark_installer_mutation(dst)
 
     def write(self, dst: Path, text: str) -> None:
@@ -265,8 +286,27 @@ class Planner:
         if self.dry_run:
             return
         dst.parent.mkdir(parents=True, exist_ok=True)
-        dst.write_text(text)
+        try:
+            descriptor = os.open(
+                dst,
+                os.O_WRONLY
+                | os.O_CREAT
+                | os.O_EXCL
+                | getattr(os, "O_NOFOLLOW", 0),
+                0o644,
+            )
+        except FileExistsError:
+            raise IncompleteRollback(
+                f"installer target appeared before exclusive write: {dst}"
+            ) from None
         _mark_installer_mutation(dst)
+        try:
+            with os.fdopen(descriptor, "w", encoding="utf-8") as handle:
+                handle.write(text)
+                handle.flush()
+                os.fsync(handle.fileno())
+        finally:
+            _mark_installer_mutation(dst)
 
     def remove(self, dst: Path) -> None:
         self.note(f"remove unchanged legacy path {dst}")
@@ -890,10 +930,7 @@ def install_host(
         ]
         transaction = _snapshot_install_paths(transaction_paths)
         _ACTIVE_INSTALL_TRANSACTIONS.append(transaction)
-        for entry in transaction.entries:
-            if entry.before is not None:
-                _remove_path(entry.path)
-                _mark_installer_mutation(entry.path)
+        _vacate_install_paths(transaction)
 
         for stale_path in [*stale_cleanup.paths, *external_cleanup.paths]:
             planner.remove(stale_path)
@@ -919,7 +956,9 @@ def install_host(
                 _write_workflow(planner, command, skills_dir / command.stem)
 
         if external_cleanup.manifest_update is not None:
-            atomic_write(*external_cleanup.manifest_update)
+            atomic_write(
+                *external_cleanup.manifest_update, expect_absent=True
+            )
         owned = {
             _host_relative(base, path): path_ownership(path)
             for path in targets
@@ -938,11 +977,14 @@ def install_host(
                 sort_keys=True,
             )
             + "\n",
+            expect_absent=True,
         )
     except BaseException as original_error:
         if transaction is not None:
             preserved = _rollback_install_paths(transaction)
-            rollback_incomplete = bool(preserved)
+            rollback_incomplete = bool(preserved) or isinstance(
+                original_error, IncompleteRollback
+            )
             if preserved:
                 joined = ", ".join(str(path) for path in preserved)
                 raise IncompleteRollback(
@@ -1037,6 +1079,39 @@ def _snapshot_install_paths(paths: list[Path]) -> InstallTransaction:
     return InstallTransaction(staging, entries)
 
 
+def _vacate_install_paths(transaction: InstallTransaction) -> None:
+    """Move snapshotted targets aside without deleting a raced-in replacement."""
+    for index, entry in enumerate(transaction.entries):
+        if entry.before is None:
+            entry.written = None
+            entry.touched = True
+            continue
+        moved = transaction.staging / f"moved-{index}"
+        try:
+            os.rename(entry.path, moved)
+        except FileNotFoundError:
+            raise IncompleteRollback(
+                f"installer target changed before backup move: {entry.path}; "
+                f"backups retained at {transaction.staging}"
+            ) from None
+        moved_identity = path_identity(moved)
+        if moved_identity != entry.before:
+            try:
+                os.rename(moved, entry.path)
+            except (FileExistsError, OSError):
+                pass
+            raise IncompleteRollback(
+                f"installer target changed during backup move: {entry.path}; "
+                f"backups retained at {transaction.staging}"
+            )
+        if entry.backup is not None:
+            _remove_path(entry.backup)
+        entry.backup = moved
+        entry.written = None
+        entry.touched = True
+        _mark_installer_mutation(entry.path)
+
+
 def _rollback_install_paths(transaction: InstallTransaction) -> list[Path]:
     preserved: list[Path] = []
     for entry in reversed(transaction.entries):
@@ -1083,7 +1158,7 @@ def file_digest(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
-def atomic_write(path: Path, text: str) -> None:
+def atomic_write(path: Path, text: str, *, expect_absent: bool = False) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     with tempfile.NamedTemporaryFile(
         "w", dir=path.parent, delete=False, encoding="utf-8"
@@ -1092,7 +1167,17 @@ def atomic_write(path: Path, text: str) -> None:
         handle.flush()
         os.fsync(handle.fileno())
         temporary = Path(handle.name)
-    os.replace(temporary, path)
+    if expect_absent:
+        try:
+            os.link(temporary, path, follow_symlinks=False)
+        except FileExistsError:
+            raise IncompleteRollback(
+                f"installer target appeared before exclusive write: {path}"
+            ) from None
+        finally:
+            temporary.unlink(missing_ok=True)
+    else:
+        os.replace(temporary, path)
     _mark_installer_mutation(path)
 
 
@@ -1613,7 +1698,9 @@ def main(argv=None) -> int:
     except BaseException as original_error:
         if outer_transaction is not None:
             preserved = _rollback_install_paths(outer_transaction)
-            rollback_incomplete = bool(preserved)
+            rollback_incomplete = bool(preserved) or isinstance(
+                original_error, IncompleteRollback
+            )
             if preserved:
                 joined = ", ".join(str(path) for path in preserved)
                 raise IncompleteRollback(
