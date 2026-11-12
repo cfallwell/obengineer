@@ -55,6 +55,14 @@ added/changed/deleted paths. Config digests and the full artifact manifest remai
 under ignored `.obengineer/`. The complete artifact directory is rehashed every run;
 changed/added files are reread and deleted-file context is removed.
 
+Analysis and verification invoke `manage_obconfig.py direct-api --phase <phase>` after
+their authorization/acceptance preconditions. For each row in its redacted JSON,
+provenance records source, attempted flag, disposition, HTTP status/attempt count when
+present, and only parsed aggregate measurements. `not-configured`, denied, unsupported,
+and unavailable rows become limitations or unresolved evidence; they are never promoted
+to measured facts. The command output, not an import-only adapter call, is the evidence
+boundary.
+
 Analysis seals the IDs it owns when the exact commit is accepted. Generation,
 implementation, Terraform, and verification may append records but may not alter sealed
 entries. Acceptance records the digest of the sorted sealed projection.

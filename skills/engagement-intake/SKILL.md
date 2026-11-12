@@ -23,7 +23,8 @@ The deterministic implementation is:
 - `scripts/obconfig.py` — secure loading, marked validation, centralized redaction,
   bounded repair, artifact tree hashing, summary, and authorization binding;
 - `scripts/manage_obconfig.py` — `init`, `validate`, `repair`, `summary`, `changed`,
-  `authorize`, `show`, `consume`, and `migrate-legacy` commands;
+  `authorize`, `show`, `consume`, `direct-api --phase analysis|verification`, and
+  `migrate-legacy` commands;
 - `scripts/direct_api.py` — fixed read-only Observability Cloud and Platform request
   adapters; and
 - `schemas/obconfig.schema.json` — machine shape and schema-derived secret registry.
@@ -64,8 +65,10 @@ YAML or ask field questions. Unchanged config prints
 - Observability realm/token and Platform HTTPS host/token/index allowlist are paired.
   Wildcard indexes and cross-origin redirect credential forwarding are forbidden.
 - Direct API attempts are mandatory in analysis and verification when configured.
-  Tokens exist only in request headers. MCP evidence supplements but never replaces or
-  relabels the direct attempt.
+  The supported production entry point is `manage_obconfig.py --project-root .
+  direct-api --phase <analysis|verification>`; it emits centralized-redacted JSON for
+  provenance. Tokens exist only in request headers. MCP evidence supplements but never
+  replaces or relabels the direct attempt.
 - `.env`, process environment, and legacy engagement input are never runtime fallback
   sources. `${VAR}` has no special semantics in schema v4.
 

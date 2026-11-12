@@ -23,10 +23,13 @@ metadata:
 2. Validate the schema version 2 `verification-plan.json`, `provenance-ledger.json`, and optional
    human-approved `verification-exclusions.json`.
 3. Load only the read integrations named by eligible criteria.
-4. Securely load local root `obconfig.yaml` through the engagement-intake loader and
-   redactor. For each configured Splunk product, mandate a direct `direct_api.py`
-   attempt and record success, denial, unavailable/timeout, or unsupported endpoint.
-   MCP is supplemental and cannot satisfy or relabel the direct attempt.
+4. After acceptance/plan validation and before any other tenant query, run exactly
+   `python3 <obengineer-root>/skills/engagement-intake/scripts/manage_obconfig.py
+   --project-root . direct-api --phase verification`. This supported command securely
+   loads ignored mode-0600 root `obconfig.yaml` and emits centralized-redacted JSON.
+   Append its dispositions and measured aggregates to the provenance ledger and
+   verification source evidence; preserve failed or `not-configured` rows as explicit
+   limitations. MCP is supplemental and cannot satisfy or relabel the direct attempt.
 5. Refuse every tenant mutation operation.
 
 Authorities:

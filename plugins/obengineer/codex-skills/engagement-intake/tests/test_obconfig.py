@@ -18,6 +18,12 @@ spec = importlib.util.spec_from_file_location("obconfig", SCRIPT)
 obconfig = importlib.util.module_from_spec(spec)
 sys.modules[spec.name] = obconfig
 spec.loader.exec_module(obconfig)
+direct_spec = importlib.util.spec_from_file_location(
+    "direct_api", SKILL / "scripts/direct_api.py"
+)
+direct_api = importlib.util.module_from_spec(direct_spec)
+sys.modules[direct_spec.name] = direct_api
+direct_spec.loader.exec_module(direct_api)
 manage_spec = importlib.util.spec_from_file_location(
     "manage_obconfig", SKILL / "scripts/manage_obconfig.py"
 )

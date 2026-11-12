@@ -10,8 +10,18 @@ values.
 When `splunk.observability` is configured, both analysis and verification directly call
 the documented realm-derived SignalFlow endpoint. When `splunk.platform` is configured,
 both directly call the exact validated HTTPS host and search only its validated index
-allowlist. `direct_api.py` owns deterministic request construction and failure
-dispositions.
+allowlist. The only supported production entry points are:
+
+```text
+python3 <obengineer-root>/skills/engagement-intake/scripts/manage_obconfig.py --project-root . direct-api --phase analysis
+python3 <obengineer-root>/skills/engagement-intake/scripts/manage_obconfig.py --project-root . direct-api --phase verification
+```
+
+`manage_obconfig.py` securely loads the ignored mode-0600 config and invokes the
+deterministic `direct_api.py` implementation internally. Consumers do not import the
+adapter directly. They append the command's centralized-redacted JSON dispositions and
+measured aggregates to provenance. Missing config returns two explicit
+`not-configured` rows and never consults process environment.
 
 Record one source-specific disposition for every product:
 

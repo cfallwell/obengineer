@@ -38,6 +38,9 @@ content or owns an actual `obconfig.yaml`.
 
 obengineer also uses relevant MCP tools already connected to the host. MCP supplements
 direct APIs; it is not the only tenant data source.
+Analysis and verification invoke the supported
+`manage_obconfig.py direct-api --phase analysis|verification` path; its redacted JSON
+dispositions and aggregate measurements feed provenance.
 
 ## Use
 

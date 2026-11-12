@@ -45,6 +45,18 @@ analysis and verification. Tokens are sent only in HTTPS request headers to vali
 exact hosts; redirects do not forward them. Platform searches use only validated exact
 indexes. MCP evidence is supplemental.
 
+The supported production commands are:
+
+```bash
+python3 skills/engagement-intake/scripts/manage_obconfig.py --project-root . direct-api --phase analysis
+python3 skills/engagement-intake/scripts/manage_obconfig.py --project-root . direct-api --phase verification
+```
+
+They securely load ignored mode-0600 config and emit only centralized-redacted JSON.
+Analysis and verification append its dispositions and parsed aggregate measurements to
+provenance. Missing config emits explicit `not-configured` dispositions; it does not
+read `.env` or process environment.
+
 Analysis measures approved `sf.org` usage and `sf.org.limit.*` enforced system limits.
 An enforced limit is not contractual entitlement. Contract terms remain unavailable
 unless a separate measured API or approved export supports them.

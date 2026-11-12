@@ -19,6 +19,16 @@ replace the long linked index with duplicated object detail.
 If config does not exist, invoke `/ob-start`. Do not begin collection unless
 `manage_obconfig.py show` verifies the unconsumed one-shot binding for schema version,
 config digest, artifact-tree digest, originating command, and intended version.
+After that check and before workers start, invoke exactly:
+
+```text
+python3 <obengineer-root>/skills/engagement-intake/scripts/manage_obconfig.py --project-root . direct-api --phase analysis
+```
+
+Consume its centralized-redacted JSON only. Append each source disposition and measured
+aggregate to `provenance-ledger.json`; record failed or `not-configured` rows as source
+limitations/unresolved evidence. Never import `direct_api.py` in place of this command,
+read process environment, or put a credential in command arguments.
 
 ## Evidence collection
 
@@ -35,7 +45,7 @@ Reserve one host slot for the coordinator. The host starts workers; the reposito
 only audit worker result intervals and must never claim it spawned them. If two or more
 jobs are runnable, their recorded intervals overlap without exceeding remaining host
 capacity. MCP servers supplement direct APIs. They are not the only tenant source.
-Every configured Splunk product requires a direct adapter request and explicit
+The supported command above owns every configured direct request and explicit
 source-specific disposition in analysis; MCP is supplemental and cannot suppress or
 relabel it. Record source provenance and reconcile facts after parallel collection.
 Every worker interval fits its manifest `deadlineSeconds`. A `limited` result names

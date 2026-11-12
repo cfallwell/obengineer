@@ -1,7 +1,7 @@
 # obconfig redesign remediation plan
 
-Status: implementation-ready plan only  
-Baseline: `redesign-obconfig` at `28d113e`, after PR #28  
+Status: implementation-ready plan only
+Baseline: `redesign-obconfig` at `28d113e`, after PR #28
 Scope: local YAML intake, its consumers, packaging, migration, security, and tests
 
 ## Outcome and boundaries

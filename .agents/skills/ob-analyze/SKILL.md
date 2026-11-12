@@ -30,9 +30,13 @@ authorization.
    complete artifact-tree digest, command, and intended version. Otherwise return to the
    common redacted summary/proceed gate; direct invocation never bypasses it.
 2. Adopt `{{OBENGINEER_ROOT}}/agents/instrumentation-architect.agent.md`.
-3. Load local root `obconfig.yaml` only through `obconfig.py`; never read `.env`, process
-   environment, or legacy engagement inputs. Consume credentials only in direct adapter
-   request headers and pass consumers redacted availability metadata.
+3. Only after step 1 passes, invoke the supported direct evidence path exactly:
+   `python3 "{{OBENGINEER_ROOT}}/skills/engagement-intake/scripts/manage_obconfig.py"
+   --project-root . direct-api --phase analysis`. It securely loads local root
+   `obconfig.yaml`; never read `.env`, process environment, or legacy engagement inputs.
+   Feed its redacted JSON dispositions and measurements into the provenance ledger.
+   Missing config produces explicit `not-configured` rows. Never invoke
+   `direct_api.py` as an import-only substitute or put credentials in arguments.
 4. Read accepted names and finding ids from the
    latest version before scanning. Reuse them and report changes under
    `{{OBENGINEER_ROOT}}/skills/references/incremental-runs.md`.

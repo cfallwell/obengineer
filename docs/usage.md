@@ -28,6 +28,17 @@ historical versions, and runs six bounded evidence workstreams. Configured Splun
 products receive mandatory direct read attempts; MCP sources supplement them. Failures
 are explicit redacted dispositions, never fabricated success.
 
+After the one-shot authorization check, analysis runs:
+
+```text
+python3 <obengineer-root>/skills/engagement-intake/scripts/manage_obconfig.py --project-root . direct-api --phase analysis
+```
+
+Its centralized-redacted JSON feeds provenance. `/ob-verify` runs the same supported
+path with `--phase verification` after acceptance/plan validation and feeds those rows
+to verification evidence and provenance. Neither workflow imports the adapter directly
+or puts credentials in command arguments.
+
 The result is one reviewed PR containing linked Markdown analysis, canonical contract,
 sanitized provenance, verification plan, versioned wiki, and all work orders. Review in
 the host side panel; no browser or localhost server is used.

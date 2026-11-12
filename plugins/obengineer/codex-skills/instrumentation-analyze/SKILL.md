@@ -79,10 +79,13 @@ contains the summary, architecture, findings, path, work-order summary, and use 
 - Load only digest-authorized root `obconfig.yaml`. Rehash the complete artifact
   directory, reread added/changed files, remove deleted context, and preserve accepted
   historical versions.
-- A configured product mandates a direct request through `direct_api.py` and one explicit
-  source disposition: success, access denial, timeout/unavailable, or unsupported.
-  Use connected MCP tools only as supplemental evidence; MCP cannot satisfy or relabel
-  the direct attempt.
+- After `manage_obconfig.py show` validates the unconsumed authorization, run exactly
+  `python3 <obengineer-root>/skills/engagement-intake/scripts/manage_obconfig.py
+  --project-root . direct-api --phase analysis`. This supported path securely loads the
+  ignored mode-0600 config and emits centralized-redacted JSON only. Append each direct
+  disposition and measured aggregate to provenance; map `not-configured` and failed
+  dispositions to source limitations/unresolved evidence. Use connected MCP tools only
+  as supplemental evidence; MCP cannot satisfy or relabel the direct attempt.
 - Never print or store a secret. Record shape, location, and exposure only.
 - Missing optional inputs do not block analysis and do not create empty chapters.
 - Findings link affected use cases, workflows, business transactions, contracts, and

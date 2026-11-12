@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import copy
+import json
 import os
 import re
 import sys
@@ -13,6 +14,7 @@ from typing import Any, Mapping
 
 import yaml
 
+from direct_api import collect_direct_evidence
 from obconfig import (
     CONFIG_NAME,
     ConfigIssue,
@@ -401,10 +403,13 @@ def _print_error(exc: BaseException, data: Mapping[str, Any] | None = None) -> i
     return 1
 
 
-def main(argv: list[str] | None = None) -> int:
+def main(
+    argv: list[str] | None = None,
+    *,
+    direct_transport: Any | None = None,
+) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--project-root", default=".")
-    parser.add_argument("--no-git-check", action="store_true", help=argparse.SUPPRESS)
     sub = parser.add_subparsers(dest="operation", required=True)
     sub.add_parser("init")
     sub.add_parser("validate")
@@ -422,14 +427,18 @@ def main(argv: list[str] | None = None) -> int:
     consume_parser = sub.add_parser("consume")
     consume_parser.add_argument("--command", required=True)
     consume_parser.add_argument("--intended-version", required=True)
+    direct_parser = sub.add_parser("direct-api")
+    direct_parser.add_argument(
+        "--phase", required=True, choices=("analysis", "verification")
+    )
     sub.add_parser("migrate-legacy")
     args = parser.parse_args(argv)
     root = _project(args.project_root)
-    enforce_git = not args.no_git_check
+    enforce_git = True
     data: Mapping[str, Any] | None = None
     try:
-        template = find_template(Path(__file__))
         if args.operation == "init":
+            template = find_template(Path(__file__))
             legacy_sources = [
                 str(relative)
                 for relative in (LEGACY_ENV, LEGACY_TEMPLATE, LEGACY_YAML)
@@ -451,6 +460,7 @@ def main(argv: list[str] | None = None) -> int:
             print("obconfig.yaml already exists.")
             return 0
         if args.operation == "migrate-legacy":
+            template = find_template(Path(__file__))
             changed = migrate_legacy(root, template)
             print("Migrated legacy files into local obconfig.yaml.")
             print("Changed key paths: " + (", ".join(changed) if changed else "none"))
@@ -462,6 +472,39 @@ def main(argv: list[str] | None = None) -> int:
                 return 2
             changed = repair(root)
             print("Safe repair complete. Changed key paths: " + ", ".join(changed))
+            return 0
+
+        if args.operation == "direct-api":
+            config_path = root / CONFIG_NAME
+            if not config_path.exists() and not config_path.is_symlink():
+                data = {
+                    "splunk": {
+                        "observability": {"realm": "", "read_token": ""},
+                        "platform": {
+                            "host": "",
+                            "read_token": "",
+                            "index_allowlist": [],
+                        },
+                    }
+                }
+            else:
+                data, _, _, _ = load_config(root, enforce_git=enforce_git)
+            if direct_transport is None:
+                direct_results = collect_direct_evidence(data, phase=args.phase)
+            else:
+                direct_results = collect_direct_evidence(
+                    data,
+                    phase=args.phase,
+                    transport=direct_transport,
+                )
+            payload = Redactor(data).value(
+                {
+                    "schema_version": 1,
+                    "phase": args.phase,
+                    "direct_api": direct_results,
+                }
+            )
+            print(json.dumps(payload, sort_keys=True, separators=(",", ":")))
             return 0
 
         data, _, _, warnings = load_config(root, enforce_git=enforce_git)

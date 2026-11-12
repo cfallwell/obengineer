@@ -1,13 +1,16 @@
 from __future__ import annotations
 
 import importlib.util
+import json
 import secrets
+import subprocess
 import sys
 import urllib.error
 from pathlib import Path
 from urllib.parse import parse_qs
 
 import pytest
+import yaml
 
 SCRIPTS = Path(__file__).resolve().parents[1] / "scripts"
 for name in ("obconfig", "direct_api"):
@@ -17,6 +20,14 @@ for name in ("obconfig", "direct_api"):
     spec.loader.exec_module(module)
 
 import direct_api
+
+manage_spec = importlib.util.spec_from_file_location(
+    "manage_obconfig", SCRIPTS / "manage_obconfig.py"
+)
+manage_obconfig = importlib.util.module_from_spec(manage_spec)
+sys.modules[manage_spec.name] = manage_obconfig
+manage_spec.loader.exec_module(manage_obconfig)
+TEMPLATE = SCRIPTS.parents[2] / "obconfig.yaml.template"
 
 
 def measured_body(source):
@@ -43,6 +54,32 @@ def configured():
         }
     }
     return config, tokens
+
+
+def configured_project(root: Path):
+    data = yaml.safe_load(TEMPLATE.read_text())
+    canaries = [secrets.token_urlsafe(33) for _ in range(3)]
+    data["engagement"]["application"] = "direct-cli-fixture"
+    data["surfaces"]["no_browser_reason"] = "service has no browser"
+    data["splunk"]["observability"] = {
+        "realm": "us1",
+        "read_token": canaries[0],
+    }
+    data["splunk"]["platform"] = {
+        "host": "https://splunk.example.test:8089",
+        "read_token": canaries[1],
+        "index_allowlist": ["app_main"],
+    }
+    data["analysis_access"]["dummy_login"] = {
+        "login_id": "disposable-user",
+        "password": canaries[2],
+    }
+    config = root / "obconfig.yaml"
+    config.write_text(yaml.safe_dump(data, sort_keys=False))
+    config.chmod(0o600)
+    (root / ".gitignore").write_text("/obconfig.yaml\n/.obengineer/\n")
+    subprocess.run(["git", "init", "-q"], cwd=root, check=True)
+    return canaries
 
 
 def test_both_phases_mandate_direct_requests_and_tokens_are_headers_only():
@@ -179,3 +216,102 @@ def test_unrecognized_success_body_is_not_labeled_measured():
     assert result["disposition"] == "unavailable"
     assert result["measured"] is False
     assert "ok" not in repr(result)
+
+
+@pytest.mark.parametrize("phase", ("analysis", "verification"))
+def test_supported_cli_invokes_mock_transport_without_leaking_canaries(
+    tmp_path, monkeypatch, capsys, phase
+):
+    canaries = configured_project(tmp_path)
+    captured = []
+
+    def transport(request):
+        captured.append(request)
+        return direct_api.Response(200, measured_body(request.source))
+
+    argv = [
+        str(SCRIPTS / "manage_obconfig.py"),
+        "--project-root",
+        str(tmp_path),
+        "direct-api",
+        "--phase",
+        phase,
+    ]
+    monkeypatch.setattr(sys, "argv", argv)
+
+    assert manage_obconfig.main(direct_transport=transport) == 0
+    terminal = capsys.readouterr()
+    payload = json.loads(terminal.out)
+    rendered = terminal.out + terminal.err + repr(payload) + repr(sys.argv)
+
+    assert terminal.err == ""
+    assert payload["phase"] == phase
+    assert [row["disposition"] for row in payload["direct_api"]] == [
+        "succeeded",
+        "succeeded",
+    ]
+    assert all(row["measured"] for row in payload["direct_api"])
+    assert all(canary not in rendered for canary in canaries)
+    assert len(captured) == 2
+    for request in captured:
+        combined_target = request.url + (request.body or b"").decode()
+        assert all(canary not in combined_target for canary in canaries)
+    assert captured[0].headers["X-SF-TOKEN"] == canaries[0]
+    assert captured[1].headers["Authorization"] == f"Splunk {canaries[1]}"
+
+
+def test_supported_cli_missing_config_ignores_environment_and_reports_not_configured(
+    tmp_path, monkeypatch, capsys
+):
+    environment_canaries = [secrets.token_urlsafe(33) for _ in range(3)]
+    monkeypatch.setenv("SPLUNK_ACCESS_TOKEN", environment_canaries[0])
+    monkeypatch.setenv("SPLUNK_TOKEN", environment_canaries[1])
+    monkeypatch.setenv("RAW_PASSWORD", environment_canaries[2])
+
+    def no_network(request):
+        raise AssertionError("missing config must not invoke a transport")
+
+    argv = [
+        str(SCRIPTS / "manage_obconfig.py"),
+        "--project-root",
+        str(tmp_path),
+        "direct-api",
+        "--phase",
+        "analysis",
+    ]
+    monkeypatch.setattr(sys, "argv", argv)
+
+    assert manage_obconfig.main(direct_transport=no_network) == 0
+    terminal = capsys.readouterr()
+    payload = json.loads(terminal.out)
+    rendered = terminal.out + terminal.err + repr(payload) + repr(sys.argv)
+
+    assert terminal.err == ""
+    assert [row["disposition"] for row in payload["direct_api"]] == [
+        "not-configured",
+        "not-configured",
+    ]
+    assert all(row["attempted"] is False for row in payload["direct_api"])
+    assert all(canary not in rendered for canary in environment_canaries)
+
+
+def test_supported_cli_refuses_permissive_config_without_leaking(
+    tmp_path, capsys
+):
+    canaries = configured_project(tmp_path)
+    (tmp_path / "obconfig.yaml").chmod(0o644)
+    argv = [
+        "--project-root",
+        str(tmp_path),
+        "direct-api",
+        "--phase",
+        "verification",
+    ]
+
+    assert manage_obconfig.main(argv, direct_transport=lambda request: None) == 1
+    terminal = capsys.readouterr()
+    rendered = terminal.out + terminal.err + repr(argv)
+
+    assert terminal.out == ""
+    assert "mode must be 0600" in terminal.err
+    assert all(canary not in rendered for canary in canaries)

@@ -107,6 +107,9 @@ def test_start_validates_before_discovery_and_gates_analysis():
         assert "exact `no`" in text or "Exact `no`" in text
     assert "one-shot authorization" in analyze
     assert "artifact-tree digest" in analyze
+    assert analyze.index(" show --command") < analyze.index(
+        "direct-api --phase analysis"
+    )
 
 
 def test_intake_runtime_and_schemas_are_packaged():
@@ -168,6 +171,29 @@ def test_direct_apis_and_mcp_are_complementary():
         "mandatory", "not-configured", "request headers",
     ):
         assert term in telemetry
+
+
+def test_supported_direct_api_cli_is_required_by_both_consumers():
+    command = (COMMANDS / "ob-analyze.md").read_text()
+    analyze = (SKILLS / "instrumentation-analyze" / "SKILL.md").read_text()
+    verify = (SKILLS / "instrumentation-verify" / "SKILL.md").read_text()
+    prompt_analysis = (PROMPTS / "01-analyze-application.md").read_text()
+    prompt_verify = (PROMPTS / "05-verify-accepted-contract.md").read_text()
+    telemetry = (SKILLS / "references/existing-telemetry.md").read_text()
+
+    for text, phase in (
+        (command, "analysis"),
+        (analyze, "analysis"),
+        (prompt_analysis, "analysis"),
+        (verify, "verification"),
+        (prompt_verify, "verification"),
+    ):
+        assert f"direct-api --phase {phase}" in text
+        assert "provenance" in text.lower()
+    assert "direct-api --phase analysis" in telemetry
+    assert "direct-api --phase verification" in telemetry
+    assert "not-configured" in telemetry
+    assert "process environment" in telemetry
 
 
 def test_analysis_uses_bounded_host_parallelism_but_serial_names():
