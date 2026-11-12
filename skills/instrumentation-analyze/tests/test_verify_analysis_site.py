@@ -68,8 +68,11 @@ def test_exact_parent_schema_v2_fixture_renders_and_verifies_without_mutation(
     assert verify.check(version, tmp_path, fixture) == []
     assert fixture.read_bytes() == before
     cardinality = (version / "contracts" / "cardinality.md").read_text()
-    assert "historical entitlement budget model" in cardinality
-    assert "Enforced system limit" not in cardinality
+    assert "maps legacy `entitlement`, `inUse`, and `headroomAfter` losslessly" in cardinality
+    assert "Enforced system limit" in cardinality
+    assert "50000" in cardinality
+    assert "30000" in cardinality
+    assert "12600" in cardinality
 
 
 def test_broken_link_fails(site):

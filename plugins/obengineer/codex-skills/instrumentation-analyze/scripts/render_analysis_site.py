@@ -843,6 +843,27 @@ class Renderer:
                         ),),
                     )
                 )
+            elif historical["budgetStatus"] == "measured":
+                budget = (
+                    "This immutable schema-v2 snapshot recorded measured usage. The "
+                    "in-memory compatibility view maps legacy `entitlement`, `inUse`, "
+                    "and `headroomAfter` losslessly to `enforcedSystemLimit`, `usage`, "
+                    "and `systemHeadroomAfter`; the source file remains unchanged.\n\n"
+                    + table(
+                        (
+                            "Status", "Enforced system limit", "Usage", "Reserved",
+                            "Proposed cost", "System headroom after",
+                        ),
+                        ((
+                            card["budgetStatus"],
+                            card["enforcedSystemLimit"],
+                            card["usage"],
+                            card["reserved"],
+                            card["proposedCost"],
+                            card["systemHeadroomAfter"],
+                        ),),
+                    )
+                )
             else:
                 budget = (
                     "This accepted schema-v2 snapshot used the historical entitlement "

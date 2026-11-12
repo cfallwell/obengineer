@@ -36,7 +36,7 @@ cloud_diagrams:
   notes: ""  # string; optional; account/region context, never credentials
 
 surfaces:
-  production_urls: []  # HTTPS/HTTP URL list; required unless no_browser_reason is nonempty
+  production_urls: []  # HTTP(S) URL list without userinfo credentials; required unless no_browser_reason is nonempty
   no_browser_reason: ""  # string; required only when production_urls is empty; explains why no live scan
   host_and_remotes: ""  # string; optional; bundle ownership and remote composition
   edge_cdn: ""  # string; optional; edge/TLS boundary to verify

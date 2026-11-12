@@ -740,6 +740,59 @@ def test_config_projection_emits_nothing_when_artifacts_change_mid_projection(
         assert canary not in terminal.err
 
 
+@pytest.mark.parametrize("with_password", (False, True))
+def test_production_url_userinfo_fails_at_exact_line_without_projection_leak(
+    tmp_path, capsys, with_password
+):
+    config_canaries = configured_project(tmp_path)
+    obconfig.authorize(tmp_path, command="ob-start", intended_version="V1")
+    obconfig.claim_authorization(
+        tmp_path, command="ob-start", intended_version="V1"
+    )
+    username = "user_" + secrets.token_urlsafe(33)
+    password = "pass_" + secrets.token_urlsafe(33)
+    authority = username + (f":{password}" if with_password else "")
+    credential_url = f"https://{authority}@shop.example.test/checkout"
+    data = yaml.safe_load((tmp_path / "obconfig.yaml").read_text())
+    data["surfaces"]["production_urls"] = [
+        "https://safe.example.test",
+        credential_url,
+    ]
+    data["surfaces"]["no_browser_reason"] = ""
+    path = tmp_path / "obconfig.yaml"
+    path.write_text(yaml.safe_dump(data, sort_keys=False))
+    path.chmod(0o600)
+    expected_line = next(
+        index
+        for index, line in enumerate(path.read_text().splitlines(), 1)
+        if credential_url in line
+    )
+
+    with pytest.raises(obconfig.ObconfigError) as raised:
+        obconfig.load_config(tmp_path)
+    issue = raised.value.issue
+    assert issue.path == "surfaces.production_urls[1]"
+    assert issue.line == expected_line
+    assert issue.reason == "must not include userinfo credentials"
+    assert username not in str(raised.value)
+    assert password not in str(raised.value)
+
+    assert manage_obconfig.main([
+        "--project-root",
+        str(tmp_path),
+        "config-projection",
+        "--command",
+        "ob-start",
+        "--intended-version",
+        "V1",
+    ]) == 1
+    terminal = capsys.readouterr()
+    assert terminal.out == ""
+    combined = terminal.err
+    for canary in [*config_canaries, username, password, credential_url]:
+        assert canary not in combined
+
+
 def test_finalize_cli_binds_runtime_outputs_before_dispatch_and_consume(
     tmp_path, capsys
 ):

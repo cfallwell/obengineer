@@ -677,20 +677,27 @@ def migrate_contract(contract: Any) -> Any:
         migrated["schemaVersion"] = 3
         cardinality = (migrated.get("contracts") or {}).get("cardinality")
         if isinstance(cardinality, dict):
-            cardinality.pop("entitlement", None)
-            cardinality.pop("inUse", None)
-            cardinality.pop("headroomAfter", None)
-            cardinality["budgetStatus"] = "unavailable"
+            legacy_status = cardinality.get("budgetStatus")
+            entitlement = cardinality.pop("entitlement", None)
+            usage = cardinality.pop("inUse", None)
+            headroom = cardinality.pop("headroomAfter", None)
             cardinality["contractualEntitlement"] = None
-            cardinality["usage"] = None
-            cardinality["enforcedSystemLimit"] = None
-            cardinality["reserved"] = None
-            cardinality["systemHeadroomAfter"] = None
-            cardinality["basis"] = (
-                "Migrated from schema v2: the historical entitlement budget remains "
-                "available in the immutable source snapshot, but it is not reclassified "
-                "as a directly measured enforced system limit in schema v3."
-            )
+            if legacy_status == "measured":
+                cardinality["budgetStatus"] = "measured"
+                cardinality["usage"] = usage
+                cardinality["enforcedSystemLimit"] = entitlement
+                cardinality["systemHeadroomAfter"] = headroom
+            else:
+                cardinality["budgetStatus"] = "unavailable"
+                cardinality["usage"] = None
+                cardinality["enforcedSystemLimit"] = None
+                cardinality["reserved"] = None
+                cardinality["systemHeadroomAfter"] = None
+                cardinality["basis"] = (
+                    "Migrated from schema v2: values not identified as directly "
+                    "measured are retained only in the immutable source snapshot and "
+                    "are not promoted to an enforced system limit in schema v3."
+                )
         return migrated
     if contract.get("schemaVersion") != 1:
         return contract

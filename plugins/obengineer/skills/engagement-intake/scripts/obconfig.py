@@ -635,7 +635,24 @@ def validate_config(
             )
         )
     for index, url in enumerate(urls):
-        parsed = urlsplit(url)
+        try:
+            parsed = urlsplit(url)
+        except ValueError:
+            raise ObconfigError(
+                _issue(
+                    marks,
+                    f"surfaces.production_urls[{index}]",
+                    "must be an absolute HTTP(S) URL without userinfo credentials",
+                )
+            ) from None
+        if parsed.username is not None or parsed.password is not None:
+            raise ObconfigError(
+                _issue(
+                    marks,
+                    f"surfaces.production_urls[{index}]",
+                    "must not include userinfo credentials",
+                )
+            )
         if parsed.scheme not in {"http", "https"} or not parsed.hostname:
             raise ObconfigError(
                 _issue(marks, f"surfaces.production_urls[{index}]", "must be an absolute HTTP(S) URL")

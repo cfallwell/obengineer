@@ -3,6 +3,7 @@ from __future__ import annotations
 import copy
 import hashlib
 import json
+import subprocess
 import sys
 from pathlib import Path
 
@@ -11,6 +12,7 @@ import pytest
 SKILL = Path(__file__).resolve().parent.parent
 SCRIPTS = SKILL / "scripts"
 FIXTURE = Path(__file__).resolve().parent / "fixtures" / "representative"
+REPOSITORY = SKILL.parents[1]
 sys.path.insert(0, str(SCRIPTS))
 
 from analysis_contract import (  # noqa: E402
@@ -30,6 +32,15 @@ from validate_analysis import main as validate_analysis_main  # noqa: E402
 
 def contract():
     return load_json(FIXTURE / "analysis-contract.json")
+
+
+def git_show_origin_main(relative: str) -> bytes:
+    return subprocess.run(
+        ["git", "show", f"origin/main:{relative}"],
+        cwd=REPOSITORY,
+        check=True,
+        stdout=subprocess.PIPE,
+    ).stdout
 
 
 def schema_v1_contract():
@@ -225,10 +236,19 @@ def test_frozen_parent_schema_v2_validates_and_normalizes_without_mutation():
         / "analysis-contract.json"
     )
     frozen_schema = SKILL / "schemas" / "analysis-contract-v2.schema.json"
-    assert hashlib.sha256(fixture.read_bytes()).hexdigest() == (
+    fixture_bytes = git_show_origin_main(
+        "skills/instrumentation-analyze/tests/fixtures/representative/"
+        "analysis-contract.json"
+    )
+    schema_bytes = git_show_origin_main(
+        "skills/instrumentation-analyze/schemas/analysis-contract.schema.json"
+    )
+    assert fixture.read_bytes() == fixture_bytes
+    assert frozen_schema.read_bytes() == schema_bytes
+    assert hashlib.sha256(fixture_bytes).hexdigest() == (
         "fda17b65c6b5a2cd026aeb42e891356bd93c069c5edac515756b8ad1ced36ab8"
     )
-    assert hashlib.sha256(frozen_schema.read_bytes()).hexdigest() == (
+    assert hashlib.sha256(schema_bytes).hexdigest() == (
         "aca0c133553ef27cc140bdc71fb65807b783e69c0bfeecfadf8b4a026705c969"
     )
     original_bytes = fixture.read_bytes()
@@ -238,8 +258,17 @@ def test_frozen_parent_schema_v2_validates_and_normalizes_without_mutation():
     assert validate_contract(value) == []
     normalized = normalize_contract(value)
     assert normalized["schemaVersion"] == 3
-    assert normalized["contracts"]["cardinality"]["usage"] is None
-    assert normalized["contracts"]["cardinality"]["enforcedSystemLimit"] is None
+    cardinality = normalized["contracts"]["cardinality"]
+    assert cardinality["budgetStatus"] == "measured"
+    assert cardinality["usage"] == 30000
+    assert cardinality["enforcedSystemLimit"] == 50000
+    assert cardinality["reserved"] == 5000
+    assert cardinality["proposedCost"] == 2400
+    assert cardinality["systemHeadroomAfter"] == 12600
+    assert cardinality["contractualEntitlement"] is None
+    assert "entitlement" not in cardinality
+    assert "inUse" not in cardinality
+    assert "headroomAfter" not in cardinality
     assert value == original_value
     assert fixture.read_bytes() == original_bytes
 
@@ -257,6 +286,9 @@ def test_explicit_schema_v2_working_copy_migration_writes_schema_v3(tmp_path):
     assert migrate_contract_main([str(source), "--output", str(output)]) == 0
     migrated = load_json(output)
     assert migrated["schemaVersion"] == 3
+    assert migrated["contracts"]["cardinality"]["usage"] == 30000
+    assert migrated["contracts"]["cardinality"]["enforcedSystemLimit"] == 50000
+    assert migrated["contracts"]["cardinality"]["systemHeadroomAfter"] == 12600
     assert validate_contract(migrated) == []
     assert source.read_bytes() == before
     assert migrate_contract_main(
