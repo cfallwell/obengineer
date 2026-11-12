@@ -24,7 +24,8 @@ The deterministic implementation is:
   bounded repair, artifact tree hashing, summary, and authorization binding;
 - `scripts/manage_obconfig.py` — `init`, `validate`, `repair`, `summary`, `changed`,
   `authorize`, atomic `claim`, baseline-neutral `abort`, journaled `consume`,
-  output-bound `finalize`, claim-bound `direct-api`, fixed-policy
+  index-bound `finalize`, commit-bound `dispatch`/`verify-dispatch`, claim-bound
+  `direct-api`, fixed-policy
   `safe-active`, and `migrate-legacy` commands;
 - `scripts/direct_api.py` — fixed read-only Observability Cloud and Platform request
   adapters; and
@@ -46,9 +47,11 @@ Follow [`../../prompts/00-load-obconfig.md`](../../prompts/00-load-obconfig.md).
 5. Exact `yes` writes one-shot authorization bound to config, full artifact
    manifest/delta and tree digest, schema, command, and intended version. Analysis must
    atomically claim it; each network consumer revalidates it. After analysis and render,
-   `finalize` revalidates the inputs and hashes explicit contained generated-output
-   paths immediately before dispatch. Consume only a successfully published finalized
-   claim; abort every declined/failed run without changing baseline/history.
+   stage intended outputs; `finalize` revalidates inputs and binds the complete Git index
+   tree plus explicit contained output blobs. Commit exactly that tree, then record and
+   verify dispatch against immutable Git objects before push/PR work. Consume only a
+   successfully published dispatch; abort every declined/failed run without changing
+   baseline/history.
 
 `/ob-add-inputs` and `/ob-edit-inputs` are compatibility entry points. They never edit
 YAML or ask field questions. Unchanged config prints

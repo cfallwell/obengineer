@@ -164,7 +164,11 @@ The installer never replaces an untracked destination with the same skill or com
 name. It reports `REFUSE` and leaves the host and project scaffold unchanged. Move or
 back up the reported user file explicitly before retrying. A reinstall replaces only
 paths whose manifest ownership record still matches; an operational failure rolls those
-changes back.
+changes back. Inner host and outer scaffold transactions journal the exact inode, type,
+mode, and content digest they write. Rollback removes or restores only a current exact
+match. A concurrent file, symlink, or directory replacement is preserved, the backup
+staging directory is retained for manual recovery, and installation exits nonzero with
+an incomplete-rollback error.
 
 Root scaffold files follow a stricter rule: existing files are never replaced, including
 files created by an earlier install. An owned file changed after installation is treated

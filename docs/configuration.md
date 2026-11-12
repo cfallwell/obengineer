@@ -39,8 +39,10 @@ full artifact manifest/delta and tree digest, originating command, and intended 
 version. Analysis atomically claims that authorization. Any input change invalidates the
 claim before API work or finalization; concurrent or repeated claims fail. After all
 analysis output is rendered and validated, `finalize` revalidates those inputs and binds
-a runtime-computed digest of explicit contained generated-output paths immediately before
-commit/push/PR dispatch.
+the complete staged Git index tree and runtime-computed manifest of explicit contained
+generated-output blobs. The commit must have exactly that tree. `dispatch` records the
+matching HEAD commit/tree and `verify-dispatch` rechecks immutable Git objects before
+push/PR work.
 
 ## Access behavior
 
@@ -55,13 +57,16 @@ The supported production commands are:
 python3 skills/engagement-intake/scripts/manage_obconfig.py --project-root . direct-api --phase analysis --command <origin> --intended-version V<N>
 python3 skills/engagement-intake/scripts/manage_obconfig.py --project-root . safe-active --command <origin> --intended-version V<N>
 python3 skills/engagement-intake/scripts/manage_obconfig.py --project-root . finalize --command <origin> --intended-version V<N> --output docs/observability --output wiki/apps/<app>/versions/V<N>
+python3 skills/engagement-intake/scripts/manage_obconfig.py --project-root . dispatch --command <origin> --intended-version V<N>
+python3 skills/engagement-intake/scripts/manage_obconfig.py --project-root . verify-dispatch --command <origin> --intended-version V<N>
 python3 skills/engagement-intake/scripts/manage_obconfig.py --project-root . direct-api --phase verification
 ```
 
 They securely load ignored mode-0600 config and emit only centralized-redacted JSON.
 Safe-active uses fixed HEAD paths/rates/ceilings with DNS and peer-address defenses;
-passive/none makes no request. Dispatch begins only after finalize succeeds. Successful
-final consume advances the artifact baseline to the finalized input snapshot;
+passive/none makes no request. Dispatch begins only after staged-tree finalization, exact
+commit, and commit verification succeed. Successful final consume re-verifies the commit
+tree/output blobs and advances the artifact baseline to the finalized input snapshot;
 declined/failed analysis uses `abort`, which releases only the exact claim. Post-finalize
 input edits belong to the next run and do not invalidate consumption of the already
 published finalized snapshot.

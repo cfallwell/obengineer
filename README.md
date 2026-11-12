@@ -60,8 +60,9 @@ when missing, then stops for editing. On rerun it validates, hashes the complete
 directory, displays a redacted summary, and asks whether to proceed. Only exact `yes`
 creates digest-bound one-shot analysis authorization. Analysis then atomically claims
 that snapshot, finalizes validated generated outputs immediately before dispatch, and
-consumes only a successfully published finalized claim. Consumption advances the
-artifact baseline to the finalized snapshot; decline/failure aborts only the claim.
+binds them to the staged Git tree. Push/PR work requires an exact matching committed
+tree and verified dispatch. Consumption rechecks immutable Git objects and advances the
+artifact baseline; decline/failure aborts only the claim.
 
 At any time:
 

@@ -12,10 +12,11 @@ proceed gate. They do not open an input-only PR and never commit local config/st
 
 Exact `yes` creates one-shot authorization bound to config, complete artifact manifest
 and delta, command, and intended version. Analysis atomically claims it before network
-or analysis work. After analysis, rendering, and validation, `finalize` revalidates the
-claimed inputs and hashes explicit generated-output roots immediately before the initial
-commit/push/PR dispatch. Failed or declined work calls `abort`; only successful dispatch
-calls `consume`, which records the finalized snapshot and advances the artifact baseline.
+or analysis work. After analysis, rendering, and validation, stage intended paths;
+`finalize` revalidates inputs and binds the complete index tree plus explicit output
+blobs. Commit exactly that tree, record `dispatch`, and run `verify-dispatch` before
+push/PR work. Failed or declined work calls `abort`; only successful publication calls
+`consume`, which verifies Git objects and advances the artifact baseline.
 
 ## One branch and PR per version
 
@@ -62,9 +63,9 @@ Authentication denial is recorded once and not retried indefinitely. If the tota
 expires or semantic QA still fails after one repair cycle, keep the PR draft and label the
 result a degraded draft. Never run past 30 minutes and call a shallow result complete.
 
-## Phase commits
+## Phase checkpoints
 
-Commit completed phases on the same branch:
+Complete these local checkpoints before staging:
 
 1. `analysis(<app> V<n>): capture evidence and findings`
 2. `analysis(<app> V<n>): publish strategy and contracts`
@@ -72,13 +73,16 @@ Commit completed phases on the same branch:
 4. `analysis(<app> V<n>): verify linked documentation`
 5. optional `analysis(<app> V<n>): render Word summary`
 
-Complete and validate every phase before dispatch. Then invoke the runtime `finalize`
-gate with all generated output roots and, without intervening analysis/network/render
-work, create the phase commits, push them together, and open the PR. Stage only
-analysis-owned paths. The PR body states the version, inputs added or edited, evidence
+Do not commit intermediate checkpoint trees. Complete and validate every phase before
+dispatch. Stage only analysis-owned paths, then
+invoke `finalize` with all generated output roots. Create one exact-tree analysis commit;
+do not create phase commits whose intermediate trees differ from the finalized tree.
+Run `dispatch`, verify it immediately before push and PR creation, then publish. The PR
+body states the version, inputs added or edited, evidence
 and limitations, findings, strategy, artifacts, work-order count, verification results,
-and the host-native analysis index path. Any mutation after finalize but before dispatch
-requires `abort` followed by a fresh proceed/claim/finalize flow.
+and the host-native analysis index path. Index mutation after finalize requires `abort`
+followed by a fresh proceed/claim/finalize flow. Unstaged worktree edits are next-run
+work and cannot alter the bound commit.
 
 ## Review loop
 

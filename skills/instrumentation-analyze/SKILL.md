@@ -29,7 +29,7 @@ The target is read-only. Application changes happen only through accepted work o
 | [`../references/analysis-site.md`](../references/analysis-site.md) | Versioned layout, landing page, links, breadcrumbs, side panel handoff, optional Word summary |
 | [`../references/critical-findings.md`](../references/critical-findings.md) | Finding evidence, severity, exposure, remediation, and credential handling |
 | [`../references/security-assessment.md`](../references/security-assessment.md) | Authorized credential/API checks and OWASP coverage |
-| [`../references/analysis-run-lifecycle.md`](../references/analysis-run-lifecycle.md) | Version branch, phase commits, review loop, acceptance, merge, and handoff |
+| [`../references/analysis-run-lifecycle.md`](../references/analysis-run-lifecycle.md) | Version branch, staged-tree dispatch gate, review loop, acceptance, merge, and handoff |
 | [`../references/agent-wiki.md`](../references/agent-wiki.md) | Versioned subject notes and work orders |
 | [`../references/implementation-work-orders.md`](../references/implementation-work-orders.md) | Bounded targets, repository legs, dependencies, and PR coordination |
 | [`../references/provenance-ledger.md`](../references/provenance-ledger.md) | Evidence and run state |
@@ -91,11 +91,12 @@ contains the summary, architecture, findings, path, work-order summary, and use 
 - Run `manage_obconfig.py safe-active --command <origin> --intended-version V<N>`
   and append its redacted outcomes to provenance. Passive/none must produce no requests.
   The claim is revalidated around every supported network path. After all analysis,
-  network, render, and validation work, run `manage_obconfig.py finalize` with the same
-  binding and explicit generated-output roots immediately before commit/push/PR
-  dispatch. Dispatch only when finalize succeeds. Consume only the successfully
-  published finalized claim. Decline/failure invokes `manage_obconfig.py abort` with the
-  same binding, releasing the claim without changing baseline/history.
+  network, render, and validation work, stage intended analysis paths and run
+  `manage_obconfig.py finalize` with the same binding and explicit generated-output
+  roots. Commit exactly the bound index tree. Run `dispatch`, then `verify-dispatch`
+  immediately before push/PR work. Consume only the successfully published immutable
+  dispatch. Decline/failure invokes `manage_obconfig.py abort` with the same binding,
+  releasing the claim without changing baseline/history.
 - Never print or store a secret. Record shape, location, and exposure only.
 - Missing optional inputs do not block analysis and do not create empty chapters.
 - Findings link affected use cases, workflows, business transactions, contracts, and
@@ -230,10 +231,10 @@ Run `make qa-analysis` against the generic representative fixture and enforce it
 validation-time, render-time, output-file, and output-byte budgets.
 
 Run `$deliverable-review` against the linked site and wiki. Fix every blocking defect.
-Then finalize `docs/observability` and the generated versioned wiki with the runtime gate.
-Do no analysis, network, render, or output mutation between finalize and dispatch.
-Input changes after finalize belong to the next run and do not invalidate successful
-consume of the already published finalized snapshot.
+Then stage and finalize `docs/observability` and the generated versioned wiki with the
+runtime gate. Commit the exact finalized tree and verify dispatch before external work.
+Index or commit mutation blocks dispatch. Working-tree changes after staging belong to
+the next run and cannot alter successful consume of the published commit.
 
 ### 8. Review, accept, and hand off
 

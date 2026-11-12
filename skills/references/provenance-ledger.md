@@ -66,11 +66,13 @@ and unavailable rows become limitations or unresolved evidence; they are never p
 to measured facts. The command output, not an import-only adapter call, is the evidence
 boundary.
 Safe-active outcomes are also recorded; passive/none yield an empty outcome list. The
-runtime finalize gate revalidates inputs and binds its own deterministic manifest/digest
-of explicit generated-output roots immediately before dispatch. The artifact baseline
-advances only when successful analysis consumes that finalized claim; history records
-both the finalized input snapshot and generated-output digest. Declined or failed
-analysis aborts the claim without changing baseline/history.
+runtime finalize gate revalidates inputs and binds the complete staged Git tree plus its
+own deterministic manifest/digest of explicit generated-output blobs. Dispatch records
+only an exact matching commit and is reverified before external publication. The
+artifact baseline advances only when successful analysis consumes that dispatch after
+re-verifying commit/tree/blob objects; history records the commit, tree, input snapshot,
+and generated-output digest. Declined or failed analysis aborts without changing
+baseline/history.
 
 Analysis seals the IDs it owns when the exact commit is accepted. Generation,
 implementation, Terraform, and verification may append records but may not alter sealed

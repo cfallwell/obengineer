@@ -34,16 +34,19 @@ After claiming with the originating command and intended version, analysis runs:
 python3 <obengineer-root>/skills/engagement-intake/scripts/manage_obconfig.py --project-root . direct-api --phase analysis --command <origin> --intended-version V<N>
 python3 <obengineer-root>/skills/engagement-intake/scripts/manage_obconfig.py --project-root . safe-active --command <origin> --intended-version V<N>
 python3 <obengineer-root>/skills/engagement-intake/scripts/manage_obconfig.py --project-root . finalize --command <origin> --intended-version V<N> --output docs/observability --output wiki/apps/<app>/versions/V<N>
+python3 <obengineer-root>/skills/engagement-intake/scripts/manage_obconfig.py --project-root . dispatch --command <origin> --intended-version V<N>
+python3 <obengineer-root>/skills/engagement-intake/scripts/manage_obconfig.py --project-root . verify-dispatch --command <origin> --intended-version V<N>
 ```
 
 Its centralized-redacted JSON feeds provenance. `/ob-verify` runs the same supported
 path with `--phase verification` after acceptance/plan validation and feeds those rows
 to verification evidence and provenance. Neither workflow imports the adapter directly
 or puts credentials in command arguments. Passive/none makes zero safe-active requests.
-Run finalize only after all analysis, network, render, and validation work and immediately
-before commit/push/PR dispatch. It revalidates the claimed inputs and computes the
-generated-output digest itself. Only successful dispatch followed by final `consume`
-advances the artifact baseline to the finalized snapshot. Failure/decline invokes
+After all analysis, network, render, and validation work, stage intended paths and run
+finalize. It binds the full index tree and computes contained output digests itself.
+Commit exactly that tree, record `dispatch`, and run `verify-dispatch` immediately before
+push/PR operations. Only successful publication followed by final `consume` advances
+the artifact baseline; consume re-verifies commit/tree/blob objects. Failure/decline invokes
 `abort` with the same binding, releasing the claim while baseline/history stay unchanged.
 Input edits after finalize belong to the next run and do not invalidate consumption of
 the already published snapshot.

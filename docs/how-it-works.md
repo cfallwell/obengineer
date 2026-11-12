@@ -15,7 +15,7 @@ outputs, changes, and verification.
   → linked analysis V<N>
   → versioned wiki and all work orders
   → deterministic validation
-  → input revalidation + generated-output finalize gate
+  → staged-tree finalize + exact commit dispatch verification
   → one review PR
   → explicit yes: content-bound acceptance and merge
   → Ready work-order implementation / Terraform plan / read-only verification
@@ -45,11 +45,12 @@ a fallback. Passive/none safe-active mode makes zero requests.
 
 Independent sources run with maximum safe sub-agent parallelism. Naming and schema
 reconciliation remain serial so concurrent workers do not create competing taxonomies.
-After all analysis, network, render, and validation work, the supported `finalize`
-command revalidates the claimed input snapshot and hashes explicit contained generated
-output roots. It runs immediately before commit/push/PR dispatch. Failed finalization
-dispatches nothing; failed or declined runs abort the claim without moving the artifact
-baseline. Successful dispatch consumes only that finalized snapshot.
+After all analysis, network, render, and validation work, intended paths are staged.
+`finalize` revalidates inputs and binds the complete index tree plus explicit generated
+output blobs. The commit must have that exact tree. `dispatch` records the matching
+immutable HEAD and `verify-dispatch` gates push/PR work. Failed verification dispatches
+nothing; failed or declined runs abort without moving the baseline. Consume re-verifies
+the committed tree/blobs and records only a successfully published dispatch.
 
 ## Versioned review surface
 

@@ -34,9 +34,11 @@ read process environment, or put a credential in command arguments.
 The second command makes zero requests in passive/none and records fixed-policy
 safe-active outcomes otherwise. Both commands revalidate the claim before and after
 network work. After all analysis, network, render, and validation work, invoke
-`manage_obconfig.py finalize --command <origin> --intended-version V<N>` with explicit
-`--output` paths for `docs/observability` and the generated versioned wiki. Run it
-immediately before the first commit/push/PR action and dispatch only after it succeeds.
+stage all intended analysis-owned paths, then invoke `manage_obconfig.py finalize
+--command <origin> --intended-version V<N>` with explicit `--output` paths for
+`docs/observability` and the generated versioned wiki. Commit exactly that finalized
+index tree. Run `dispatch` against HEAD, then `verify-dispatch` immediately before push
+and PR creation. Dispatch only after each gate succeeds.
 Consume only after successful analysis and PR dispatch. On failure or decline invoke
 `manage_obconfig.py abort` with the same command/version; it releases the claim while
 leaving artifact baseline/history unchanged.
@@ -134,10 +136,10 @@ Run `make qa-analysis`. Validate manifest intervals and coordinator capacity, ca
 object fields, deterministic rendering, placeholders, links, breadcrumbs, schema, map,
 ledger, verification plan schema version 2 with stable `source_ref` values, wiki,
 work-order dependencies, reverse links, performance budgets, and credential scanning.
-Finalize the generated output roots as specified above, then open one analysis PR without
-performing intervening analysis, network, or rendering. Mutation before finalize yields
-no dispatch. Input mutation after finalize belongs to the next run and does not
-invalidate consumption of the finalized snapshot after successful dispatch.
+Stage and finalize the generated output roots as specified above, commit the exact index
+tree, verify/record dispatch, then open one analysis PR. Omitted or changed staged/commit
+blobs yield no dispatch. Working-tree mutation after staging belongs to the next run and
+does not alter consumption of the immutable dispatched snapshot.
 
 When ready for review, ask the human to review the linked PR. Process review comments and
 commit corrections. Ask:

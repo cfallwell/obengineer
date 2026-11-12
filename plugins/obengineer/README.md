@@ -37,9 +37,9 @@ tools already connected to the host. MCP is not the only source.
 Analysis atomically claims its snapshot and uses claim-bound `direct-api` and
 `safe-active` commands. Verification uses `direct-api --phase verification`. Only their
 centralized-redacted JSON dispositions/aggregates feed provenance.
-After rendering and validation, analysis finalizes explicit generated-output roots
-immediately before dispatch. Successful publication consumes only that finalized claim;
-decline/failure aborts it without changing the artifact baseline or history.
+After rendering and validation, analysis stages and finalizes an exact Git tree, then
+verifies the matching commit before push/PR work. Successful publication consumes only
+that immutable dispatch; decline/failure aborts without changing baseline or history.
 
 Read-only API credentials remain only in local `obconfig.yaml` and are sent only in
 validated HTTPS request headers. The committed `obconfig.yaml.template` is the sole

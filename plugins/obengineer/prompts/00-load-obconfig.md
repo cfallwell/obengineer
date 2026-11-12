@@ -41,12 +41,14 @@ Only exact `yes` writes one-shot local authorization bound to schema version, co
 digest, full artifact manifest/delta and tree digest, command, and intended version.
 Exact `no` performs no network/API/analysis action. Analysis atomically claims the
 authorization before dispatch; concurrent/repeated claims fail. Revalidate the claim
-around every network consumer. After analysis, rendering, and validation, `finalize`
-rehashes the claimed inputs and computes the generated-output digest from explicit
-contained output paths immediately before commit/push/PR dispatch. Changed
-config/artifacts before finalize prevents dispatch. Advance the artifact baseline only
-when `consume` records the successfully published finalized snapshot. Input changes
-after finalize belong to the next run and do not invalidate that consume.
+around every network consumer. After analysis, rendering, validation, and staging,
+`finalize` rehashes the claimed inputs and binds the complete Git index tree plus exact
+blobs under explicit generated-output paths. The next commit must have that exact tree.
+`dispatch` verifies and records the immutable HEAD commit/tree; `verify-dispatch` must
+pass immediately before push/PR work. Changed config/artifacts before finalize, or any
+index/commit omission or mutation, prevents dispatch. Advance the artifact baseline only
+when `consume` verifies Git objects and records the successfully published dispatch.
+Working-tree edits after staging belong to the next run and cannot alter that tree.
 Declined/failed analysis must invoke `abort` with the same command/version; abort changes
 neither baseline nor history. Changed config/artifacts never prevent an explicit abort.
 

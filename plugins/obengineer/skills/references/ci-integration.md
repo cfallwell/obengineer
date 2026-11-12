@@ -10,9 +10,9 @@ down is that a machine can check it.
 Intake creates no branch, commit, or PR. An analysis run follows
 [`analysis-run-lifecycle.md`](analysis-run-lifecycle.md): first analysis uses
 `initial-<app>-analysis`; later CI analyses use `ci-initiated-<app>-analysis`. It commits
-validated intake/evidence, contract plus `implementation-map.json`, and verified render as
-separate phase commits on one new branch and opens one docs-only PR. CI never accepts or
-merges that PR. The example is
+validated intake/evidence, contract plus `implementation-map.json`, and verified render,
+then stages and finalizes them as one exact-tree analysis commit before opening one
+docs-only PR. CI never accepts or merges that PR. The example is
 [`../../examples/ci/agent-analysis.yml`](../../examples/ci/agent-analysis.yml).
 
 Three layers, deliberately separate, because they fail for different reasons and should be
