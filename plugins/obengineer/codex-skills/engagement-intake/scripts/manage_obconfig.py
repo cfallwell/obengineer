@@ -14,7 +14,7 @@ from typing import Any, Mapping
 
 import yaml
 
-from direct_api import collect_direct_evidence
+from direct_api import collect_direct_evidence, execute_safe_active
 from obconfig import (
     CONFIG_NAME,
     ConfigIssue,
@@ -25,16 +25,22 @@ from obconfig import (
     atomic_write_json,
     authorize,
     binding,
+    claim_authorization,
     config_changed_since_authorization,
-    consume_authorization,
+    consume_claim,
     find_template,
     hash_artifact_tree,
     initialize,
     load_config,
     parse_yaml,
+    preflight_config_creation,
+    prepare_local_state,
+    read_project_file,
     redacted_issue,
     repair,
+    secure_unlink,
     summary,
+    validate_claim,
     validate_authorization,
     validate_config,
 )
@@ -117,15 +123,19 @@ def _merge_value(
     changed.append(destination)
 
 
-def _read_legacy_env(path: Path) -> dict[str, str]:
-    if not path.exists():
+def _read_legacy_env(project_root: Path, relative: Path) -> dict[str, str]:
+    path = project_root / relative
+    if not path.exists() and not path.is_symlink():
         return {}
-    if path.is_symlink() or not path.is_file():
-        raise ObconfigError(
-            ConfigIssue(1, 1, "", f"{path.name} must be a regular file")
-        )
+    raw = read_project_file(
+        project_root,
+        relative,
+        relative.as_posix(),
+        limit=1024 * 1024,
+        required_mode=0o600 if relative == LEGACY_ENV else None,
+    )
     result: dict[str, str] = {}
-    for raw_line in path.read_text(encoding="utf-8").splitlines():
+    for raw_line in raw.decode("utf-8").splitlines():
         line = raw_line.strip()
         if not line or line.startswith("#") or "=" not in line:
             continue
@@ -320,20 +330,33 @@ def migrate_legacy(project_root: Path, template: Path) -> list[str]:
     destination = project_root / CONFIG_NAME
     if destination.exists() or destination.is_symlink():
         raise ValueError("obconfig.yaml already exists; legacy values were not merged")
-    template_data, _ = parse_yaml(template.read_bytes())
+    preflight_config_creation(project_root)
+    local = prepare_local_state(project_root)
+    template_data, _ = parse_yaml(
+        read_project_file(
+            template.parent,
+            template.name,
+            "obconfig.yaml.template",
+            limit=1024 * 1024,
+        )
+    )
     target = copy.deepcopy(template_data)
     changed: list[str] = []
     legacy: Mapping[str, Any] = {}
     legacy_path = project_root / LEGACY_YAML
     if legacy_path.exists():
-        if legacy_path.is_symlink() or not legacy_path.is_file():
-            raise ValueError(f"{LEGACY_YAML} must be a regular file")
-        legacy = yaml.load(legacy_path.read_text(encoding="utf-8"), Loader=UniqueLoader)
+        legacy_raw = read_project_file(
+            project_root,
+            LEGACY_YAML,
+            LEGACY_YAML.as_posix(),
+            limit=1024 * 1024,
+        )
+        legacy = yaml.load(legacy_raw.decode("utf-8"), Loader=UniqueLoader)
         if not isinstance(legacy, Mapping):
             raise ValueError(f"{LEGACY_YAML} top level must be a mapping")
         changed.extend(_merge_retained(target, legacy, project_root))
 
-    env = _read_legacy_env(project_root / LEGACY_ENV)
+    env = _read_legacy_env(project_root, LEGACY_ENV)
     for name, destination_path in ENV_MAPPING.items():
         value = env.get(name)
         if not _supplied(value):
@@ -371,10 +394,9 @@ def migrate_legacy(project_root: Path, template: Path) -> list[str]:
                 "analysis_access.password_ref is unresolved; place the dummy password directly in local obconfig.yaml"
             )
 
-    # Validation is intentionally deferred until after the local file is edited when
-    # required application/surface fields were not present in legacy input.
     text = yaml.safe_dump(target, sort_keys=False, allow_unicode=True).encode()
-    atomic_write(destination, text, 0o600)
+    staged_data, staged_marks = parse_yaml(text)
+    validate_config(staged_data, staged_marks)
     changed_paths = sorted(set(changed))
     sources = [
         str(relative)
@@ -382,15 +404,48 @@ def migrate_legacy(project_root: Path, template: Path) -> list[str]:
         if (project_root / relative).exists()
         or (project_root / relative).is_symlink()
     ]
-    atomic_write_json(
-        project_root / ".obengineer/migration.json",
-        {
-            "schema_version": 1,
-            "sources_preserved": sources,
-            "changed_key_paths": changed_paths,
-        },
-        0o600,
+    migration_path = local / "migration.json"
+    previous_migration = (
+        read_project_file(
+            project_root,
+            Path(".obengineer/migration.json"),
+            "migration state",
+            required_mode=0o600,
+        )
+        if migration_path.exists()
+        else None
     )
+    config_written = False
+    config_identity: tuple[int, int] | None = None
+    try:
+        atomic_write(destination, text, 0o600, expect_absent=True)
+        config_written = True
+        written = destination.lstat()
+        config_identity = (written.st_dev, written.st_ino)
+        atomic_write_json(
+            migration_path,
+            {
+                "schema_version": 1,
+                "sources_preserved": sources,
+                "changed_key_paths": changed_paths,
+            },
+            0o600,
+        )
+    except BaseException:
+        if config_written:
+            secure_unlink(destination, expected_identity=config_identity)
+        elif destination.exists() or destination.is_symlink():
+            appeared = destination.lstat()
+            secure_unlink(
+                destination,
+                expected_identity=(appeared.st_dev, appeared.st_ino),
+                allow_symlink=True,
+            )
+        if previous_migration is None:
+            secure_unlink(migration_path)
+        else:
+            atomic_write(migration_path, previous_migration, 0o600)
+        raise
     return changed_paths
 
 
@@ -407,6 +462,7 @@ def main(
     argv: list[str] | None = None,
     *,
     direct_transport: Any | None = None,
+    safe_active_executor: Any | None = None,
 ) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--project-root", default=".")
@@ -421,9 +477,9 @@ def main(
     authorize_parser.add_argument("--answer", required=True)
     authorize_parser.add_argument("--command", required=True)
     authorize_parser.add_argument("--intended-version", required=True)
-    show_parser = sub.add_parser("show")
-    show_parser.add_argument("--command", required=True)
-    show_parser.add_argument("--intended-version", required=True)
+    claim_parser = sub.add_parser("claim")
+    claim_parser.add_argument("--command", required=True)
+    claim_parser.add_argument("--intended-version", required=True)
     consume_parser = sub.add_parser("consume")
     consume_parser.add_argument("--command", required=True)
     consume_parser.add_argument("--intended-version", required=True)
@@ -431,6 +487,11 @@ def main(
     direct_parser.add_argument(
         "--phase", required=True, choices=("analysis", "verification")
     )
+    direct_parser.add_argument("--command")
+    direct_parser.add_argument("--intended-version")
+    safe_active_parser = sub.add_parser("safe-active")
+    safe_active_parser.add_argument("--command", required=True)
+    safe_active_parser.add_argument("--intended-version", required=True)
     sub.add_parser("migrate-legacy")
     args = parser.parse_args(argv)
     root = _project(args.project_root)
@@ -474,7 +535,7 @@ def main(
             print("Safe repair complete. Changed key paths: " + ", ".join(changed))
             return 0
 
-        if args.operation == "direct-api":
+        if args.operation in {"direct-api", "safe-active"}:
             config_path = root / CONFIG_NAME
             if not config_path.exists() and not config_path.is_symlink():
                 data = {
@@ -489,6 +550,41 @@ def main(
                 }
             else:
                 data, _, _, _ = load_config(root, enforce_git=enforce_git)
+            if args.operation == "safe-active" or args.phase == "analysis":
+                if not args.command or not args.intended_version:
+                    raise ValueError(
+                        "analysis direct-api requires --command and --intended-version"
+                    )
+                validate_claim(
+                    root,
+                    command=args.command,
+                    intended_version=args.intended_version,
+                    enforce_git=enforce_git,
+                )
+            if args.operation == "safe-active":
+                if safe_active_executor is None:
+                    active_results = execute_safe_active(data)
+                else:
+                    active_results = execute_safe_active(
+                        data,
+                        executor=safe_active_executor,
+                        sleep=lambda _: None,
+                    )
+                validate_claim(
+                    root,
+                    command=args.command,
+                    intended_version=args.intended_version,
+                    enforce_git=enforce_git,
+                )
+                payload = Redactor(data).value(
+                    {
+                        "schema_version": 1,
+                        "phase": "analysis",
+                        "safe_active": active_results,
+                    }
+                )
+                print(json.dumps(payload, sort_keys=True, separators=(",", ":")))
+                return 0
             if direct_transport is None:
                 direct_results = collect_direct_evidence(data, phase=args.phase)
             else:
@@ -496,6 +592,13 @@ def main(
                     data,
                     phase=args.phase,
                     transport=direct_transport,
+                )
+            if args.phase == "analysis":
+                validate_claim(
+                    root,
+                    command=args.command,
+                    intended_version=args.intended_version,
+                    enforce_git=enforce_git,
                 )
             payload = Redactor(data).value(
                 {
@@ -536,17 +639,33 @@ def main(
             )
             print("Analysis authorized for the current configuration and artifact tree.")
             return 0
-        if args.operation == "show":
-            validate_authorization(
+        if args.operation == "claim":
+            state = claim_authorization(
                 root,
                 command=args.command,
                 intended_version=args.intended_version,
                 enforce_git=enforce_git,
             )
-            print("PASS — one-shot analysis authorization matches current inputs")
+            print(
+                json.dumps(
+                    Redactor(data).value(
+                        {
+                            "claimed": True,
+                            "command": state["command"],
+                            "intended_version": state["intended_version"],
+                            "artifact_tree_sha256": state[
+                                "artifact_tree_sha256"
+                            ],
+                            "artifact_delta": state["artifact_delta"],
+                        }
+                    ),
+                    sort_keys=True,
+                    separators=(",", ":"),
+                )
+            )
             return 0
         if args.operation == "consume":
-            consume_authorization(
+            consume_claim(
                 root,
                 command=args.command,
                 intended_version=args.intended_version,

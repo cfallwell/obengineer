@@ -1,114 +1,1012 @@
 {
-  "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://obengineer.dev/schemas/obconfig.schema.json",
-  "title": "obengineer local configuration v4",
   "type": "object",
   "required": [
-    "schema_version", "engagement", "initial_scope", "artifacts", "cloud_diagrams",
-    "surfaces", "security_assessment", "analysis_access", "splunk", "backends",
-    "tenancy", "standards", "constraints", "outcomes", "traffic_baseline",
-    "business_context", "public_evidence", "developer_tools"
+    "schema_version",
+    "engagement",
+    "initial_scope",
+    "artifacts",
+    "cloud_diagrams",
+    "surfaces",
+    "security_assessment",
+    "analysis_access",
+    "splunk",
+    "backends",
+    "tenancy",
+    "standards",
+    "constraints",
+    "outcomes",
+    "traffic_baseline",
+    "business_context",
+    "public_evidence",
+    "developer_tools",
+    "extensions"
   ],
   "properties": {
-    "schema_version": {"const": 4},
+    "schema_version": {
+      "const": 4
+    },
     "engagement": {
       "type": "object",
-      "required": ["application", "deployment_environment"],
+      "required": [
+        "application",
+        "customer",
+        "scope",
+        "date",
+        "document_version",
+        "deployment_environment"
+      ],
       "properties": {
-        "application": {"type": "string"},
-        "customer": {"type": "string"},
-        "scope": {"type": "string"},
-        "date": {"type": "string"},
-        "document_version": {"type": "integer", "minimum": 1},
-        "deployment_environment": {"type": "string", "minLength": 1}
-      }
+        "application": {
+          "type": "string",
+          "minLength": 1
+        },
+        "customer": {
+          "type": "string"
+        },
+        "scope": {
+          "type": "string"
+        },
+        "date": {
+          "type": "string"
+        },
+        "document_version": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "deployment_environment": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "additionalProperties": false
     },
-    "initial_scope": {"type": "object"},
+    "initial_scope": {
+      "type": "object",
+      "required": [
+        "authorized",
+        "repositories",
+        "parent_folders",
+        "branches"
+      ],
+      "properties": {
+        "authorized": {
+          "type": "string",
+          "enum": [
+            "unknown",
+            "full",
+            "repositories",
+            "parent_folders"
+          ]
+        },
+        "repositories": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "uniqueItems": false
+        },
+        "parent_folders": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "repository",
+              "path"
+            ],
+            "properties": {
+              "repository": {
+                "type": "string"
+              },
+              "path": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "branches": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "repository",
+              "branch"
+            ],
+            "properties": {
+              "repository": {
+                "type": "string"
+              },
+              "branch": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": false
+          }
+        }
+      },
+      "additionalProperties": false
+    },
     "artifacts": {
       "type": "object",
-      "required": ["directory"],
-      "properties": {"directory": {"type": "string", "minLength": 1}}
+      "required": [
+        "directory"
+      ],
+      "properties": {
+        "directory": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "additionalProperties": false
     },
-    "cloud_diagrams": {"type": "object"},
+    "cloud_diagrams": {
+      "type": "object",
+      "required": [
+        "generate",
+        "notes"
+      ],
+      "properties": {
+        "generate": {
+          "type": "boolean"
+        },
+        "notes": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
     "surfaces": {
       "type": "object",
-      "required": ["production_urls", "no_browser_reason"],
+      "required": [
+        "production_urls",
+        "no_browser_reason",
+        "host_and_remotes",
+        "edge_cdn"
+      ],
       "properties": {
-        "production_urls": {"type": "array", "items": {"type": "string"}},
-        "no_browser_reason": {"type": "string"}
-      }
+        "production_urls": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "uniqueItems": false
+        },
+        "no_browser_reason": {
+          "type": "string"
+        },
+        "host_and_remotes": {
+          "type": "string"
+        },
+        "edge_cdn": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
     },
     "security_assessment": {
       "type": "object",
-      "required": ["mode", "authorized_origins"],
+      "required": [
+        "mode",
+        "authorized_origins"
+      ],
       "properties": {
-        "mode": {"enum": ["passive", "safe-active", "none"]},
-        "authorized_origins": {"type": "array", "uniqueItems": true, "items": {"type": "string"}}
-      }
+        "mode": {
+          "type": "string",
+          "enum": [
+            "passive",
+            "safe-active",
+            "none"
+          ]
+        },
+        "authorized_origins": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "uniqueItems": true
+        }
+      },
+      "additionalProperties": false
     },
     "analysis_access": {
       "type": "object",
-      "required": ["dummy_login"],
+      "required": [
+        "dummy_login"
+      ],
       "properties": {
         "dummy_login": {
           "type": "object",
-          "required": ["login_id", "password"],
+          "required": [
+            "login_id",
+            "password"
+          ],
           "properties": {
-            "login_id": {"type": "string", "x-obengineer-sensitive": true},
-            "password": {"type": "string", "x-obengineer-secret": true}
-          }
+            "login_id": {
+              "type": "string",
+              "x-obengineer-sensitive": true
+            },
+            "password": {
+              "type": "string",
+              "x-obengineer-secret": true
+            }
+          },
+          "additionalProperties": false
         }
-      }
+      },
+      "additionalProperties": false
     },
     "splunk": {
       "type": "object",
-      "required": ["observability", "platform"],
+      "required": [
+        "observability",
+        "platform"
+      ],
       "properties": {
         "observability": {
           "type": "object",
-          "required": ["realm", "read_token"],
+          "required": [
+            "realm",
+            "read_token"
+          ],
           "properties": {
-            "realm": {"type": "string"},
-            "read_token": {"type": "string", "x-obengineer-secret": true}
-          }
+            "realm": {
+              "type": "string"
+            },
+            "read_token": {
+              "type": "string",
+              "x-obengineer-secret": true
+            }
+          },
+          "additionalProperties": false
         },
         "platform": {
           "type": "object",
-          "required": ["host", "read_token", "index_allowlist"],
+          "required": [
+            "host",
+            "read_token",
+            "index_allowlist"
+          ],
           "properties": {
-            "host": {"type": "string"},
-            "read_token": {"type": "string", "x-obengineer-secret": true},
+            "host": {
+              "type": "string"
+            },
+            "read_token": {
+              "type": "string",
+              "x-obengineer-secret": true
+            },
             "index_allowlist": {
-              "type": "array", "uniqueItems": true, "items": {"type": "string", "minLength": 1}
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "uniqueItems": true
             }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    },
+    "backends": {
+      "type": "object",
+      "required": [
+        "languages",
+        "deploy_targets",
+        "buses",
+        "cloud_accounts",
+        "gateway"
+      ],
+      "properties": {
+        "languages": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "uniqueItems": false
+        },
+        "deploy_targets": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "uniqueItems": false
+        },
+        "buses": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "uniqueItems": false
+        },
+        "cloud_accounts": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "uniqueItems": false
+        },
+        "gateway": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
+    "tenancy": {
+      "type": "object",
+      "required": [
+        "o11y_org_id",
+        "thousandeyes_account_group",
+        "tokens_held_by"
+      ],
+      "properties": {
+        "o11y_org_id": {
+          "type": "string"
+        },
+        "thousandeyes_account_group": {
+          "type": "string"
+        },
+        "tokens_held_by": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
+    "standards": {
+      "type": "object",
+      "required": [
+        "percentile",
+        "workflow_naming",
+        "baggage_header_budget_bytes",
+        "baggage_value_ceiling_bytes",
+        "unknown_dimension_threshold_pct"
+      ],
+      "properties": {
+        "percentile": {
+          "type": "string"
+        },
+        "workflow_naming": {
+          "type": "string"
+        },
+        "baggage_header_budget_bytes": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "baggage_value_ceiling_bytes": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "unknown_dimension_threshold_pct": {
+          "type": "integer"
+        }
+      },
+      "additionalProperties": false
+    },
+    "constraints": {
+      "type": "object",
+      "required": [
+        "privacy_regimes",
+        "data_residency",
+        "consent_platform",
+        "pii_deny_list_additions",
+        "competing_eum_agents",
+        "change_windows",
+        "who_deploys_front_end",
+        "who_deploys_collector"
+      ],
+      "properties": {
+        "privacy_regimes": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "uniqueItems": false
+        },
+        "data_residency": {
+          "type": "string"
+        },
+        "consent_platform": {
+          "type": "string"
+        },
+        "pii_deny_list_additions": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "uniqueItems": false
+        },
+        "competing_eum_agents": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "uniqueItems": false
+        },
+        "change_windows": {
+          "type": "string"
+        },
+        "who_deploys_front_end": {
+          "type": "string"
+        },
+        "who_deploys_collector": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
+    "outcomes": {
+      "type": "object",
+      "required": [
+        "first_journey",
+        "audiences"
+      ],
+      "properties": {
+        "first_journey": {
+          "type": "string"
+        },
+        "audiences": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "uniqueItems": true
+        }
+      },
+      "additionalProperties": false
+    },
+    "traffic_baseline": {
+      "type": "object",
+      "required": [
+        "rum",
+        "apm",
+        "logs",
+        "infra_integrations"
+      ],
+      "properties": {
+        "rum": {
+          "type": "object",
+          "required": [
+            "sessions_per_day_avg",
+            "sessions_per_day_peak",
+            "page_views_per_session"
+          ],
+          "properties": {
+            "sessions_per_day_avg": {
+              "oneOf": [
+                {
+                  "type": "number",
+                  "minimum": 0
+                },
+                {
+                  "const": "unknown"
+                }
+              ]
+            },
+            "sessions_per_day_peak": {
+              "oneOf": [
+                {
+                  "type": "number",
+                  "minimum": 0
+                },
+                {
+                  "const": "unknown"
+                }
+              ]
+            },
+            "page_views_per_session": {
+              "oneOf": [
+                {
+                  "type": "number",
+                  "minimum": 0
+                },
+                {
+                  "const": "unknown"
+                }
+              ]
+            }
+          },
+          "additionalProperties": false
+        },
+        "apm": {
+          "type": "object",
+          "required": [
+            "requests_per_minute_avg",
+            "requests_per_minute_peak",
+            "spans_per_trace"
+          ],
+          "properties": {
+            "requests_per_minute_avg": {
+              "oneOf": [
+                {
+                  "type": "number",
+                  "minimum": 0
+                },
+                {
+                  "const": "unknown"
+                }
+              ]
+            },
+            "requests_per_minute_peak": {
+              "oneOf": [
+                {
+                  "type": "number",
+                  "minimum": 0
+                },
+                {
+                  "const": "unknown"
+                }
+              ]
+            },
+            "spans_per_trace": {
+              "oneOf": [
+                {
+                  "type": "number",
+                  "minimum": 0
+                },
+                {
+                  "const": "unknown"
+                }
+              ]
+            }
+          },
+          "additionalProperties": false
+        },
+        "logs": {
+          "type": "object",
+          "required": [
+            "gb_per_hour_avg",
+            "gb_per_hour_peak"
+          ],
+          "properties": {
+            "gb_per_hour_avg": {
+              "oneOf": [
+                {
+                  "type": "number",
+                  "minimum": 0
+                },
+                {
+                  "const": "unknown"
+                }
+              ]
+            },
+            "gb_per_hour_peak": {
+              "oneOf": [
+                {
+                  "type": "number",
+                  "minimum": 0
+                },
+                {
+                  "const": "unknown"
+                }
+              ]
+            }
+          },
+          "additionalProperties": false
+        },
+        "infra_integrations": {
+          "type": "array",
+          "items": {}
+        }
+      },
+      "additionalProperties": false
+    },
+    "business_context": {
+      "type": "object",
+      "required": [
+        "incident_experience",
+        "operating_cost",
+        "revenue_context",
+        "business_information"
+      ],
+      "properties": {
+        "incident_experience": {
+          "type": "object",
+          "required": [
+            "mttd_minutes",
+            "mtta_minutes",
+            "mttr_minutes",
+            "mtti_minutes",
+            "incidents_per_month",
+            "sev1_per_quarter",
+            "responders_per_incident",
+            "war_room_hours_per_month",
+            "pct_incidents_found_by_customers"
+          ],
+          "properties": {
+            "mttd_minutes": {
+              "oneOf": [
+                {
+                  "type": "number",
+                  "minimum": 0
+                },
+                {
+                  "const": "unknown"
+                }
+              ]
+            },
+            "mtta_minutes": {
+              "oneOf": [
+                {
+                  "type": "number",
+                  "minimum": 0
+                },
+                {
+                  "const": "unknown"
+                }
+              ]
+            },
+            "mttr_minutes": {
+              "oneOf": [
+                {
+                  "type": "number",
+                  "minimum": 0
+                },
+                {
+                  "const": "unknown"
+                }
+              ]
+            },
+            "mtti_minutes": {
+              "oneOf": [
+                {
+                  "type": "number",
+                  "minimum": 0
+                },
+                {
+                  "const": "unknown"
+                }
+              ]
+            },
+            "incidents_per_month": {
+              "oneOf": [
+                {
+                  "type": "number",
+                  "minimum": 0
+                },
+                {
+                  "const": "unknown"
+                }
+              ]
+            },
+            "sev1_per_quarter": {
+              "oneOf": [
+                {
+                  "type": "number",
+                  "minimum": 0
+                },
+                {
+                  "const": "unknown"
+                }
+              ]
+            },
+            "responders_per_incident": {
+              "oneOf": [
+                {
+                  "type": "number",
+                  "minimum": 0
+                },
+                {
+                  "const": "unknown"
+                }
+              ]
+            },
+            "war_room_hours_per_month": {
+              "oneOf": [
+                {
+                  "type": "number",
+                  "minimum": 0
+                },
+                {
+                  "const": "unknown"
+                }
+              ]
+            },
+            "pct_incidents_found_by_customers": {
+              "oneOf": [
+                {
+                  "type": "number",
+                  "minimum": 0
+                },
+                {
+                  "const": "unknown"
+                }
+              ]
+            }
+          },
+          "additionalProperties": false
+        },
+        "operating_cost": {
+          "type": "object",
+          "required": [
+            "observability_tools_in_use",
+            "annual_tooling_spend",
+            "duplicate_agents_on_page",
+            "engineering_hours_per_month_on_triage",
+            "fully_loaded_hourly_cost",
+            "opex_challenges"
+          ],
+          "properties": {
+            "observability_tools_in_use": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "uniqueItems": false
+            },
+            "annual_tooling_spend": {
+              "oneOf": [
+                {
+                  "type": "number",
+                  "minimum": 0
+                },
+                {
+                  "const": "unknown"
+                }
+              ]
+            },
+            "duplicate_agents_on_page": {
+              "oneOf": [
+                {
+                  "type": "number",
+                  "minimum": 0
+                },
+                {
+                  "const": "unknown"
+                }
+              ]
+            },
+            "engineering_hours_per_month_on_triage": {
+              "oneOf": [
+                {
+                  "type": "number",
+                  "minimum": 0
+                },
+                {
+                  "const": "unknown"
+                }
+              ]
+            },
+            "fully_loaded_hourly_cost": {
+              "oneOf": [
+                {
+                  "type": "number",
+                  "minimum": 0
+                },
+                {
+                  "const": "unknown"
+                }
+              ]
+            },
+            "opex_challenges": {
+              "type": "string"
+            }
+          },
+          "additionalProperties": false
+        },
+        "revenue_context": {
+          "type": "object",
+          "required": [
+            "revenue_per_hour_online",
+            "orders_per_day",
+            "average_order_value",
+            "conversion_rate_pct",
+            "cart_abandonment_pct",
+            "peak_events",
+            "revenue_challenges"
+          ],
+          "properties": {
+            "revenue_per_hour_online": {
+              "oneOf": [
+                {
+                  "type": "number",
+                  "minimum": 0
+                },
+                {
+                  "const": "unknown"
+                }
+              ]
+            },
+            "orders_per_day": {
+              "oneOf": [
+                {
+                  "type": "number",
+                  "minimum": 0
+                },
+                {
+                  "const": "unknown"
+                }
+              ]
+            },
+            "average_order_value": {
+              "oneOf": [
+                {
+                  "type": "number",
+                  "minimum": 0
+                },
+                {
+                  "const": "unknown"
+                }
+              ]
+            },
+            "conversion_rate_pct": {
+              "oneOf": [
+                {
+                  "type": "number",
+                  "minimum": 0
+                },
+                {
+                  "const": "unknown"
+                }
+              ]
+            },
+            "cart_abandonment_pct": {
+              "oneOf": [
+                {
+                  "type": "number",
+                  "minimum": 0
+                },
+                {
+                  "const": "unknown"
+                }
+              ]
+            },
+            "peak_events": {
+              "type": "array",
+              "items": {}
+            },
+            "revenue_challenges": {
+              "type": "string"
+            }
+          },
+          "additionalProperties": false
+        },
+        "business_information": {
+          "type": "object",
+          "required": [
+            "business_model",
+            "seasonality",
+            "growth_or_margin_pressure",
+            "regulatory_exposure",
+            "strategic_initiatives"
+          ],
+          "properties": {
+            "business_model": {
+              "type": "string"
+            },
+            "seasonality": {
+              "type": "string"
+            },
+            "growth_or_margin_pressure": {
+              "type": "string"
+            },
+            "regulatory_exposure": {
+              "type": "string"
+            },
+            "strategic_initiatives": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "uniqueItems": false
+            }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    },
+    "public_evidence": {
+      "type": "object",
+      "required": [
+        "allowed",
+        "window_months",
+        "brand_terms",
+        "status_page_urls",
+        "exclude_domains",
+        "competitors"
+      ],
+      "properties": {
+        "allowed": {
+          "type": "boolean"
+        },
+        "window_months": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "brand_terms": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "uniqueItems": false
+        },
+        "status_page_urls": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "uniqueItems": false
+        },
+        "exclude_domains": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "uniqueItems": false
+        },
+        "competitors": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "uniqueItems": false
+        }
+      },
+      "additionalProperties": false
+    },
+    "developer_tools": {
+      "type": "object",
+      "required": [
+        "named",
+        "matched"
+      ],
+      "properties": {
+        "named": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "uniqueItems": false
+        },
+        "matched": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "tool",
+              "via",
+              "key"
+            ],
+            "properties": {
+              "tool": {
+                "type": "string"
+              },
+              "via": {
+                "type": "string"
+              },
+              "key": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": false
           }
         }
-      }
+      },
+      "additionalProperties": false
     },
-    "backends": {"type": "object"},
-    "tenancy": {"type": "object"},
-    "standards": {"type": "object"},
-    "constraints": {"type": "object"},
-    "outcomes": {"type": "object"},
-    "traffic_baseline": {"type": "object"},
-    "business_context": {"type": "object"},
-    "public_evidence": {"type": "object"},
-    "developer_tools": {"type": "object"},
-    "extensions": {"type": "object"}
+    "extensions": {
+      "type": "object",
+      "required": [],
+      "properties": {},
+      "additionalProperties": true
+    }
   },
-  "additionalProperties": true,
+  "additionalProperties": false,
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://obengineer.dev/schemas/obconfig.schema.json",
+  "title": "obengineer local configuration v4",
   "x-obengineer-secret-paths": [
+    "analysis_access.dummy_login.password",
     "splunk.observability.read_token",
-    "splunk.platform.read_token",
-    "analysis_access.dummy_login.password"
+    "splunk.platform.read_token"
   ],
   "x-obengineer-retired-keys": {
     "entitlement": "remove entitlement input; analysis measures sf.org usage and enforced system limits",
     "tenancy.environments": "replace with singular engagement.deployment_environment scalar",
-    "outcomes.known_pain": "remove retired pain commentary; use outcomes.first_journey or evidence ranking",
+    "outcomes.known_pain": "remove retired pain commentary",
     "business_context.commentary": "remove retired what-hurts commentary",
     "analysis_access.token_ref": "replace with splunk.platform.read_token",
     "analysis_access.api_key_ref": "replace with splunk.observability.read_token",
-    "analysis_access.password_ref": "replace with analysis_access.dummy_login.password in local ignored obconfig.yaml"
-  }
+    "analysis_access.password_ref": "replace with analysis_access.dummy_login.password"
+  },
+  "x-obengineer-runtime-semantics": "The bundled validator enforces paired credentials, exact HTTPS origins, URL/index/realm restrictions, and conditional fields after this schema."
 }

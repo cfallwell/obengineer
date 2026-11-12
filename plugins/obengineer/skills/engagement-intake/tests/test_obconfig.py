@@ -6,6 +6,7 @@ import secrets
 import stat
 import subprocess
 import sys
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 import pytest
@@ -58,6 +59,11 @@ def write_data(root: Path, data: dict) -> None:
     path.chmod(0o600)
 
 
+def prepare_config_creation(root: Path) -> None:
+    (root / ".gitignore").write_text("/obconfig.yaml\n/.obengineer/\n")
+    subprocess.run(["git", "init", "-q"], cwd=root, check=True)
+
+
 def test_template_has_schema_v4_and_complete_secret_registry():
     data, marks = obconfig.parse_yaml(TEMPLATE.read_bytes())
     assert data["schema_version"] == 4
@@ -69,6 +75,20 @@ def test_template_has_schema_v4_and_complete_secret_registry():
     assert "entitlement" not in data
     assert "deployment_environment" in data["engagement"]
     assert marks["engagement.deployment_environment"][0] > 1
+    lines = TEMPLATE.read_text().splitlines()
+
+    def leaf_paths(value, prefix=""):
+        if isinstance(value, dict) and value:
+            for key, item in value.items():
+                child = f"{prefix}.{key}" if prefix else key
+                yield from leaf_paths(item, child)
+        else:
+            yield prefix
+
+    for path in leaf_paths(data):
+        line = lines[marks[path][0] - 1]
+        assert "#" in line, f"{path} lacks an inline field contract comment"
+        assert ";" in line.split("#", 1)[1], f"{path} comment lacks contract clauses"
 
 
 def test_duplicate_key_reports_exact_redacted_location(tmp_path):
@@ -229,7 +249,7 @@ def test_tree_hash_is_metadata_independent_and_delta_is_exact(tmp_path):
     (second / "artifacts/z.txt").write_bytes(b"z")
     os.chmod(second / "artifacts/z.txt", 0o600)
     os.utime(second / "artifacts/a/x.txt", (1, 1))
-    left = obconfig.hash_artifact_tree(first, "artifacts")
+    left = obconfig.hash_artifact_tree(first, "artifacts", write_manifest=True)
     right = obconfig.hash_artifact_tree(second, "artifacts")
     assert left["tree_sha256"] == right["tree_sha256"]
     (first / "artifacts/a/x.txt").write_bytes(b"changed")
@@ -275,32 +295,114 @@ def test_tree_rejects_file_substitution_race_without_manifest(tmp_path, monkeypa
     assert external.read_text() == "must not be read"
 
 
+def test_tree_rejects_recursive_directory_mutation(tmp_path, monkeypatch):
+    root = project(tmp_path)
+    nested = root / "artifacts/nested"
+    nested.mkdir()
+    (nested / "one.txt").write_text("one")
+    original_listdir = os.listdir
+    calls = 0
+
+    def racing_listdir(target):
+        nonlocal calls
+        result = original_listdir(target)
+        if isinstance(target, int):
+            calls += 1
+        if calls == 2:
+            (nested / "late.txt").write_text("late")
+            current = nested.stat()
+            os.utime(
+                nested,
+                ns=(current.st_atime_ns, current.st_mtime_ns + 1_000_000_000),
+            )
+        return result
+
+    monkeypatch.setattr(os, "listdir", racing_listdir)
+    with pytest.raises(obconfig.ObconfigError, match="directory changed"):
+        obconfig.hash_artifact_tree(root, "artifacts")
+
+
 def test_authorization_is_one_shot_and_bound_to_both_digests(tmp_path):
     root = project(tmp_path)
     (root / "artifacts/input.txt").write_text("one")
     obconfig.authorize(
         root, command="ob-start", intended_version="V1", enforce_git=False
     )
-    obconfig.validate_authorization(
+    claim = obconfig.claim_authorization(
         root, command="ob-start", intended_version="V1", enforce_git=False
     )
-    (root / "artifacts/input.txt").write_text("two")
-    with pytest.raises(obconfig.ObconfigError, match="no longer matches"):
-        obconfig.validate_authorization(
+    assert claim["artifact_delta"]["added"] == ["input.txt"]
+    with pytest.raises(obconfig.ObconfigError):
+        obconfig.claim_authorization(
             root, command="ob-start", intended_version="V1", enforce_git=False
         )
+    (root / "artifacts/input.txt").write_text("two")
+    with pytest.raises(obconfig.ObconfigError, match="no longer matches"):
+        obconfig.validate_claim(
+            root, command="ob-start", intended_version="V1", enforce_git=False
+        )
+    with pytest.raises(obconfig.ObconfigError, match="no longer matches"):
+        obconfig.consume_claim(
+            root, command="ob-start", intended_version="V1", enforce_git=False
+        )
+
+
+def test_concurrent_claim_has_exactly_one_winner(tmp_path):
+    root = project(tmp_path)
+    (root / "artifacts/input.txt").write_text("one")
+    obconfig.authorize(
+        root, command="ob-start", intended_version="V1", enforce_git=False
+    )
+
+    def attempt():
+        try:
+            obconfig.claim_authorization(
+                root, command="ob-start", intended_version="V1", enforce_git=False
+            )
+            return "claimed"
+        except obconfig.ObconfigError:
+            return "rejected"
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        outcomes = list(pool.map(lambda _: attempt(), range(2)))
+
+    assert sorted(outcomes) == ["claimed", "rejected"]
     assert not (root / ".obengineer/authorization.json").exists()
+    assert (root / ".obengineer/analysis-claim.json").is_file()
+
+
+def test_baseline_updates_only_after_successful_claim_consume(tmp_path):
+    root = project(tmp_path)
+    artifact = root / "artifacts/input.txt"
+    artifact.write_text("one")
+
+    first = obconfig.hash_artifact_tree(root, "artifacts")
+    assert first["added"] == ["input.txt"]
+    retry = obconfig.hash_artifact_tree(root, "artifacts")
+    assert retry["added"] == ["input.txt"]
+    assert not (root / ".obengineer/artifact-manifest.json").exists()
 
     obconfig.authorize(
         root, command="ob-start", intended_version="V1", enforce_git=False
     )
-    data = load_data(root)
-    data["engagement"]["scope"] = "changed"
-    write_data(root, data)
-    with pytest.raises(obconfig.ObconfigError, match="no longer matches"):
-        obconfig.consume_authorization(
-            root, command="ob-start", intended_version="V1", enforce_git=False
-        )
+    claim = obconfig.claim_authorization(
+        root, command="ob-start", intended_version="V1", enforce_git=False
+    )
+    assert claim["artifact_delta"]["added"] == ["input.txt"]
+    obconfig.consume_claim(
+        root, command="ob-start", intended_version="V1", enforce_git=False
+    )
+
+    unchanged = obconfig.hash_artifact_tree(root, "artifacts")
+    assert unchanged["added"] == []
+    artifact.write_text("two")
+    (root / "artifacts/new.txt").write_text("new")
+    delta = obconfig.hash_artifact_tree(root, "artifacts")
+    assert delta["changed"] == ["input.txt"]
+    assert delta["added"] == ["new.txt"]
+    artifact.unlink()
+    deletion = obconfig.hash_artifact_tree(root, "artifacts")
+    assert deletion["deleted"] == ["input.txt"]
 
 
 def test_authorization_state_symlink_substitution_is_rejected(tmp_path):
@@ -321,11 +423,80 @@ def test_authorization_state_symlink_substitution_is_rejected(tmp_path):
     assert external.read_text() == "{}"
 
 
+def test_local_claim_state_requires_0600(tmp_path):
+    root = project(tmp_path)
+    obconfig.authorize(
+        root, command="ob-start", intended_version="V1", enforce_git=False
+    )
+    state = root / ".obengineer/authorization.json"
+    assert stat.S_IMODE(state.stat().st_mode) == 0o600
+    state.chmod(0o644)
+    with pytest.raises(obconfig.ObconfigError, match="0600"):
+        obconfig.claim_authorization(
+            root, command="ob-start", intended_version="V1", enforce_git=False
+        )
+
+
+def test_schema_contract_rejects_every_removed_template_leaf(tmp_path):
+    root = project(tmp_path)
+    valid = load_data(root)
+
+    def leaves(value, prefix=()):
+        if isinstance(value, dict) and value:
+            for key, item in value.items():
+                yield from leaves(item, (*prefix, key))
+        else:
+            yield prefix
+
+    for path in leaves(valid):
+        mutated = yaml.safe_load(yaml.safe_dump(valid))
+        target = mutated
+        for key in path[:-1]:
+            target = target[key]
+        del target[path[-1]]
+        write_data(root, mutated)
+        with pytest.raises(obconfig.ObconfigError):
+            obconfig.load_config(root, enforce_git=False)
+
+
+def test_schema_contract_rejects_unknown_nested_key_at_mark(tmp_path):
+    root = project(tmp_path)
+    data = load_data(root)
+    data["splunk"]["observability"]["retired_nested"] = "invalid"
+    write_data(root, data)
+    with pytest.raises(obconfig.ObconfigError) as raised:
+        obconfig.load_config(root, enforce_git=False)
+    assert raised.value.issue.path == "splunk.observability.retired_nested"
+    assert raised.value.issue.line > 1
+
+
+def test_safe_active_origin_ceiling_fails_at_field_mark(tmp_path):
+    root = project(tmp_path)
+    data = load_data(root)
+    data["security_assessment"] = {
+        "mode": "safe-active",
+        "authorized_origins": [
+            f"https://host-{index}.example.com" for index in range(51)
+        ],
+    }
+    write_data(root, data)
+    with pytest.raises(obconfig.ObconfigError) as raised:
+        obconfig.load_config(root, enforce_git=False)
+    assert raised.value.issue.path == "security_assessment.authorized_origins"
+    assert raised.value.issue.line > 1
+    assert "ceiling" in raised.value.issue.reason
+
+
 def test_unknown_extensions_and_comments_survive_mode_repair(tmp_path):
     root = project(tmp_path)
     config = root / "obconfig.yaml"
-    marker = "\nextensions:\n  # preserve this comment\n  custom_vendor:\n    opaque: value\n"
-    config.write_text(config.read_text() + marker)
+    marker = "extensions:\n  # preserve this comment\n  custom_vendor:\n    opaque: value\n"
+    config.write_text(
+        config.read_text().replace(
+            "extensions: {}  # mapping; required namespace, default empty; never place credentials here\n",
+            marker,
+        )
+    )
     config.chmod(0o644)
     obconfig.repair(root)
     assert marker in config.read_text()
@@ -379,6 +550,7 @@ def test_safe_active_rejects_malformed_origins_at_item_line(tmp_path, origin):
 
 
 def test_legacy_yaml_and_env_migrate_with_precedence_and_preservation(tmp_path):
+    prepare_config_creation(tmp_path)
     artifact = tmp_path / "artifacts"
     artifact.mkdir()
     legacy_path = tmp_path / "docs/observability/engagement-inputs.yaml"
@@ -424,6 +596,7 @@ def test_legacy_yaml_and_env_migrate_with_precedence_and_preservation(tmp_path):
         )
         + "\n"
     )
+    legacy_env.chmod(0o600)
 
     changed = manage_obconfig.migrate_legacy(tmp_path, TEMPLATE)
 
@@ -453,6 +626,7 @@ def test_legacy_yaml_and_env_migrate_with_precedence_and_preservation(tmp_path):
 
 
 def test_legacy_migration_blocks_unresolved_plural_and_redacted_conflict(tmp_path):
+    prepare_config_creation(tmp_path)
     legacy_path = tmp_path / "docs/observability/engagement-inputs.yaml"
     legacy_path.parent.mkdir(parents=True)
     legacy_path.write_text(
@@ -496,9 +670,120 @@ def test_legacy_migration_blocks_unresolved_plural_and_redacted_conflict(tmp_pat
     (tmp_path / ".env").write_text(
         f"SPLUNK_REALM=us1\nSPLUNK_ACCESS_TOKEN={second}\n"
     )
+    (tmp_path / ".env").chmod(0o600)
     with pytest.raises(ValueError) as raised:
         manage_obconfig.migrate_legacy(tmp_path, TEMPLATE)
     message = str(raised.value)
     assert message == "redacted conflict for splunk.observability.read_token"
     assert first not in message and second not in message
     assert not (tmp_path / "obconfig.yaml").exists()
+
+
+def test_legacy_migration_rolls_back_config_and_state_on_commit_failure(
+    tmp_path, monkeypatch
+):
+    prepare_config_creation(tmp_path)
+    legacy = tmp_path / "docs/observability/engagement-inputs.yaml"
+    legacy.parent.mkdir(parents=True)
+    canary = secrets.token_urlsafe(33)
+    legacy.write_text(
+        yaml.safe_dump(
+            {
+                "schema_version": 3,
+                "engagement": {"application": "rollback-fixture"},
+                "artifacts": {
+                    "location": "artifacts",
+                    "front_end_scan_notes": "no browser: migration fixture",
+                },
+                "splunk": {
+                    "observability": {"realm": "us1", "read_token": canary}
+                },
+            }
+        )
+    )
+    (tmp_path / "artifacts").mkdir()
+
+    def fail_state(*args, **kwargs):
+        raise OSError("injected state commit failure")
+
+    monkeypatch.setattr(manage_obconfig, "atomic_write_json", fail_state)
+    with pytest.raises(OSError, match="injected"):
+        manage_obconfig.migrate_legacy(tmp_path, TEMPLATE)
+    assert not (tmp_path / "obconfig.yaml").exists()
+    assert not (tmp_path / ".obengineer/migration.json").exists()
+    assert canary not in repr(list((tmp_path / ".obengineer").glob("*")))
+
+
+def test_init_and_migration_reject_local_state_symlink_before_secrets(tmp_path):
+    prepare_config_creation(tmp_path)
+    external = tmp_path / "external-state"
+    external.mkdir()
+    (tmp_path / ".obengineer").symlink_to(external, target_is_directory=True)
+    with pytest.raises(obconfig.ObconfigError, match="must not be a symlink"):
+        obconfig.initialize(tmp_path, TEMPLATE)
+    assert not (tmp_path / "obconfig.yaml").exists()
+
+    canary = secrets.token_urlsafe(33)
+    legacy = tmp_path / ".env"
+    legacy.write_text(f"SPLUNK_ACCESS_TOKEN={canary}\n")
+    legacy.chmod(0o600)
+    with pytest.raises(obconfig.ObconfigError, match="must not be a symlink"):
+        manage_obconfig.migrate_legacy(tmp_path, TEMPLATE)
+    assert not (tmp_path / "obconfig.yaml").exists()
+    assert list(external.iterdir()) == []
+
+
+def test_init_refuses_config_symlink_substitution_without_writing_secret(
+    tmp_path, monkeypatch
+):
+    prepare_config_creation(tmp_path)
+    external = tmp_path / "external-config"
+    external.write_text("unchanged")
+    original = obconfig.atomic_write
+
+    def substitute(path, data, mode=0o600, **kwargs):
+        (tmp_path / "obconfig.yaml").symlink_to(external)
+        return original(path, data, mode, **kwargs)
+
+    monkeypatch.setattr(obconfig, "atomic_write", substitute)
+    with pytest.raises(obconfig.ObconfigError, match="symlink"):
+        obconfig.initialize(tmp_path, TEMPLATE)
+    assert external.read_text() == "unchanged"
+    assert not (tmp_path / "obconfig.yaml").exists()
+    assert not (tmp_path / "obconfig.yaml").is_symlink()
+
+
+def test_migration_rolls_back_config_symlink_substitution(
+    tmp_path, monkeypatch
+):
+    prepare_config_creation(tmp_path)
+    (tmp_path / "artifacts").mkdir()
+    legacy = tmp_path / "docs/observability/engagement-inputs.yaml"
+    legacy.parent.mkdir(parents=True)
+    legacy.write_text(
+        yaml.safe_dump(
+            {
+                "schema_version": 3,
+                "engagement": {"application": "swap-fixture"},
+                "artifacts": {
+                    "location": "artifacts",
+                    "front_end_scan_notes": "no browser: swap fixture",
+                },
+            }
+        )
+    )
+    external = tmp_path / "external-config"
+    external.write_text("unchanged")
+    original = manage_obconfig.atomic_write
+
+    def substitute(path, data, mode=0o600, **kwargs):
+        if path.name == "obconfig.yaml":
+            path.symlink_to(external)
+        return original(path, data, mode, **kwargs)
+
+    monkeypatch.setattr(manage_obconfig, "atomic_write", substitute)
+    with pytest.raises(obconfig.ObconfigError, match="symlink"):
+        manage_obconfig.migrate_legacy(tmp_path, TEMPLATE)
+    assert external.read_text() == "unchanged"
+    assert not (tmp_path / "obconfig.yaml").exists()
+    assert not (tmp_path / ".obengineer/migration.json").exists()

@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import copy
+import contextlib
 import hashlib
 import ipaddress
 import json
@@ -13,7 +14,6 @@ import re
 import stat
 import struct
 import subprocess
-import tempfile
 import time
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
@@ -273,6 +273,75 @@ def _issue(
     return ConfigIssue(line, column, path, reason)
 
 
+def _schema_accepts_type(value: Any, expected: str) -> bool:
+    return {
+        "object": isinstance(value, Mapping),
+        "array": isinstance(value, list),
+        "string": isinstance(value, str),
+        "boolean": isinstance(value, bool),
+        "integer": isinstance(value, int) and not isinstance(value, bool),
+        "number": isinstance(value, (int, float)) and not isinstance(value, bool),
+    }.get(expected, False)
+
+
+def _validate_schema_node(
+    value: Any,
+    schema: Mapping[str, Any],
+    marks: Mapping[str, tuple[int, int]],
+    path: str,
+) -> None:
+    if "oneOf" in schema:
+        matches = 0
+        for candidate in schema["oneOf"]:
+            try:
+                _validate_schema_node(value, candidate, marks, path)
+                matches += 1
+            except ObconfigError:
+                pass
+        if matches != 1:
+            raise ObconfigError(_issue(marks, path, "does not match the field contract"))
+        return
+    if "const" in schema and value != schema["const"]:
+        raise ObconfigError(_issue(marks, path, "must equal the fixed schema value"))
+    expected = schema.get("type")
+    if expected and not _schema_accepts_type(value, expected):
+        raise ObconfigError(_issue(marks, path, f"must be {expected}"))
+    if "enum" in schema and value not in schema["enum"]:
+        raise ObconfigError(_issue(marks, path, "must be one of the allowed values"))
+    if isinstance(value, str) and len(value) < schema.get("minLength", 0):
+        raise ObconfigError(_issue(marks, path, "must not be empty"))
+    if (
+        isinstance(value, (int, float))
+        and not isinstance(value, bool)
+        and "minimum" in schema
+        and value < schema["minimum"]
+    ):
+        raise ObconfigError(
+            _issue(marks, path, f"must be at least {schema['minimum']}")
+        )
+    if isinstance(value, Mapping):
+        properties = schema.get("properties", {})
+        for required in schema.get("required", []):
+            if required not in value:
+                missing = f"{path}.{required}" if path else required
+                raise ObconfigError(_issue(marks, path, f"missing required key {missing}"))
+        if schema.get("additionalProperties") is False:
+            for key in value:
+                if key not in properties:
+                    unknown = f"{path}.{key}" if path else str(key)
+                    raise ObconfigError(_issue(marks, unknown, "unknown key is not allowed"))
+        for key, item in value.items():
+            if key in properties:
+                child = f"{path}.{key}" if path else str(key)
+                _validate_schema_node(item, properties[key], marks, child)
+    if isinstance(value, list):
+        item_schema = schema.get("items", {})
+        for index, item in enumerate(value):
+            _validate_schema_node(item, item_schema, marks, f"{path}[{index}]")
+        if schema.get("uniqueItems") and len({repr(item) for item in value}) != len(value):
+            raise ObconfigError(_issue(marks, path, "must contain unique values"))
+
+
 def _mapping(
     data: Mapping[str, Any],
     marks: Mapping[str, tuple[int, int]],
@@ -528,6 +597,14 @@ def validate_config(
             _issue(marks, "security_assessment.mode", "must be passive, safe-active, or none")
         )
     origins = _string_list(data, marks, "security_assessment.authorized_origins")
+    if len(origins) * len(SAFE_ACTIVE_PATHS) > SAFE_ACTIVE_MAX_REQUESTS:
+        raise ObconfigError(
+            _issue(
+                marks,
+                "security_assessment.authorized_origins",
+                "fixed safe-active request ceiling exceeded",
+            )
+        )
     if (mode == "safe-active") != bool(origins):
         raise ObconfigError(
             _issue(
@@ -730,6 +807,7 @@ def validate_config(
                 )
             )
 
+    _validate_schema_node(data, _SCHEMA_METADATA, marks, "")
     warnings: list[str] = []
     for section, fields in KNOWN.items():
         value = data.get(section)
@@ -768,6 +846,7 @@ def _read_regular_bytes(
     label: str,
     *,
     limit: int = 64 * 1024 * 1024,
+    required_mode: int | None = 0o600,
 ) -> bytes:
     parent_info = path.parent.lstat()
     if stat.S_ISLNK(parent_info.st_mode) or not stat.S_ISDIR(parent_info.st_mode):
@@ -798,6 +877,16 @@ def _read_regular_bytes(
         if info.st_size > limit:
             raise ObconfigError(
                 ConfigIssue(1, 1, "", f"{label} exceeds the fixed size limit")
+            )
+        if (
+            os.name == "posix"
+            and required_mode is not None
+            and stat.S_IMODE(info.st_mode) != required_mode
+        ):
+            raise ObconfigError(
+                ConfigIssue(
+                    1, 1, "", f"{label} mode must be {required_mode:04o}"
+                )
             )
         descriptor = os.open(
             path.name,
@@ -845,6 +934,106 @@ def _read_regular_bytes(
         os.close(parent_descriptor)
 
 
+def read_project_file(
+    project_root: Path,
+    relative: str | Path,
+    label: str,
+    *,
+    limit: int = 64 * 1024 * 1024,
+    required_mode: int | None = None,
+) -> bytes:
+    candidate = PurePosixPath(str(relative).replace("\\", "/"))
+    if (
+        candidate.is_absolute()
+        or not candidate.parts
+        or any(part in {"", ".", ".."} for part in candidate.parts)
+    ):
+        raise ObconfigError(ConfigIssue(1, 1, "", f"{label} path is unsafe"))
+    root = project_root.resolve()
+    root_info = root.lstat()
+    directory_flags = (
+        os.O_RDONLY
+        | getattr(os, "O_DIRECTORY", 0)
+        | getattr(os, "O_NOFOLLOW", 0)
+    )
+    directory = os.open(root, directory_flags)
+    try:
+        opened_root = os.fstat(directory)
+        if (opened_root.st_dev, opened_root.st_ino) != (
+            root_info.st_dev,
+            root_info.st_ino,
+        ):
+            raise ObconfigError(
+                ConfigIssue(1, 1, "", f"{label} root changed during secure open")
+            )
+        for part in candidate.parts[:-1]:
+            try:
+                child = os.open(part, directory_flags, dir_fd=directory)
+            except OSError:
+                raise ObconfigError(
+                    ConfigIssue(1, 1, "", f"{label} parent is unsafe")
+                ) from None
+            os.close(directory)
+            directory = child
+        name = candidate.parts[-1]
+        try:
+            info = os.stat(name, dir_fd=directory, follow_symlinks=False)
+        except OSError as exc:
+            raise ObconfigError(
+                ConfigIssue(1, 1, "", f"cannot stat {label}: {exc.strerror}")
+            ) from None
+        if stat.S_ISLNK(info.st_mode) or not stat.S_ISREG(info.st_mode):
+            raise ObconfigError(
+                ConfigIssue(1, 1, "", f"{label} must be a regular file")
+            )
+        if (
+            os.name == "posix"
+            and required_mode is not None
+            and stat.S_IMODE(info.st_mode) != required_mode
+        ):
+            raise ObconfigError(
+                ConfigIssue(1, 1, "", f"{label} mode must be {required_mode:04o}")
+            )
+        if info.st_size > limit:
+            raise ObconfigError(
+                ConfigIssue(1, 1, "", f"{label} exceeds the fixed size limit")
+            )
+        descriptor = os.open(
+            name,
+            os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0),
+            dir_fd=directory,
+        )
+        try:
+            opened = os.fstat(descriptor)
+            if (opened.st_dev, opened.st_ino) != (info.st_dev, info.st_ino):
+                raise ObconfigError(
+                    ConfigIssue(1, 1, "", f"{label} changed during secure open")
+                )
+            data = bytearray()
+            while len(data) <= limit:
+                chunk = os.read(descriptor, min(1024 * 1024, limit + 1 - len(data)))
+                if not chunk:
+                    break
+                data.extend(chunk)
+            after = os.fstat(descriptor)
+            current = os.stat(name, dir_fd=directory, follow_symlinks=False)
+            if (
+                len(data) > limit
+                or (opened.st_dev, opened.st_ino, opened.st_size, opened.st_mtime_ns)
+                != (after.st_dev, after.st_ino, after.st_size, after.st_mtime_ns)
+                or (current.st_dev, current.st_ino)
+                != (opened.st_dev, opened.st_ino)
+            ):
+                raise ObconfigError(
+                    ConfigIssue(1, 1, "", f"{label} changed while being read")
+                )
+            return bytes(data)
+        finally:
+            os.close(descriptor)
+    finally:
+        os.close(directory)
+
+
 def _git_check(project_root: Path, config: Path) -> None:
     relative = config.relative_to(project_root).as_posix()
     tracked = subprocess.run(
@@ -865,6 +1054,67 @@ def _git_check(project_root: Path, config: Path) -> None:
         raise ObconfigError(ConfigIssue(1, 1, "", "obconfig.yaml is not ignored; add exact /obconfig.yaml to the root .gitignore"))
 
 
+def preflight_config_creation(project_root: Path) -> None:
+    root = project_root.resolve()
+    local = root / STATE_DIRECTORY
+    if local.is_symlink():
+        raise ObconfigError(
+            ConfigIssue(1, 1, "", ".obengineer must not be a symlink")
+        )
+    ignore = root / ".gitignore"
+    raw = _read_regular_bytes(
+        ignore,
+        ".gitignore",
+        limit=1024 * 1024,
+        required_mode=None,
+    )
+    try:
+        lines = raw.decode("utf-8").splitlines()
+    except UnicodeDecodeError:
+        raise ObconfigError(
+            ConfigIssue(1, 1, "", ".gitignore must be UTF-8")
+        ) from None
+    if "/obconfig.yaml" not in lines:
+        raise ObconfigError(
+            ConfigIssue(
+                1,
+                1,
+                "",
+                "root .gitignore must contain exact /obconfig.yaml before creation",
+            )
+        )
+    tracked = subprocess.run(
+        [
+            "git",
+            "-C",
+            str(root),
+            "ls-files",
+            "--error-unmatch",
+            "--",
+            CONFIG_NAME,
+        ],
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+        check=False,
+    )
+    if tracked.returncode == 0:
+        raise ObconfigError(
+            ConfigIssue(
+                1, 1, "", "obconfig.yaml is tracked by git; creation is refused"
+            )
+        )
+    ignored = subprocess.run(
+        ["git", "-C", str(root), "check-ignore", "-q", "--", CONFIG_NAME],
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+        check=False,
+    )
+    if ignored.returncode != 0:
+        raise ObconfigError(
+            ConfigIssue(1, 1, "", "git does not ignore root obconfig.yaml")
+        )
+
+
 def read_config_bytes(
     project_root: Path,
     *,
@@ -880,20 +1130,12 @@ def read_config_bytes(
         raise ObconfigError(ConfigIssue(1, 1, "", "obconfig.yaml mode must be 0600; explicit repair can tighten it"))
     if enforce_git:
         _git_check(root, path)
-    flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0)
-    descriptor = os.open(path, flags)
-    try:
-        opened = os.fstat(descriptor)
-        if (opened.st_dev, opened.st_ino) != (info.st_dev, info.st_ino):
-            raise ObconfigError(ConfigIssue(1, 1, "", "obconfig.yaml changed during secure open"))
-        with os.fdopen(descriptor, "rb", closefd=False) as handle:
-            raw = handle.read(MAX_CONFIG_BYTES + 1)
-        after = os.fstat(descriptor)
-        if (opened.st_size, opened.st_mtime_ns) != (after.st_size, after.st_mtime_ns):
-            raise ObconfigError(ConfigIssue(1, 1, "", "obconfig.yaml changed while being read"))
-        return raw
-    finally:
-        os.close(descriptor)
+    return _read_regular_bytes(
+        path,
+        CONFIG_NAME,
+        limit=MAX_CONFIG_BYTES,
+        required_mode=0o600 if enforce_mode else None,
+    )
 
 
 def load_config(
@@ -947,17 +1189,90 @@ def _manifest_path(project_root: Path) -> Path:
 
 
 def _safe_local_directory(project_root: Path) -> Path:
-    local = project_root / STATE_DIRECTORY
-    if local.is_symlink():
-        raise ObconfigError(ConfigIssue(1, 1, "", ".obengineer must not be a symlink"))
-    local.mkdir(mode=0o700, exist_ok=True)
-    if os.name == "posix":
-        os.chmod(local, 0o700)
-    return local
+    root = project_root.resolve()
+    root_info = root.lstat()
+    flags = os.O_RDONLY | getattr(os, "O_DIRECTORY", 0) | getattr(os, "O_NOFOLLOW", 0)
+    descriptor = os.open(root, flags)
+    child: int | None = None
+    try:
+        opened_root = os.fstat(descriptor)
+        if (opened_root.st_dev, opened_root.st_ino) != (
+            root_info.st_dev,
+            root_info.st_ino,
+        ):
+            raise ObconfigError(
+                ConfigIssue(1, 1, "", "project root changed during secure open")
+            )
+        try:
+            info = os.stat(
+                STATE_DIRECTORY, dir_fd=descriptor, follow_symlinks=False
+            )
+        except FileNotFoundError:
+            try:
+                os.mkdir(STATE_DIRECTORY, 0o700, dir_fd=descriptor)
+            except FileExistsError:
+                pass
+            info = os.stat(
+                STATE_DIRECTORY, dir_fd=descriptor, follow_symlinks=False
+            )
+        if stat.S_ISLNK(info.st_mode) or not stat.S_ISDIR(info.st_mode):
+            raise ObconfigError(
+                ConfigIssue(1, 1, "", ".obengineer must be a regular directory")
+            )
+        child = os.open(STATE_DIRECTORY, flags, dir_fd=descriptor)
+        opened = os.fstat(child)
+        if (opened.st_dev, opened.st_ino) != (info.st_dev, info.st_ino):
+            raise ObconfigError(
+                ConfigIssue(1, 1, "", ".obengineer changed during secure open")
+            )
+        if os.name == "posix":
+            os.fchmod(child, 0o700)
+        os.fsync(descriptor)
+    finally:
+        if child is not None:
+            os.close(child)
+        os.close(descriptor)
+    return root / STATE_DIRECTORY
+
+
+def _safe_state_subdirectory(project_root: Path, name: str) -> Path:
+    if "/" in name or name in {"", ".", ".."}:
+        raise ValueError("invalid state directory name")
+    local = _safe_local_directory(project_root)
+    flags = os.O_RDONLY | getattr(os, "O_DIRECTORY", 0) | getattr(os, "O_NOFOLLOW", 0)
+    descriptor = os.open(local, flags)
+    child: int | None = None
+    try:
+        try:
+            info = os.stat(name, dir_fd=descriptor, follow_symlinks=False)
+        except FileNotFoundError:
+            try:
+                os.mkdir(name, 0o700, dir_fd=descriptor)
+            except FileExistsError:
+                pass
+            info = os.stat(name, dir_fd=descriptor, follow_symlinks=False)
+        if stat.S_ISLNK(info.st_mode) or not stat.S_ISDIR(info.st_mode):
+            raise ObconfigError(
+                ConfigIssue(1, 1, "", f"{name} must be a regular directory")
+            )
+        child = os.open(name, flags, dir_fd=descriptor)
+        opened = os.fstat(child)
+        if (opened.st_dev, opened.st_ino) != (info.st_dev, info.st_ino):
+            raise ObconfigError(
+                ConfigIssue(1, 1, "", f"{name} changed during secure open")
+            )
+        if os.name == "posix":
+            os.fchmod(child, 0o700)
+        os.fsync(descriptor)
+    finally:
+        if child is not None:
+            os.close(child)
+        os.close(descriptor)
+    return local / name
 
 
 def _read_manifest(path: Path) -> dict[str, Any]:
-    if not path.exists():
+    if not path.exists() and not path.is_symlink():
         return {}
     try:
         value = json.loads(
@@ -972,7 +1287,7 @@ def hash_artifact_tree(
     project_root: Path,
     directory: str,
     *,
-    write_manifest: bool = True,
+    write_manifest: bool = False,
 ) -> dict[str, Any]:
     root = resolve_artifact_directory(project_root, directory)
     records: list[tuple[bytes, int, str]] = []
@@ -1024,10 +1339,23 @@ def hash_artifact_tree(
                             )
                         )
                     walk(child, (*prefix, name))
+                    after_directory = os.fstat(child)
                     current = os.stat(name, dir_fd=descriptor, follow_symlinks=False)
-                    if (current.st_dev, current.st_ino) != (
-                        opened.st_dev,
-                        opened.st_ino,
+                    if (
+                        (
+                            opened.st_dev,
+                            opened.st_ino,
+                            opened.st_mtime_ns,
+                            opened.st_ctime_ns,
+                        )
+                        != (
+                            after_directory.st_dev,
+                            after_directory.st_ino,
+                            after_directory.st_mtime_ns,
+                            after_directory.st_ctime_ns,
+                        )
+                        or (current.st_dev, current.st_ino)
+                        != (opened.st_dev, opened.st_ino)
                     ):
                         raise ObconfigError(
                             ConfigIssue(
@@ -1114,10 +1442,23 @@ def hash_artifact_tree(
                 )
             )
         walk(root_descriptor, ())
+        after_root = os.fstat(root_descriptor)
         current_root = root.lstat()
-        if (current_root.st_dev, current_root.st_ino) != (
-            opened_root.st_dev,
-            opened_root.st_ino,
+        if (
+            (
+                opened_root.st_dev,
+                opened_root.st_ino,
+                opened_root.st_mtime_ns,
+                opened_root.st_ctime_ns,
+            )
+            != (
+                after_root.st_dev,
+                after_root.st_ino,
+                after_root.st_mtime_ns,
+                after_root.st_ctime_ns,
+            )
+            or (current_root.st_dev, current_root.st_ino)
+            != (opened_root.st_dev, opened_root.st_ino)
         ):
             raise ObconfigError(
                 ConfigIssue(
@@ -1172,31 +1513,130 @@ def redact_path(path: str) -> str:
     return "/".join("[REDACTED]" if SECRET_KEY.search(part) else part for part in parts)
 
 
-def atomic_write(path: Path, data: bytes, mode: int = 0o600) -> None:
-    local = _safe_local_directory(path.parent.parent) if path.parent.name == STATE_DIRECTORY else path.parent
-    if path.exists() or path.is_symlink():
-        _regular_no_symlink(path, path.name)
-    descriptor, temporary_name = tempfile.mkstemp(prefix=f".{path.name}.", dir=local)
-    temporary = Path(temporary_name)
+def atomic_write(
+    path: Path,
+    data: bytes,
+    mode: int = 0o600,
+    *,
+    expect_absent: bool = False,
+) -> None:
+    parent = path.parent
+    if parent.name == STATE_DIRECTORY:
+        _safe_local_directory(parent.parent)
+    parent_info = parent.lstat()
+    if stat.S_ISLNK(parent_info.st_mode) or not stat.S_ISDIR(parent_info.st_mode):
+        raise ObconfigError(
+            ConfigIssue(1, 1, "", f"{path.name} parent must be a regular directory")
+        )
+    directory_flags = (
+        os.O_RDONLY
+        | getattr(os, "O_DIRECTORY", 0)
+        | getattr(os, "O_NOFOLLOW", 0)
+    )
+    parent_descriptor = os.open(parent, directory_flags)
+    descriptor: int | None = None
+    temporary_name = f".{path.name}.{os.getpid()}.{time.time_ns()}"
     try:
-        os.fchmod(descriptor, mode)
-        with os.fdopen(descriptor, "wb") as handle:
-            handle.write(data)
-            handle.flush()
-            os.fsync(handle.fileno())
-        os.replace(temporary, path)
-        directory_descriptor = os.open(path.parent, os.O_RDONLY)
+        opened_parent = os.fstat(parent_descriptor)
+        if (opened_parent.st_dev, opened_parent.st_ino) != (
+            parent_info.st_dev,
+            parent_info.st_ino,
+        ):
+            raise ObconfigError(
+                ConfigIssue(1, 1, "", f"{path.name} parent changed during secure open")
+            )
         try:
-            os.fsync(directory_descriptor)
-        finally:
-            os.close(directory_descriptor)
+            existing = os.stat(
+                path.name, dir_fd=parent_descriptor, follow_symlinks=False
+            )
+        except FileNotFoundError:
+            existing = None
+        if existing is not None and (
+            stat.S_ISLNK(existing.st_mode) or not stat.S_ISREG(existing.st_mode)
+        ):
+            raise ObconfigError(
+                ConfigIssue(
+                    1, 1, "", f"{path.name} must be a regular file, not a symlink"
+                )
+            )
+        if expect_absent and existing is not None:
+            raise ObconfigError(
+                ConfigIssue(1, 1, "", f"{path.name} appeared during secure creation")
+            )
+        descriptor = os.open(
+            temporary_name,
+            os.O_WRONLY
+            | os.O_CREAT
+            | os.O_EXCL
+            | getattr(os, "O_NOFOLLOW", 0),
+            mode,
+            dir_fd=parent_descriptor,
+        )
+        os.fchmod(descriptor, mode)
+        view = memoryview(data)
+        while view:
+            written = os.write(descriptor, view)
+            view = view[written:]
+        os.fsync(descriptor)
+        os.close(descriptor)
+        descriptor = None
+        try:
+            current = os.stat(
+                path.name, dir_fd=parent_descriptor, follow_symlinks=False
+            )
+        except FileNotFoundError:
+            current = None
+        if (existing is None) != (current is None) or (
+            existing is not None
+            and current is not None
+            and (existing.st_dev, existing.st_ino)
+            != (current.st_dev, current.st_ino)
+        ):
+            raise ObconfigError(
+                ConfigIssue(1, 1, "", f"{path.name} changed before atomic replace")
+            )
+        if existing is None:
+            try:
+                os.link(
+                    temporary_name,
+                    path.name,
+                    src_dir_fd=parent_descriptor,
+                    dst_dir_fd=parent_descriptor,
+                    follow_symlinks=False,
+                )
+            except FileExistsError:
+                raise ObconfigError(
+                    ConfigIssue(
+                        1, 1, "", f"{path.name} appeared before atomic creation"
+                    )
+                ) from None
+            os.unlink(temporary_name, dir_fd=parent_descriptor)
+        else:
+            os.replace(
+                temporary_name,
+                path.name,
+                src_dir_fd=parent_descriptor,
+                dst_dir_fd=parent_descriptor,
+            )
+        os.fsync(parent_descriptor)
+        final = os.stat(path.name, dir_fd=parent_descriptor, follow_symlinks=False)
+        if os.name == "posix" and stat.S_IMODE(final.st_mode) != mode:
+            raise ObconfigError(
+                ConfigIssue(1, 1, "", f"{path.name} mode was not preserved")
+            )
     except BaseException:
         try:
-            os.close(descriptor)
+            if descriptor is not None:
+                os.close(descriptor)
         except OSError:
             pass
-        temporary.unlink(missing_ok=True)
+        try:
+            os.unlink(temporary_name, dir_fd=parent_descriptor)
+        except OSError:
+            pass
         raise
+    finally:
+        os.close(parent_descriptor)
 
 
 def atomic_write_json(path: Path, value: Mapping[str, Any], mode: int = 0o600) -> None:
@@ -1207,12 +1647,72 @@ def atomic_write_json(path: Path, value: Mapping[str, Any], mode: int = 0o600) -
     )
 
 
+def secure_unlink(
+    path: Path,
+    *,
+    expected_identity: tuple[int, int] | None = None,
+    allow_symlink: bool = False,
+) -> None:
+    parent_info = path.parent.lstat()
+    if stat.S_ISLNK(parent_info.st_mode) or not stat.S_ISDIR(parent_info.st_mode):
+        raise ObconfigError(
+            ConfigIssue(1, 1, "", f"{path.name} parent is unsafe")
+        )
+    descriptor = os.open(
+        path.parent,
+        os.O_RDONLY
+        | getattr(os, "O_DIRECTORY", 0)
+        | getattr(os, "O_NOFOLLOW", 0),
+    )
+    try:
+        try:
+            info = os.stat(path.name, dir_fd=descriptor, follow_symlinks=False)
+        except FileNotFoundError:
+            return
+        if (
+            (stat.S_ISLNK(info.st_mode) and not allow_symlink)
+            or (not stat.S_ISLNK(info.st_mode) and not stat.S_ISREG(info.st_mode))
+        ):
+            raise ObconfigError(
+                ConfigIssue(1, 1, "", f"{path.name} is not a regular file")
+            )
+        if expected_identity is not None and (info.st_dev, info.st_ino) != expected_identity:
+            raise ObconfigError(
+                ConfigIssue(1, 1, "", f"{path.name} changed before secure removal")
+            )
+        os.unlink(path.name, dir_fd=descriptor)
+        os.fsync(descriptor)
+    finally:
+        os.close(descriptor)
+
+
+def prepare_local_state(project_root: Path) -> Path:
+    return _safe_local_directory(project_root)
+
+
 def initialize(project_root: Path, template: Path) -> bool:
     destination = project_root / CONFIG_NAME
     if destination.exists() or destination.is_symlink():
         return False
-    _regular_no_symlink(template, TEMPLATE_NAME)
-    atomic_write(destination, template.read_bytes(), 0o600)
+    preflight_config_creation(project_root)
+    _safe_local_directory(project_root)
+    raw = _read_regular_bytes(
+        template, TEMPLATE_NAME, limit=MAX_CONFIG_BYTES, required_mode=None
+    )
+    try:
+        atomic_write(destination, raw, 0o600, expect_absent=True)
+    except BaseException:
+        try:
+            appeared = destination.lstat()
+        except FileNotFoundError:
+            pass
+        else:
+            secure_unlink(
+                destination,
+                expected_identity=(appeared.st_dev, appeared.st_ino),
+                allow_symlink=True,
+            )
+        raise
     return True
 
 
@@ -1246,18 +1746,16 @@ def _catalog_repair(raw: bytes) -> tuple[bytes, list[str]]:
 def repair(project_root: Path, *, allow_mode_fix: bool = True) -> list[str]:
     path = project_root / CONFIG_NAME
     info = _regular_no_symlink(path, CONFIG_NAME)
-    raw = path.read_bytes()
+    raw = read_config_bytes(
+        project_root, enforce_git=False, enforce_mode=False
+    )
     repaired, changes = _catalog_repair(raw)
     if allow_mode_fix and os.name == "posix" and stat.S_IMODE(info.st_mode) != 0o600:
         changes.append("file.mode")
     if not changes:
         raise ObconfigError(ConfigIssue(1, 1, "", "no safe catalogued repair exists"))
 
-    local = _safe_local_directory(project_root)
-    backup_dir = local / "backups"
-    if backup_dir.is_symlink():
-        raise ObconfigError(ConfigIssue(1, 1, "", "backup directory must not be a symlink"))
-    backup_dir.mkdir(mode=0o700, exist_ok=True)
+    backup_dir = _safe_state_subdirectory(project_root, "backups")
     backup = backup_dir / f"obconfig-{time.time_ns()}.yaml"
     atomic_write(backup, raw, 0o600)
     try:
@@ -1335,6 +1833,10 @@ def _authorization_path(project_root: Path) -> Path:
     return project_root / STATE_DIRECTORY / "authorization.json"
 
 
+def _claim_path(project_root: Path) -> Path:
+    return project_root / STATE_DIRECTORY / "analysis-claim.json"
+
+
 def _last_binding_path(project_root: Path) -> Path:
     return project_root / STATE_DIRECTORY / "last-analysis-binding.json"
 
@@ -1348,13 +1850,29 @@ def binding(
 ) -> tuple[dict[str, Any], dict[str, Any], dict[str, Any]]:
     data, _, raw, _ = load_config(project_root, enforce_git=enforce_git)
     tree = hash_artifact_tree(project_root, data["artifacts"]["directory"])
+    manifest = {
+        key: tree[key]
+        for key in (
+            "schema_version",
+            "algorithm",
+            "tree_sha256",
+            "file_count",
+            "total_bytes",
+            "files",
+        )
+    }
+    delta = {
+        key: tree[key]
+        for key in ("added", "changed", "deleted", "reread")
+    }
     state = {
         "schema_version": SCHEMA_VERSION,
         "command": command,
         "intended_version": intended_version,
         "config_sha256": config_digest(raw),
         "artifact_tree_sha256": tree["tree_sha256"],
-        "consumed": False,
+        "artifact_manifest": manifest,
+        "artifact_delta": delta,
     }
     return state, data, tree
 
@@ -1366,21 +1884,119 @@ def authorize(
     intended_version: str,
     enforce_git: bool = True,
 ) -> dict[str, Any]:
-    state, _, _ = binding(
+    with _gate_lock(project_root):
+        if _claim_path(project_root).exists() or _claim_path(project_root).is_symlink():
+            raise ObconfigError(
+                ConfigIssue(1, 1, "", "an analysis claim already exists")
+            )
+        state, _, _ = binding(
+            project_root,
+            command=command,
+            intended_version=intended_version,
+            enforce_git=enforce_git,
+        )
+        atomic_write_json(_authorization_path(project_root), state)
+        # Recheck immediately after persistence; changed input invalidates the gate.
+        validate_authorization(
+            project_root,
+            command=command,
+            intended_version=intended_version,
+            enforce_git=enforce_git,
+        )
+        return state
+
+
+def _load_bound_state(path: Path, label: str) -> dict[str, Any]:
+    try:
+        saved = json.loads(_read_regular_bytes(path, label).decode("utf-8"))
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError):
+        raise ObconfigError(
+            ConfigIssue(1, 1, "", f"{label} is invalid")
+        ) from None
+    if not isinstance(saved, dict):
+        raise ObconfigError(ConfigIssue(1, 1, "", f"{label} is invalid"))
+    return saved
+
+
+@contextlib.contextmanager
+def _gate_lock(project_root: Path):
+    local = _safe_local_directory(project_root)
+    descriptor = os.open(
+        local,
+        os.O_RDONLY
+        | getattr(os, "O_DIRECTORY", 0)
+        | getattr(os, "O_NOFOLLOW", 0),
+    )
+    lock_descriptor: int | None = None
+    try:
+        try:
+            lock_descriptor = os.open(
+                "analysis-gate.lock",
+                os.O_WRONLY
+                | os.O_CREAT
+                | os.O_EXCL
+                | getattr(os, "O_NOFOLLOW", 0),
+                0o600,
+                dir_fd=descriptor,
+            )
+        except FileExistsError:
+            raise ObconfigError(
+                ConfigIssue(1, 1, "", "analysis gate operation is already in progress")
+            ) from None
+        if os.name == "posix" and stat.S_IMODE(os.fstat(lock_descriptor).st_mode) != 0o600:
+            raise ObconfigError(
+                ConfigIssue(1, 1, "", "analysis gate lock mode must be 0600")
+            )
+        os.fsync(lock_descriptor)
+        os.fsync(descriptor)
+        yield
+    finally:
+        if lock_descriptor is not None:
+            os.close(lock_descriptor)
+            try:
+                os.unlink("analysis-gate.lock", dir_fd=descriptor)
+                os.fsync(descriptor)
+            except FileNotFoundError:
+                pass
+        os.close(descriptor)
+
+
+def _validate_bound_state(
+    saved: Mapping[str, Any],
+    project_root: Path,
+    *,
+    command: str,
+    intended_version: str,
+    enforce_git: bool,
+    label: str,
+) -> dict[str, Any]:
+    current, _, _ = binding(
         project_root,
         command=command,
         intended_version=intended_version,
         enforce_git=enforce_git,
     )
-    atomic_write_json(_authorization_path(project_root), state)
-    # Recheck immediately after persistence; changed input invalidates the gate.
-    validate_authorization(
-        project_root,
-        command=command,
-        intended_version=intended_version,
-        enforce_git=enforce_git,
-    )
-    return state
+    if any(
+        saved.get(key) != current[key]
+        for key in (
+            "schema_version",
+            "command",
+            "intended_version",
+            "config_sha256",
+            "artifact_tree_sha256",
+            "artifact_manifest",
+            "artifact_delta",
+        )
+    ):
+        raise ObconfigError(
+            ConfigIssue(
+                1,
+                1,
+                "",
+                f"{label} no longer matches current configuration and artifacts",
+            )
+        )
+    return dict(saved)
 
 
 def validate_authorization(
@@ -1391,40 +2007,131 @@ def validate_authorization(
     enforce_git: bool = True,
 ) -> dict[str, Any]:
     path = _authorization_path(project_root)
-    try:
-        saved = json.loads(
-            _read_regular_bytes(path, "authorization state").decode("utf-8")
-        )
-    except (OSError, UnicodeDecodeError, json.JSONDecodeError):
-        raise ObconfigError(ConfigIssue(1, 1, "", "authorization state is invalid")) from None
-    current, _, _ = binding(
+    saved = _load_bound_state(path, "authorization state")
+    return _validate_bound_state(
+        saved,
         project_root,
         command=command,
         intended_version=intended_version,
         enforce_git=enforce_git,
+        label="authorization",
     )
-    if saved.get("consumed") is True or any(
-        saved.get(key) != current[key]
-        for key in (
-            "schema_version", "command", "intended_version",
-            "config_sha256", "artifact_tree_sha256",
-        )
-    ):
-        path.unlink(missing_ok=True)
-        raise ObconfigError(
-            ConfigIssue(1, 1, "", "authorization no longer matches current configuration and artifacts; show a new summary")
-        )
-    return saved
 
 
-def consume_authorization(
+def claim_authorization(
+    project_root: Path,
+    *,
+    command: str,
+    intended_version: str,
+    enforce_git: bool = True,
+) -> dict[str, Any]:
+    with _gate_lock(project_root):
+        validate_authorization(
+            project_root,
+            command=command,
+            intended_version=intended_version,
+            enforce_git=enforce_git,
+        )
+        local = _safe_local_directory(project_root)
+        directory_flags = (
+            os.O_RDONLY
+            | getattr(os, "O_DIRECTORY", 0)
+            | getattr(os, "O_NOFOLLOW", 0)
+        )
+        descriptor = os.open(local, directory_flags)
+        try:
+            try:
+                os.link(
+                    "authorization.json",
+                    "analysis-claim.json",
+                    src_dir_fd=descriptor,
+                    dst_dir_fd=descriptor,
+                    follow_symlinks=False,
+                )
+            except FileExistsError:
+                raise ObconfigError(
+                    ConfigIssue(1, 1, "", "analysis authorization was already claimed")
+                ) from None
+            except FileNotFoundError:
+                raise ObconfigError(
+                    ConfigIssue(1, 1, "", "analysis authorization is unavailable")
+                ) from None
+            os.unlink("authorization.json", dir_fd=descriptor)
+            os.fsync(descriptor)
+        finally:
+            os.close(descriptor)
+    try:
+        return validate_claim(
+            project_root,
+            command=command,
+            intended_version=intended_version,
+            enforce_git=enforce_git,
+        )
+    except BaseException:
+        _unlink_local_state(project_root, "analysis-claim.json")
+        raise
+
+
+def validate_claim(
+    project_root: Path,
+    *,
+    command: str,
+    intended_version: str,
+    enforce_git: bool = True,
+) -> dict[str, Any]:
+    saved = _load_bound_state(_claim_path(project_root), "analysis claim")
+    return _validate_bound_state(
+        saved,
+        project_root,
+        command=command,
+        intended_version=intended_version,
+        enforce_git=enforce_git,
+        label="analysis claim",
+    )
+
+
+def _unlink_local_state(project_root: Path, name: str) -> None:
+    local = _safe_local_directory(project_root)
+    descriptor = os.open(
+        local,
+        os.O_RDONLY
+        | getattr(os, "O_DIRECTORY", 0)
+        | getattr(os, "O_NOFOLLOW", 0),
+    )
+    try:
+        try:
+            os.unlink(name, dir_fd=descriptor)
+        except FileNotFoundError:
+            return
+        os.fsync(descriptor)
+    finally:
+        os.close(descriptor)
+
+
+def consume_claim(
     project_root: Path,
     *,
     command: str,
     intended_version: str,
     enforce_git: bool = True,
 ) -> None:
-    state = validate_authorization(
+    with _gate_lock(project_root):
+        _consume_claim_locked(
+            project_root,
+            command=command,
+            intended_version=intended_version,
+            enforce_git=enforce_git,
+        )
+
+
+def _consume_claim_locked(
+    project_root: Path,
+    *,
+    command: str,
+    intended_version: str,
+    enforce_git: bool,
+) -> None:
+    state = validate_claim(
         project_root,
         command=command,
         intended_version=intended_version,
@@ -1437,8 +2144,37 @@ def consume_authorization(
             "config_sha256", "artifact_tree_sha256",
         )
     }
-    atomic_write_json(_last_binding_path(project_root), history)
-    _authorization_path(project_root).unlink(missing_ok=True)
+    manifest = state.get("artifact_manifest")
+    if not isinstance(manifest, Mapping):
+        raise ObconfigError(
+            ConfigIssue(1, 1, "", "analysis claim has no artifact manifest")
+        )
+    baseline_path = _manifest_path(project_root)
+    history_path = _last_binding_path(project_root)
+    old_baseline = (
+        _read_regular_bytes(baseline_path, "artifact manifest")
+        if baseline_path.exists()
+        else None
+    )
+    old_history = (
+        _read_regular_bytes(history_path, "last analysis binding")
+        if history_path.exists()
+        else None
+    )
+    try:
+        atomic_write_json(baseline_path, manifest)
+        atomic_write_json(history_path, history)
+    except BaseException:
+        if old_baseline is None:
+            _unlink_local_state(project_root, baseline_path.name)
+        else:
+            atomic_write(baseline_path, old_baseline)
+        if old_history is None:
+            _unlink_local_state(project_root, history_path.name)
+        else:
+            atomic_write(history_path, old_history)
+        raise
+    _unlink_local_state(project_root, "analysis-claim.json")
 
 
 def config_changed_since_authorization(project_root: Path) -> bool:
@@ -1450,9 +2186,15 @@ def config_changed_since_authorization(project_root: Path) -> bool:
             _read_regular_bytes(path, "last analysis binding").decode("utf-8")
         )
         raw = read_config_bytes(project_root)
+        data, marks = parse_yaml(raw)
+        validate_config(data, marks)
+        tree = hash_artifact_tree(project_root, data["artifacts"]["directory"])
     except (ObconfigError, OSError, UnicodeDecodeError, json.JSONDecodeError):
         return True
-    return state.get("config_sha256") != config_digest(raw)
+    return (
+        state.get("config_sha256") != config_digest(raw)
+        or state.get("artifact_tree_sha256") != tree["tree_sha256"]
+    )
 
 
 def find_template(script: Path) -> Path:

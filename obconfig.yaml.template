@@ -166,3 +166,6 @@ public_evidence:
 developer_tools:
   named: []  # string list; tools the human says are used
   matched: []  # list of {tool, via, key}; names only, never credentials
+
+# Namespaced vendor/customer additions preserved verbatim but ignored by runtime logic.
+extensions: {}  # mapping; required namespace, default empty; never place credentials here
