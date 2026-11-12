@@ -127,7 +127,7 @@ def safe_active_https_probe(
         target = parsed.path or "/"
         outgoing = (
             f"{request['method']} {target} HTTP/1.1\r\n"
-            f"Host: {parsed.hostname}\r\n"
+            f"Host: {parsed.netloc}\r\n"
             "Connection: close\r\n"
             "User-Agent: obengineer-safe-active/1\r\n\r\n"
         ).encode("ascii")
@@ -218,7 +218,7 @@ def _platform_json_objects(body: bytes) -> list[Mapping[str, Any]]:
 def _observability_measurements(body: bytes) -> dict[str, Any] | None:
     metadata: dict[str, str] = {}
     values: dict[str, list[tuple[int, int | float]]] = {}
-    pending: list[Mapping[str, Any]] = []
+    pending: list[tuple[Mapping[str, Any], Any]] = []
     for event in _sse_json_events(body):
         message = event.get("message", event)
         if not isinstance(message, Mapping):
@@ -231,11 +231,19 @@ def _observability_measurements(body: bytes) -> dict[str, Any] | None:
                 metadata[tsid] = metric
         points = message.get("data")
         if isinstance(points, list):
-            pending.extend(point for point in points if isinstance(point, Mapping))
-    for point in pending:
+            logical_timestamp = message.get("logicalTimestampMs")
+            pending.extend(
+                (point, logical_timestamp)
+                for point in points
+                if isinstance(point, Mapping)
+            )
+    for point, logical_timestamp in pending:
         metric = metadata.get(point.get("tsId"))
         value = point.get("value")
-        timestamp = point.get("timestamp", point.get("ts", 0))
+        timestamp = point.get(
+            "timestamp",
+            point.get("ts", logical_timestamp),
+        )
         if (
             metric is not None
             and isinstance(value, (int, float))

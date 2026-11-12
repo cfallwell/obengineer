@@ -251,6 +251,31 @@ def test_sse_parser_is_bounded():
         direct_api._sse_json_events(body)
 
 
+def test_signalflow_batches_apply_logical_timestamp_to_each_point():
+    metric = direct_api.SF_ORG_METRICS[0]
+    body = (
+        "event: metadata\n"
+        'data: {"message":{"tsId":"one","properties":'
+        f'{{"sf_metric":"{metric}"}}}}}}\n\n'
+        "event: data\n"
+        'data: {"message":{"logicalTimestampMs":1000,'
+        '"data":[{"tsId":"one","value":1}]}}\n\n'
+        "event: data\n"
+        'data: {"message":{"logicalTimestampMs":2000,'
+        '"data":[{"tsId":"one","value":2}]}}\n\n'
+    ).encode()
+    measured = direct_api._observability_measurements(body)
+    assert measured["measurements"][metric] == 2
+    assert measured["aggregates"][metric] == {
+        "samples": 2,
+        "first_timestamp": 1000,
+        "last_timestamp": 2000,
+        "minimum": 1,
+        "maximum": 2,
+        "latest": 2,
+    }
+
+
 def test_safe_active_plan_zero_calls_and_fixed_capture():
     passive = {"security_assessment": {"mode": "passive", "authorized_origins": []}}
     calls = []
@@ -305,6 +330,82 @@ def test_safe_active_rejects_any_private_dns_answer_and_peer_swap():
             ],
             connection_factory=lambda *args, **kwargs: SwappedSocket(),
         )
+
+
+@pytest.mark.parametrize(
+    ("url", "address", "family", "expected_authority", "expected_port"),
+    (
+        (
+            "https://www.example.com/robots.txt",
+            "8.8.8.8",
+            socket.AF_INET,
+            "www.example.com",
+            443,
+        ),
+        (
+            "https://www.example.com:8443/robots.txt",
+            "8.8.8.8",
+            socket.AF_INET,
+            "www.example.com:8443",
+            8443,
+        ),
+        (
+            "https://[2606:4700:4700::1111]/robots.txt",
+            "2606:4700:4700::1111",
+            socket.AF_INET6,
+            "[2606:4700:4700::1111]",
+            443,
+        ),
+    ),
+)
+def test_safe_active_host_header_preserves_exact_authority(
+    monkeypatch, url, address, family, expected_authority, expected_port
+):
+    class FakeSocket:
+        def __init__(self):
+            self.sent = b""
+
+        def getpeername(self):
+            return (address, expected_port)
+
+        def sendall(self, value):
+            self.sent += value
+
+        def recv(self, size):
+            return b"HTTP/1.1 204 No Content\r\n\r\n"
+
+        def close(self):
+            pass
+
+    fake = FakeSocket()
+
+    class FakeContext:
+        def wrap_socket(self, raw, server_hostname):
+            return raw
+
+    monkeypatch.setattr(
+        direct_api.ssl, "create_default_context", lambda: FakeContext()
+    )
+
+    def connection(target, timeout):
+        assert target == (address, expected_port)
+        return fake
+
+    result = direct_api.safe_active_https_probe(
+        {"method": "HEAD", "url": url},
+        resolver=lambda *args, **kwargs: [
+            (
+                family,
+                socket.SOCK_STREAM,
+                6,
+                "",
+                (address, expected_port),
+            )
+        ],
+        connection_factory=connection,
+    )
+    assert result["status"] == 204
+    assert f"\r\nHost: {expected_authority}\r\n".encode() in fake.sent
 
 
 def test_unrecognized_success_body_is_not_labeled_measured():
@@ -415,6 +516,33 @@ def test_supported_safe_active_cli_is_claim_bound_and_redacted(
     assert all(canary not in rendered for canary in canaries)
 
 
+def test_supported_abort_cli_releases_mutated_claim_without_baseline(
+    tmp_path, capsys
+):
+    configured_project(tmp_path)
+    obconfig.authorize(tmp_path, command="ob-start", intended_version="V1")
+    obconfig.claim_authorization(
+        tmp_path, command="ob-start", intended_version="V1"
+    )
+    (tmp_path / "obconfig.yaml").write_text("invalid: [\n")
+    (tmp_path / "obconfig.yaml").chmod(0o600)
+    argv = [
+        "--project-root",
+        str(tmp_path),
+        "abort",
+        "--command",
+        "ob-start",
+        "--intended-version",
+        "V1",
+    ]
+    assert manage_obconfig.main(argv) == 0
+    terminal = capsys.readouterr()
+    assert "without advancing the baseline" in terminal.out
+    assert not (tmp_path / ".obengineer/analysis-claim.json").exists()
+    assert not (tmp_path / ".obengineer/artifact-manifest.json").exists()
+    assert not (tmp_path / ".obengineer/last-analysis-binding.json").exists()
+
+
 def test_direct_api_discards_result_when_config_swaps_during_transport(
     tmp_path, capsys
 ):
@@ -452,6 +580,48 @@ def test_direct_api_discards_result_when_config_swaps_during_transport(
     rendered = terminal.out + terminal.err + repr(argv)
     assert terminal.out == ""
     assert "no longer matches" in terminal.err
+    assert all(canary not in rendered for canary in canaries)
+
+
+@pytest.mark.parametrize("change", ("mutate", "replace", "mode"))
+def test_verification_discards_evidence_when_config_changes_during_request(
+    tmp_path, capsys, change
+):
+    canaries = configured_project(tmp_path)
+    changed = False
+
+    def transport(request):
+        nonlocal changed
+        if not changed:
+            changed = True
+            path = tmp_path / "obconfig.yaml"
+            if change == "mutate":
+                data = yaml.safe_load(path.read_text())
+                data["engagement"]["scope"] = "changed during verification"
+                path.write_text(yaml.safe_dump(data, sort_keys=False))
+                path.chmod(0o600)
+            else:
+                if change == "replace":
+                    replacement = tmp_path / "replacement.yaml"
+                    replacement.write_bytes(path.read_bytes())
+                    replacement.chmod(0o600)
+                    replacement.replace(path)
+                else:
+                    path.chmod(0o640)
+        return direct_api.Response(200, measured_body(request.source))
+
+    argv = [
+        "--project-root",
+        str(tmp_path),
+        "direct-api",
+        "--phase",
+        "verification",
+    ]
+    assert manage_obconfig.main(argv, direct_transport=transport) == 1
+    terminal = capsys.readouterr()
+    rendered = terminal.out + terminal.err + repr(argv)
+    assert terminal.out == ""
+    assert "changed" in terminal.err or "mode must be 0600" in terminal.err
     assert all(canary not in rendered for canary in canaries)
 
 

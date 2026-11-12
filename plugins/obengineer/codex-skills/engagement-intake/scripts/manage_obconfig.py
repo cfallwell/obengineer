@@ -23,9 +23,12 @@ from obconfig import (
     UniqueLoader,
     atomic_write,
     atomic_write_json,
+    abort_claim,
     authorize,
     binding,
+    capture_config_binding,
     claim_authorization,
+    config_digest,
     config_changed_since_authorization,
     consume_claim,
     find_template,
@@ -37,6 +40,8 @@ from obconfig import (
     prepare_local_state,
     read_project_file,
     redacted_issue,
+    recover_pending_consume,
+    remove_config_from_index,
     repair,
     secure_unlink,
     summary,
@@ -417,11 +422,14 @@ def migrate_legacy(project_root: Path, template: Path) -> list[str]:
     )
     config_written = False
     config_identity: tuple[int, int] | None = None
+    migration_written = False
+    migration_identity: tuple[int, int] | None = None
     try:
         atomic_write(destination, text, 0o600, expect_absent=True)
         config_written = True
         written = destination.lstat()
         config_identity = (written.st_dev, written.st_ino)
+        preflight_config_creation(project_root)
         atomic_write_json(
             migration_path,
             {
@@ -431,7 +439,15 @@ def migrate_legacy(project_root: Path, template: Path) -> list[str]:
             },
             0o600,
         )
+        migration_written = True
+        written_migration = migration_path.lstat()
+        migration_identity = (
+            written_migration.st_dev,
+            written_migration.st_ino,
+        )
+        preflight_config_creation(project_root)
     except BaseException:
+        remove_config_from_index(project_root)
         if config_written:
             secure_unlink(destination, expected_identity=config_identity)
         elif destination.exists() or destination.is_symlink():
@@ -441,10 +457,23 @@ def migrate_legacy(project_root: Path, template: Path) -> list[str]:
                 expected_identity=(appeared.st_dev, appeared.st_ino),
                 allow_symlink=True,
             )
-        if previous_migration is None:
-            secure_unlink(migration_path)
-        else:
-            atomic_write(migration_path, previous_migration, 0o600)
+        if migration_written:
+            if previous_migration is None:
+                secure_unlink(
+                    migration_path, expected_identity=migration_identity
+                )
+            else:
+                current = migration_path.lstat()
+                if (current.st_dev, current.st_ino) != migration_identity:
+                    raise ObconfigError(
+                        ConfigIssue(
+                            1,
+                            1,
+                            "",
+                            "migration state changed before rollback",
+                        )
+                    )
+                atomic_write(migration_path, previous_migration, 0o600)
         raise
     return changed_paths
 
@@ -480,6 +509,9 @@ def main(
     claim_parser = sub.add_parser("claim")
     claim_parser.add_argument("--command", required=True)
     claim_parser.add_argument("--intended-version", required=True)
+    abort_parser = sub.add_parser("abort")
+    abort_parser.add_argument("--command", required=True)
+    abort_parser.add_argument("--intended-version", required=True)
     consume_parser = sub.add_parser("consume")
     consume_parser.add_argument("--command", required=True)
     consume_parser.add_argument("--intended-version", required=True)
@@ -498,6 +530,16 @@ def main(
     enforce_git = True
     data: Mapping[str, Any] | None = None
     try:
+        journal = root / ".obengineer/consume-journal.json"
+        if args.operation not in {
+            "init",
+            "migrate-legacy",
+            "authorize",
+            "claim",
+            "abort",
+            "consume",
+        } and (journal.exists() or journal.is_symlink()):
+            recover_pending_consume(root)
         if args.operation == "init":
             template = find_template(Path(__file__))
             legacy_sources = [
@@ -537,6 +579,7 @@ def main(
 
         if args.operation in {"direct-api", "safe-active"}:
             config_path = root / CONFIG_NAME
+            config_binding = None
             if not config_path.exists() and not config_path.is_symlink():
                 data = {
                     "splunk": {
@@ -549,7 +592,14 @@ def main(
                     }
                 }
             else:
-                data, _, _, _ = load_config(root, enforce_git=enforce_git)
+                data, _, config_raw, _ = load_config(
+                    root, enforce_git=enforce_git
+                )
+                config_binding = capture_config_binding(
+                    root,
+                    enforce_git=enforce_git,
+                    expected_digest=config_digest(config_raw),
+                )
             if args.operation == "safe-active" or args.phase == "analysis":
                 if not args.command or not args.intended_version:
                     raise ValueError(
@@ -600,6 +650,21 @@ def main(
                     intended_version=args.intended_version,
                     enforce_git=enforce_git,
                 )
+            elif config_binding is not None:
+                current_binding = capture_config_binding(
+                    root,
+                    enforce_git=enforce_git,
+                    expected_digest=config_binding.digest,
+                )
+                if current_binding != config_binding:
+                    raise ObconfigError(
+                        ConfigIssue(
+                            1,
+                            1,
+                            "",
+                            "obconfig.yaml identity or mode changed during verification",
+                        )
+                    )
             payload = Redactor(data).value(
                 {
                     "schema_version": 1,
@@ -608,6 +673,15 @@ def main(
                 }
             )
             print(json.dumps(payload, sort_keys=True, separators=(",", ":")))
+            return 0
+
+        if args.operation == "abort":
+            abort_claim(
+                root,
+                command=args.command,
+                intended_version=args.intended_version,
+            )
+            print("Aborted one-shot analysis claim without advancing the baseline.")
             return 0
 
         data, _, _, warnings = load_config(root, enforce_git=enforce_git)

@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import argparse
 import json
 from pathlib import Path
 from typing import Any
@@ -34,10 +35,25 @@ STRING_LISTS = {
     "public_evidence.competitors",
     "developer_tools.named",
 }
-MAPPING_LIST_KEYS = {
-    "initial_scope.parent_folders": ("repository", "path"),
-    "initial_scope.branches": ("repository", "branch"),
-    "developer_tools.matched": ("tool", "via", "key"),
+MAPPING_LIST_SCHEMAS = {
+    "initial_scope.parent_folders": {
+        "repository": {"type": "string"},
+        "path": {"type": "string"},
+    },
+    "initial_scope.branches": {
+        "repository": {"type": "string"},
+        "branch": {"type": "string"},
+    },
+    "developer_tools.matched": {
+        "tool": {"type": "string"},
+        "via": {"type": "string"},
+        "key": {"type": "string"},
+    },
+    "traffic_baseline.infra_integrations": {
+        "name": {"type": "string"},
+        "entities": {"type": "number", "minimum": 0},
+        "metrics_per_entity": {"type": "number", "minimum": 0},
+    },
 }
 NUMBER_OR_UNKNOWN_PREFIXES = {
     "traffic_baseline.rum",
@@ -67,10 +83,28 @@ SECRET_PATHS = {
 }
 
 
-def schema_for(value: Any, path: str) -> dict[str, Any]:
+def _source_marks(node: yaml.Node, path: str, marks: dict[str, int]) -> None:
+    marks[path] = node.start_mark.line + 1
+    if isinstance(node, yaml.MappingNode):
+        for key, value in node.value:
+            key_name = str(getattr(key, "value", ""))
+            child = f"{path}.{key_name}" if path else key_name
+            _source_marks(value, child, marks)
+    elif isinstance(node, yaml.SequenceNode):
+        for index, child in enumerate(node.value):
+            _source_marks(child, f"{path}[{index}]", marks)
+
+
+def schema_for(
+    value: Any, path: str, marks: dict[str, int]
+) -> dict[str, Any]:
     if isinstance(value, dict):
         properties = {
-            key: schema_for(item, f"{path}.{key}" if path else key)
+            key: schema_for(
+                item,
+                f"{path}.{key}" if path else key,
+                marks,
+            )
             for key, item in value.items()
         }
         return {
@@ -78,9 +112,13 @@ def schema_for(value: Any, path: str) -> dict[str, Any]:
             "required": list(value),
             "properties": properties,
             "additionalProperties": path == "extensions",
+            "x-obengineer-source-line": marks[path],
         }
     if isinstance(value, list):
-        result: dict[str, Any] = {"type": "array"}
+        result: dict[str, Any] = {
+            "type": "array",
+            "x-obengineer-source-line": marks[path],
+        }
         if path in STRING_LISTS:
             result["items"] = {"type": "string"}
             result["uniqueItems"] = path in {
@@ -88,32 +126,52 @@ def schema_for(value: Any, path: str) -> dict[str, Any]:
                 "splunk.platform.index_allowlist",
                 "outcomes.audiences",
             }
-        elif path in MAPPING_LIST_KEYS:
-            keys = MAPPING_LIST_KEYS[path]
+        elif path in MAPPING_LIST_SCHEMAS:
+            properties = MAPPING_LIST_SCHEMAS[path]
             result["items"] = {
                 "type": "object",
-                "required": list(keys),
-                "properties": {key: {"type": "string"} for key in keys},
+                "required": list(properties),
+                "properties": properties,
                 "additionalProperties": False,
+            }
+        elif path == "business_context.revenue_context.peak_events":
+            result["items"] = {
+                "oneOf": [
+                    {"type": "string"},
+                    {"type": "object"},
+                ]
             }
         else:
             result["items"] = {}
         return result
     if path == "schema_version":
-        return {"const": 4}
+        return {
+            "type": "integer",
+            "const": 4,
+            "x-obengineer-source-line": marks[path],
+        }
     if path in ENUMS:
-        return {"type": "string", "enum": ENUMS[path]}
+        return {
+            "type": "string",
+            "enum": ENUMS[path],
+            "x-obengineer-source-line": marks[path],
+        }
     if path in NUMBER_OR_UNKNOWN or any(
         path.startswith(prefix + ".") for prefix in NUMBER_OR_UNKNOWN_PREFIXES
     ):
-        return {
+        result = {
             "oneOf": [
                 {"type": "number", "minimum": 0},
                 {"const": "unknown"},
             ]
         }
+        result["x-obengineer-source-line"] = marks[path]
+        return result
     if isinstance(value, bool):
-        return {"type": "boolean"}
+        return {
+            "type": "boolean",
+            "x-obengineer-source-line": marks[path],
+        }
     if isinstance(value, int):
         result = {"type": "integer"}
         if path in {
@@ -123,10 +181,17 @@ def schema_for(value: Any, path: str) -> dict[str, Any]:
             "public_evidence.window_months",
         }:
             result["minimum"] = 1
+        result["x-obengineer-source-line"] = marks[path]
         return result
     if isinstance(value, float):
-        return {"type": "number"}
-    result = {"type": "string"}
+        return {
+            "type": "number",
+            "x-obengineer-source-line": marks[path],
+        }
+    result = {
+        "type": "string",
+        "x-obengineer-source-line": marks[path],
+    }
     if path in SECRET_PATHS:
         result["x-obengineer-secret"] = True
     if path == "analysis_access.dummy_login.login_id":
@@ -136,9 +201,15 @@ def schema_for(value: Any, path: str) -> dict[str, Any]:
     return result
 
 
-def main() -> None:
-    template = yaml.safe_load(TEMPLATE.read_text(encoding="utf-8"))
-    schema = schema_for(template, "")
+def render_schema() -> str:
+    text = TEMPLATE.read_text(encoding="utf-8")
+    template = yaml.safe_load(text)
+    node = yaml.compose(text)
+    if node is None:
+        raise ValueError("canonical template is empty")
+    marks: dict[str, int] = {}
+    _source_marks(node, "", marks)
+    schema = schema_for(template, "", marks)
     schema.update(
         {
             "$schema": "https://json-schema.org/draft/2020-12/schema",
@@ -160,7 +231,20 @@ def main() -> None:
             ),
         }
     )
-    OUTPUT.write_text(json.dumps(schema, indent=2) + "\n", encoding="utf-8")
+    return json.dumps(schema, indent=2) + "\n"
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--check", action="store_true")
+    args = parser.parse_args()
+    rendered = render_schema()
+    if args.check:
+        if not OUTPUT.is_file() or OUTPUT.read_text(encoding="utf-8") != rendered:
+            raise SystemExit("obconfig schema drifted; regenerate it")
+        print("PASS — obconfig schema matches canonical YAML contract")
+        return
+    OUTPUT.write_text(rendered, encoding="utf-8")
 
 
 if __name__ == "__main__":

@@ -32,7 +32,7 @@ test: ## Run contract tests over the agentry and the renderer round-trip
 	$(PY) -m pytest tests skills -q
 
 .PHONY: check
-check: check-plugin-skills check-manifest-versions ## Verify packaging is consistent
+check: check-obconfig-schema check-plugin-skills check-manifest-versions ## Verify packaging is consistent
 
 .PHONY: sync-plugin-skills
 sync-plugin-skills: ## Refresh plugin skill copies and host links from canonical skills
@@ -41,6 +41,10 @@ sync-plugin-skills: ## Refresh plugin skill copies and host links from canonical
 .PHONY: check-plugin-skills
 check-plugin-skills: ## Fail if plugin copies drifted from canonical skills
 	$(PY) scripts/sync_plugin_skills.py --check
+
+.PHONY: check-obconfig-schema
+check-obconfig-schema: ## Fail if generated obconfig schema drifted from the YAML contract
+	$(PY) skills/engagement-intake/scripts/generate_obconfig_schema.py --check
 
 .PHONY: check-manifest-versions
 check-manifest-versions: ## Fail if the Claude and Codex plugin versions disagree
