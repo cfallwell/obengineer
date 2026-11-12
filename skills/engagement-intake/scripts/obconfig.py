@@ -39,7 +39,7 @@ CONFIG_NAME = "obconfig.yaml"
 TEMPLATE_NAME = "obconfig.yaml.template"
 STATE_DIRECTORY = ".obengineer"
 TREE_ALGORITHM = "ob-artifact-tree-v1"
-GENERATED_OUTPUT_ALGORITHM = "ob-generated-output-v1"
+GENERATED_OUTPUT_ALGORITHM = "ob-generated-index-output-v2"
 MAX_CONFIG_BYTES = 1024 * 1024
 SAFE_ACTIVE_MAX_REQUESTS = 100
 SAFE_ACTIVE_REQUESTS_PER_SECOND = 1
@@ -1691,10 +1691,7 @@ def redact_path(path: str) -> str:
     return "/".join("[REDACTED]" if SECRET_KEY.search(part) else part for part in parts)
 
 
-def hash_generated_outputs(
-    project_root: Path,
-    relative_paths: Iterable[str],
-) -> dict[str, Any]:
+def _normalized_generated_paths(relative_paths: Iterable[str]) -> list[str]:
     normalized: list[str] = []
     for value in relative_paths:
         candidate = PurePosixPath(value.replace("\\", "/"))
@@ -1720,66 +1717,202 @@ def hash_generated_outputs(
             raise ObconfigError(
                 ConfigIssue(1, 1, "", "generated output paths must not overlap")
             )
+    return normalized
 
-    records: list[dict[str, Any]] = []
+
+def _git_output(project_root: Path, *arguments: str) -> bytes:
+    try:
+        completed = subprocess.run(
+            ["git", *arguments],
+            cwd=project_root,
+            check=False,
+            capture_output=True,
+            timeout=30,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        raise ObconfigError(
+            ConfigIssue(1, 1, "", "Git object verification is unavailable")
+        ) from None
+    if completed.returncode != 0:
+        raise ObconfigError(
+            ConfigIssue(1, 1, "", "Git object verification failed")
+        )
+    return completed.stdout
+
+
+def _require_git_project_root(project_root: Path) -> Path:
     root = project_root.resolve()
-    for value in normalized:
-        path = root / value
+    reported = Path(
+        _git_output(root, "rev-parse", "--show-toplevel")
+        .decode("utf-8", errors="strict")
+        .strip()
+    ).resolve()
+    if reported != root:
+        raise ObconfigError(
+            ConfigIssue(1, 1, "", "project root must be the Git worktree root")
+        )
+    return root
+
+
+def _git_index_entries(
+    project_root: Path, paths: list[str]
+) -> tuple[str, dict[str, tuple[str, str]]]:
+    root = _require_git_project_root(project_root)
+    tree_sha = _git_output(root, "write-tree").decode("ascii").strip()
+    pathspecs = [f":(literal){path}" for path in paths]
+    raw = _git_output(root, "ls-files", "--stage", "-z", "--", *pathspecs)
+    entries: dict[str, tuple[str, str]] = {}
+    for record in raw.split(b"\0"):
+        if not record:
+            continue
         try:
-            info = path.lstat()
-        except OSError:
+            metadata, encoded_path = record.split(b"\t", 1)
+            mode, object_id, stage = metadata.decode("ascii").split(" ")
+            path = encoded_path.decode("utf-8")
+        except (ValueError, UnicodeDecodeError):
             raise ObconfigError(
-                ConfigIssue(1, 1, "", "generated output path does not exist")
+                ConfigIssue(1, 1, "", "Git index output entry is invalid")
             ) from None
-        if stat.S_ISLNK(info.st_mode):
+        if stage != "0" or mode not in {"100644", "100755"}:
             raise ObconfigError(
-                ConfigIssue(1, 1, "", "generated output must not be a symlink")
+                ConfigIssue(
+                    1,
+                    1,
+                    "",
+                    "generated outputs must be regular stage-zero Git index files",
+                )
             )
-        if stat.S_ISREG(info.st_mode):
-            raw, version = read_project_file_version(
-                root,
-                Path(value),
-                "generated output",
-                required_mode=None,
+        entries[path] = (mode, object_id)
+    return tree_sha, entries
+
+
+def _git_commit_entries(
+    project_root: Path,
+    commit_sha: str,
+    paths: list[str],
+) -> tuple[str, dict[str, tuple[str, str]]]:
+    root = _require_git_project_root(project_root)
+    tree_sha = _git_output(
+        root, "rev-parse", "--verify", f"{commit_sha}^{{tree}}"
+    ).decode("ascii").strip()
+    pathspecs = [f":(literal){path}" for path in paths]
+    raw = _git_output(
+        root,
+        "ls-tree",
+        "-r",
+        "-z",
+        "--full-tree",
+        commit_sha,
+        "--",
+        *pathspecs,
+    )
+    entries: dict[str, tuple[str, str]] = {}
+    for record in raw.split(b"\0"):
+        if not record:
+            continue
+        try:
+            metadata, encoded_path = record.split(b"\t", 1)
+            mode, object_type, object_id = metadata.decode("ascii").split(" ")
+            path = encoded_path.decode("utf-8")
+        except (ValueError, UnicodeDecodeError):
+            raise ObconfigError(
+                ConfigIssue(1, 1, "", "Git commit output entry is invalid")
+            ) from None
+        if object_type != "blob" or mode not in {"100644", "100755"}:
+            raise ObconfigError(
+                ConfigIssue(
+                    1, 1, "", "generated commit outputs must be regular files"
+                )
             )
-            records.append(
+        entries[path] = (mode, object_id)
+    return tree_sha, entries
+
+
+def _git_output_manifest(
+    project_root: Path,
+    paths: list[str],
+    entries: Mapping[str, tuple[str, str]],
+) -> dict[str, Any]:
+    outputs: list[dict[str, Any]] = []
+    for value in paths:
+        exact = value in entries
+        prefix = value + "/"
+        children = sorted(path for path in entries if path.startswith(prefix))
+        if exact and children:
+            raise ObconfigError(
+                ConfigIssue(1, 1, "", "generated output path is ambiguous")
+            )
+        selected = [value] if exact else children
+        if not selected:
+            raise ObconfigError(
+                ConfigIssue(
+                    1, 1, "", "generated output is omitted from the Git tree"
+                )
+            )
+        files: list[dict[str, Any]] = []
+        for path in selected:
+            mode, object_id = entries[path]
+            content = _git_output(project_root, "cat-file", "blob", object_id)
+            files.append(
                 {
-                    "path": value,
-                    "type": "file",
-                    "bytes": len(raw),
-                    "sha256": version.digest,
+                    "path": path,
+                    "mode": mode,
+                    "bytes": len(content),
+                    "sha256": hashlib.sha256(content).hexdigest(),
+                    "git_object": object_id,
                 }
             )
-        elif stat.S_ISDIR(info.st_mode):
-            tree = hash_artifact_tree(root, value)
-            records.append(
-                {
-                    "path": value,
-                    "type": "directory",
-                    "file_count": tree["file_count"],
-                    "total_bytes": tree["total_bytes"],
-                    "tree_sha256": tree["tree_sha256"],
-                }
-            )
-        else:
-            raise ObconfigError(
-                ConfigIssue(1, 1, "", "generated output must be a file or directory")
-            )
-    encoded = json.dumps(
-        {
-            "algorithm": GENERATED_OUTPUT_ALGORITHM,
-            "outputs": records,
-        },
-        sort_keys=True,
-        separators=(",", ":"),
-    ).encode()
-    return {
-        "schema_version": 1,
+        output_type = "file" if exact else "directory"
+        output_digest = hashlib.sha256(
+            json.dumps(
+                files, sort_keys=True, separators=(",", ":")
+            ).encode()
+        ).hexdigest()
+        outputs.append(
+            {
+                "path": value,
+                "type": output_type,
+                "file_count": len(files),
+                "sha256": output_digest,
+                "files": files,
+            }
+        )
+    projection = {
         "algorithm": GENERATED_OUTPUT_ALGORITHM,
-        "output_count": len(records),
-        "sha256": hashlib.sha256(encoded).hexdigest(),
-        "outputs": records,
+        "paths": paths,
+        "outputs": outputs,
     }
+    return {
+        "schema_version": 2,
+        **projection,
+        "output_count": len(outputs),
+        "sha256": hashlib.sha256(
+            json.dumps(
+                projection, sort_keys=True, separators=(",", ":")
+            ).encode()
+        ).hexdigest(),
+    }
+
+
+def hash_staged_generated_outputs(
+    project_root: Path,
+    relative_paths: Iterable[str],
+) -> tuple[str, dict[str, Any]]:
+    normalized = _normalized_generated_paths(relative_paths)
+    tree_sha, entries = _git_index_entries(project_root, normalized)
+    return tree_sha, _git_output_manifest(project_root, normalized, entries)
+
+
+def hash_committed_generated_outputs(
+    project_root: Path,
+    commit_sha: str,
+    relative_paths: Iterable[str],
+) -> tuple[str, dict[str, Any]]:
+    normalized = _normalized_generated_paths(relative_paths)
+    tree_sha, entries = _git_commit_entries(
+        project_root, commit_sha, normalized
+    )
+    return tree_sha, _git_output_manifest(project_root, normalized, entries)
 
 
 def _descriptor_digest(
@@ -1872,7 +2005,7 @@ def atomic_write(
     expected_identity: tuple[int, int] | None = None,
     expected_digest: str | None = None,
     expected_mode: int | None = None,
-) -> None:
+) -> RegularFileVersion:
     parent = path.parent
     if parent.name == STATE_DIRECTORY:
         _safe_local_directory(parent.parent)
@@ -1888,6 +2021,9 @@ def atomic_write(
     )
     parent_descriptor = os.open(parent, directory_flags)
     descriptor: int | None = None
+    temporary_identity: tuple[int, int] | None = None
+    created_path = False
+    existing: os.stat_result | None = None
     temporary_name = f".{path.name}.{os.getpid()}.{time.time_ns()}"
     try:
         opened_parent = os.fstat(parent_descriptor)
@@ -1946,6 +2082,11 @@ def atomic_write(
             dir_fd=parent_descriptor,
         )
         os.fchmod(descriptor, mode)
+        temporary_info = os.fstat(descriptor)
+        temporary_identity = (
+            temporary_info.st_dev,
+            temporary_info.st_ino,
+        )
         view = memoryview(data)
         while view:
             written = os.write(descriptor, view)
@@ -1998,6 +2139,7 @@ def atomic_write(
                     )
                 ) from None
             os.unlink(temporary_name, dir_fd=parent_descriptor)
+            created_path = True
         else:
             os.replace(
                 temporary_name,
@@ -2005,11 +2147,20 @@ def atomic_write(
                 src_dir_fd=parent_descriptor,
                 dst_dir_fd=parent_descriptor,
             )
+            created_path = True
         os.fsync(parent_descriptor)
         final = os.stat(path.name, dir_fd=parent_descriptor, follow_symlinks=False)
-        if os.name == "posix" and stat.S_IMODE(final.st_mode) != mode:
+        if (
+            temporary_identity is None
+            or (final.st_dev, final.st_ino) != temporary_identity
+            or (os.name == "posix" and stat.S_IMODE(final.st_mode) != mode)
+            or _descriptor_digest(parent_descriptor, path.name, final)
+            != hashlib.sha256(data).hexdigest()
+        ):
             raise ObconfigError(
-                ConfigIssue(1, 1, "", f"{path.name} mode was not preserved")
+                ConfigIssue(
+                    1, 1, "", f"{path.name} changed after atomic creation"
+                )
             )
         current_parent = parent.lstat()
         if (current_parent.st_dev, current_parent.st_ino) != (
@@ -2019,6 +2170,15 @@ def atomic_write(
             raise ObconfigError(
                 ConfigIssue(1, 1, "", f"{path.name} parent changed during write")
             )
+        return RegularFileVersion(
+            final.st_dev,
+            final.st_ino,
+            stat.S_IMODE(final.st_mode),
+            final.st_size,
+            final.st_mtime_ns,
+            final.st_ctime_ns,
+            hashlib.sha256(data).hexdigest(),
+        )
     except BaseException:
         try:
             if descriptor is not None:
@@ -2029,6 +2189,18 @@ def atomic_write(
             os.unlink(temporary_name, dir_fd=parent_descriptor)
         except OSError:
             pass
+        if created_path and existing is None and temporary_identity is not None:
+            try:
+                current = os.stat(
+                    path.name,
+                    dir_fd=parent_descriptor,
+                    follow_symlinks=False,
+                )
+                if (current.st_dev, current.st_ino) == temporary_identity:
+                    os.unlink(path.name, dir_fd=parent_descriptor)
+                    os.fsync(parent_descriptor)
+            except (FileNotFoundError, OSError):
+                pass
         raise
     finally:
         os.close(parent_descriptor)
@@ -2043,8 +2215,8 @@ def atomic_write_json(
     expected_identity: tuple[int, int] | None = None,
     expected_digest: str | None = None,
     expected_mode: int | None = None,
-) -> None:
-    atomic_write(
+) -> RegularFileVersion:
+    return atomic_write(
         path,
         (json.dumps(value, indent=2, sort_keys=True) + "\n").encode(),
         mode,
@@ -2059,6 +2231,8 @@ def secure_unlink(
     path: Path,
     *,
     expected_identity: tuple[int, int] | None = None,
+    expected_digest: str | None = None,
+    expected_mode: int | None = None,
     allow_symlink: bool = False,
 ) -> None:
     parent_info = path.parent.lstat()
@@ -2088,6 +2262,23 @@ def secure_unlink(
             raise ObconfigError(
                 ConfigIssue(1, 1, "", f"{path.name} changed before secure removal")
             )
+        if (
+            expected_mode is not None
+            and stat.S_IMODE(info.st_mode) != expected_mode
+        ):
+            raise ObconfigError(
+                ConfigIssue(1, 1, "", f"{path.name} mode changed before removal")
+            )
+        if expected_digest is not None:
+            if stat.S_ISLNK(info.st_mode) or (
+                _descriptor_digest(descriptor, path.name, info)
+                != expected_digest
+            ):
+                raise ObconfigError(
+                    ConfigIssue(
+                        1, 1, "", f"{path.name} content changed before removal"
+                    )
+                )
         os.unlink(path.name, dir_fd=descriptor)
         os.fsync(descriptor)
         current_parent = path.parent.lstat()
@@ -2116,24 +2307,23 @@ def initialize(project_root: Path, template: Path) -> bool:
     raw = _read_regular_bytes(
         template, TEMPLATE_NAME, limit=MAX_CONFIG_BYTES, required_mode=None
     )
-    written_identity: tuple[int, int] | None = None
+    written_version: RegularFileVersion | None = None
     try:
-        atomic_write(destination, raw, 0o600, expect_absent=True)
-        written = destination.lstat()
-        written_identity = (written.st_dev, written.st_ino)
+        written_version = atomic_write(
+            destination, raw, 0o600, expect_absent=True
+        )
         preflight_config_creation(project_root)
     except BaseException:
         remove_config_from_index(project_root)
-        try:
-            appeared = destination.lstat()
-        except FileNotFoundError:
-            pass
-        else:
+        if written_version is not None:
             secure_unlink(
                 destination,
-                expected_identity=written_identity
-                or (appeared.st_dev, appeared.st_ino),
-                allow_symlink=True,
+                expected_identity=(
+                    written_version.device,
+                    written_version.inode,
+                ),
+                expected_digest=written_version.digest,
+                expected_mode=written_version.mode,
             )
         raise
     return True
@@ -2407,6 +2597,10 @@ def _authorization_path(project_root: Path) -> Path:
 
 def _claim_path(project_root: Path) -> Path:
     return project_root / STATE_DIRECTORY / "analysis-claim.json"
+
+
+def _dispatch_path(project_root: Path) -> Path:
+    return project_root / STATE_DIRECTORY / "analysis-dispatch.json"
 
 
 def _consume_journal_path(project_root: Path) -> Path:
@@ -2881,7 +3075,9 @@ def finalize_claim(
             enforce_git=enforce_git,
             label="analysis claim",
         )
-        generated = hash_generated_outputs(project_root, generated_outputs)
+        index_tree_sha, generated = hash_staged_generated_outputs(
+            project_root, generated_outputs
+        )
         _validate_bound_state(
             saved,
             project_root,
@@ -2894,6 +3090,7 @@ def finalize_claim(
         finalized.update(
             {
                 "finalized": True,
+                "git_index_tree_sha": index_tree_sha,
                 "generated_output_manifest": generated,
                 "generated_output_sha256": generated["sha256"],
             }
@@ -2917,6 +3114,154 @@ def finalize_claim(
         return finalized
 
 
+def _resolve_head_commit(project_root: Path) -> str:
+    commit = _git_output(
+        _require_git_project_root(project_root),
+        "rev-parse",
+        "--verify",
+        "HEAD^{commit}",
+    ).decode("ascii").strip()
+    if not re.fullmatch(r"[0-9a-f]{40}|[0-9a-f]{64}", commit):
+        raise ObconfigError(
+            ConfigIssue(1, 1, "", "Git HEAD commit identity is invalid")
+        )
+    return commit
+
+
+def _verify_dispatched_git_objects(
+    project_root: Path,
+    dispatch: Mapping[str, Any],
+    generated_manifest: Mapping[str, Any],
+) -> None:
+    commit_sha = dispatch.get("commit_sha")
+    tree_sha = dispatch.get("tree_sha")
+    paths = generated_manifest.get("paths")
+    if (
+        not isinstance(commit_sha, str)
+        or not isinstance(tree_sha, str)
+        or not isinstance(paths, list)
+        or not all(isinstance(path, str) for path in paths)
+    ):
+        raise ObconfigError(
+            ConfigIssue(1, 1, "", "analysis dispatch record is invalid")
+        )
+    if _resolve_head_commit(project_root) != commit_sha:
+        raise ObconfigError(
+            ConfigIssue(1, 1, "", "Git HEAD no longer matches analysis dispatch")
+        )
+    committed_tree, committed_manifest = hash_committed_generated_outputs(
+        project_root, commit_sha, paths
+    )
+    if (
+        committed_tree != tree_sha
+        or committed_manifest != dict(generated_manifest)
+        or dispatch.get("generated_output_sha256")
+        != generated_manifest.get("sha256")
+    ):
+        raise ObconfigError(
+            ConfigIssue(
+                1, 1, "", "dispatched Git tree or generated outputs do not match"
+            )
+        )
+
+
+def record_dispatch(
+    project_root: Path,
+    *,
+    command: str,
+    intended_version: str,
+) -> dict[str, Any]:
+    with _gate_lock(
+        project_root,
+        recovery_command=command,
+        recovery_version=intended_version,
+    ):
+        claim, claim_version = _load_bound_state_version(
+            _claim_path(project_root), "analysis claim"
+        )
+        generated = claim.get("generated_output_manifest")
+        index_tree = claim.get("git_index_tree_sha")
+        if (
+            claim.get("schema_version") != SCHEMA_VERSION
+            or claim.get("command") != command
+            or claim.get("intended_version") != intended_version
+            or claim.get("finalized") is not True
+            or not isinstance(generated, Mapping)
+            or not isinstance(index_tree, str)
+        ):
+            raise ObconfigError(
+                ConfigIssue(1, 1, "", "analysis claim is not dispatchable")
+            )
+        commit_sha = _resolve_head_commit(project_root)
+        committed_tree, committed_manifest = hash_committed_generated_outputs(
+            project_root, commit_sha, generated.get("paths", [])
+        )
+        if committed_tree != index_tree or committed_manifest != dict(generated):
+            raise ObconfigError(
+                ConfigIssue(
+                    1,
+                    1,
+                    "",
+                    "HEAD must commit the exact finalized Git index tree and outputs",
+                )
+            )
+        dispatch = {
+            "schema_version": 1,
+            "command": command,
+            "intended_version": intended_version,
+            "claim_sha256": claim_version.digest,
+            "commit_sha": commit_sha,
+            "tree_sha": committed_tree,
+            "generated_output_sha256": generated["sha256"],
+        }
+        path = _dispatch_path(project_root)
+        atomic_write_json(path, dispatch, expect_absent=True)
+        persisted, _ = _load_bound_state_version(path, "analysis dispatch")
+        if persisted != dispatch:
+            raise ObconfigError(
+                ConfigIssue(1, 1, "", "analysis dispatch did not persist exactly")
+            )
+        _verify_dispatched_git_objects(project_root, dispatch, generated)
+        return dispatch
+
+
+def verify_dispatch(
+    project_root: Path,
+    *,
+    command: str,
+    intended_version: str,
+) -> dict[str, Any]:
+    with _gate_lock(
+        project_root,
+        recovery_command=command,
+        recovery_version=intended_version,
+    ):
+        claim, claim_version = _load_bound_state_version(
+            _claim_path(project_root), "analysis claim"
+        )
+        dispatch = _load_bound_state(
+            _dispatch_path(project_root), "analysis dispatch"
+        )
+        generated = claim.get("generated_output_manifest")
+        if (
+            claim.get("finalized") is not True
+            or claim.get("command") != command
+            or claim.get("intended_version") != intended_version
+            or not isinstance(generated, Mapping)
+            or dispatch.get("command") != command
+            or dispatch.get("intended_version") != intended_version
+            or dispatch.get("claim_sha256") != claim_version.digest
+            or dispatch.get("tree_sha") != claim.get("git_index_tree_sha")
+        ):
+            raise ObconfigError(
+                ConfigIssue(
+                    1, 1, "", "analysis dispatch does not match finalized claim"
+                )
+            )
+        _verify_dispatched_git_objects(project_root, dispatch, generated)
+        return dict(dispatch)
+
+
 def abort_claim(
     project_root: Path,
     *,
@@ -2938,6 +3283,24 @@ def abort_claim(
         ):
             raise ObconfigError(
                 ConfigIssue(1, 1, "", "analysis claim command or version does not match")
+            )
+        dispatch_path = _dispatch_path(project_root)
+        if dispatch_path.exists() or dispatch_path.is_symlink():
+            dispatch, dispatch_version = _load_bound_state_version(
+                dispatch_path, "analysis dispatch"
+            )
+            if (
+                dispatch.get("command") != command
+                or dispatch.get("intended_version") != intended_version
+                or dispatch.get("claim_sha256") != version.digest
+            ):
+                raise ObconfigError(
+                    ConfigIssue(
+                        1, 1, "", "analysis dispatch does not match abort claim"
+                    )
+                )
+            _quarantine_remove_state(
+                project_root, dispatch_path.name, dispatch_version
             )
         _quarantine_remove_state(
             project_root,
@@ -3010,14 +3373,31 @@ def _consume_claim_locked(
         raise ObconfigError(
             ConfigIssue(1, 1, "", "analysis claim must be finalized before consume")
         )
+    dispatch, dispatch_version = _load_bound_state_version(
+        _dispatch_path(project_root), "analysis dispatch"
+    )
+    if (
+        dispatch.get("command") != command
+        or dispatch.get("intended_version") != intended_version
+        or dispatch.get("claim_sha256") != claim_version.digest
+        or dispatch.get("tree_sha") != state.get("git_index_tree_sha")
+    ):
+        raise ObconfigError(
+            ConfigIssue(
+                1, 1, "", "analysis dispatch does not match finalized claim"
+            )
+        )
+    _verify_dispatched_git_objects(project_root, dispatch, generated_manifest)
     history = {
         key: state[key]
         for key in (
             "schema_version", "command", "intended_version",
             "config_sha256", "artifact_tree_sha256",
-            "generated_output_sha256",
+            "generated_output_sha256", "git_index_tree_sha",
         )
     }
+    history["dispatched_commit_sha"] = dispatch["commit_sha"]
+    history["dispatched_tree_sha"] = dispatch["tree_sha"]
     history["generated_output_manifest"] = dict(generated_manifest)
     manifest = state.get("artifact_manifest")
     if not isinstance(manifest, Mapping):
@@ -3029,6 +3409,8 @@ def _consume_claim_locked(
         "command": command,
         "intended_version": intended_version,
         "claim_sha256": claim_version.digest,
+        "dispatch_sha256": dispatch_version.digest,
+        "dispatch": dict(dispatch),
         "artifact_manifest": dict(manifest),
         "last_analysis_binding": history,
     }
@@ -3058,12 +3440,17 @@ def _recover_consume_locked(
     manifest = journal.get("artifact_manifest")
     history = journal.get("last_analysis_binding")
     claim_sha256 = journal.get("claim_sha256")
+    dispatch_sha256 = journal.get("dispatch_sha256")
+    dispatch = journal.get("dispatch")
     if (
         journal.get("schema_version") != 1
         or not isinstance(manifest, Mapping)
         or not isinstance(history, Mapping)
         or not isinstance(claim_sha256, str)
         or not re.fullmatch(r"[0-9a-f]{64}", claim_sha256)
+        or not isinstance(dispatch_sha256, str)
+        or not re.fullmatch(r"[0-9a-f]{64}", dispatch_sha256)
+        or not isinstance(dispatch, Mapping)
     ):
         raise ObconfigError(ConfigIssue(1, 1, "", "consume journal is invalid"))
     if (
@@ -3095,6 +3482,34 @@ def _recover_consume_locked(
                 ConfigIssue(1, 1, "", "consume journal does not match analysis claim")
             )
 
+    generated_manifest = history.get("generated_output_manifest")
+    if not isinstance(generated_manifest, Mapping):
+        raise ObconfigError(
+            ConfigIssue(1, 1, "", "consume journal generated outputs are invalid")
+        )
+    dispatch_path = _dispatch_path(project_root)
+    dispatch_exists = dispatch_path.exists() or dispatch_path.is_symlink()
+    dispatch_version: RegularFileVersion | None = None
+    if dispatch_exists:
+        dispatch_raw, dispatch_version = _capture_regular_version(
+            dispatch_path,
+            "analysis dispatch",
+            required_mode=0o600,
+        )
+        if (
+            hashlib.sha256(dispatch_raw).hexdigest() != dispatch_sha256
+            or _load_bound_state(dispatch_path, "analysis dispatch")
+            != dict(dispatch)
+        ):
+            raise ObconfigError(
+                ConfigIssue(
+                    1, 1, "", "consume journal does not match analysis dispatch"
+                )
+            )
+    _verify_dispatched_git_objects(
+        project_root, dispatch, generated_manifest
+    )
+
     atomic_write_json(_manifest_path(project_root), manifest)
     atomic_write_json(_last_binding_path(project_root), history)
     saved_manifest = _load_bound_state(
@@ -3113,6 +3528,13 @@ def _recover_consume_locked(
             project_root,
             claim_path.name,
             claim_version,
+        )
+    if dispatch_exists:
+        assert dispatch_version is not None
+        _quarantine_remove_state(
+            project_root,
+            dispatch_path.name,
+            dispatch_version,
         )
     _, journal_version = _capture_regular_version(
         path,

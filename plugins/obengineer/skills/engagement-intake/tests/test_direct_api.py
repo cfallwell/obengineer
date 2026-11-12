@@ -596,8 +596,13 @@ def test_finalize_cli_binds_runtime_outputs_before_dispatch_and_consume(
     claim = obconfig.claim_authorization(
         tmp_path, command="ob-start", intended_version="V1"
     )
+    subprocess.run(
+        ["git", "add", "docs/observability/analysis/app/V1"],
+        cwd=tmp_path,
+        check=True,
+    )
     dispatched = []
-    argv = [
+    finalize_argv = [
         "--project-root",
         str(tmp_path),
         "finalize",
@@ -608,11 +613,51 @@ def test_finalize_cli_binds_runtime_outputs_before_dispatch_and_consume(
         "--output",
         "docs/observability/analysis/app/V1",
     ]
-    assert manage_obconfig.main(argv, dispatch_callback=dispatched.append) == 0
+    assert manage_obconfig.main(finalize_argv) == 0
     payload = json.loads(capsys.readouterr().out)
-    assert dispatched == [payload]
+    assert dispatched == []
     assert payload["finalized"] is True
     assert payload["output_count"] == 1
+
+    # A worktree edit after staging does not alter the exact finalized index tree.
+    (output / "index.md").write_text("next-run generated analysis\n")
+    subprocess.run(
+        [
+            "git",
+            "-c",
+            "user.name=Obengineer Test",
+            "-c",
+            "user.email=test@example.invalid",
+            "commit",
+            "-q",
+            "-m",
+            "analysis V1",
+        ],
+        cwd=tmp_path,
+        check=True,
+    )
+    dispatch_argv = [
+        "--project-root",
+        str(tmp_path),
+        "dispatch",
+        "--command",
+        "ob-start",
+        "--intended-version",
+        "V1",
+    ]
+    assert (
+        manage_obconfig.main(
+            dispatch_argv, dispatch_callback=dispatched.append
+        )
+        == 0
+    )
+    dispatch_payload = json.loads(capsys.readouterr().out)
+    assert dispatched == [dispatch_payload]
+    assert dispatch_payload["dispatch_verified"] is True
+    verify_argv = dispatch_argv.copy()
+    verify_argv[2] = "verify-dispatch"
+    assert manage_obconfig.main(verify_argv) == 0
+    capsys.readouterr()
 
     # Inputs after finalization belong to the next run and do not alter the
     # finalized/published baseline committed by consume.
@@ -630,6 +675,7 @@ def test_finalize_cli_binds_runtime_outputs_before_dispatch_and_consume(
     assert history["generated_output_sha256"] == payload[
         "generated_output_sha256"
     ]
+    assert history["dispatched_commit_sha"] == dispatch_payload["commit_sha"]
 
 
 def test_finalize_mutation_blocks_dispatch_callback(tmp_path, capsys):
@@ -643,6 +689,7 @@ def test_finalize_mutation_blocks_dispatch_callback(tmp_path, capsys):
     obconfig.claim_authorization(
         tmp_path, command="ob-start", intended_version="V1"
     )
+    subprocess.run(["git", "add", "generated"], cwd=tmp_path, check=True)
     artifact.write_text("mutated before finalize")
     dispatched = []
     argv = [
@@ -661,6 +708,128 @@ def test_finalize_mutation_blocks_dispatch_callback(tmp_path, capsys):
     assert terminal.out == ""
     assert dispatched == []
     assert "no longer matches" in terminal.err
+
+
+def test_finalize_rejects_output_omitted_from_git_index(tmp_path, capsys):
+    configured_project(tmp_path)
+    output = tmp_path / "generated"
+    output.mkdir()
+    (output / "result.md").write_text("not staged\n")
+    obconfig.authorize(tmp_path, command="ob-start", intended_version="V1")
+    obconfig.claim_authorization(
+        tmp_path, command="ob-start", intended_version="V1"
+    )
+    argv = [
+        "--project-root",
+        str(tmp_path),
+        "finalize",
+        "--command",
+        "ob-start",
+        "--intended-version",
+        "V1",
+        "--output",
+        "generated",
+    ]
+    assert manage_obconfig.main(argv) == 1
+    terminal = capsys.readouterr()
+    assert terminal.out == ""
+    assert "omitted from the Git tree" in terminal.err
+
+
+def test_dispatch_and_consume_reject_nonfinalized_commit_tree(
+    tmp_path, capsys
+):
+    configured_project(tmp_path)
+    output = tmp_path / "generated"
+    output.mkdir()
+    result = output / "result.md"
+    result.write_text("finalized bytes\n")
+    subprocess.run(["git", "add", "generated"], cwd=tmp_path, check=True)
+    obconfig.authorize(tmp_path, command="ob-start", intended_version="V1")
+    obconfig.claim_authorization(
+        tmp_path, command="ob-start", intended_version="V1"
+    )
+    obconfig.finalize_claim(
+        tmp_path,
+        command="ob-start",
+        intended_version="V1",
+        generated_outputs=["generated"],
+    )
+    result.write_text("different committed bytes\n")
+    subprocess.run(["git", "add", "generated"], cwd=tmp_path, check=True)
+    subprocess.run(
+        [
+            "git",
+            "-c",
+            "user.name=Obengineer Test",
+            "-c",
+            "user.email=test@example.invalid",
+            "commit",
+            "-q",
+            "-m",
+            "wrong tree",
+        ],
+        cwd=tmp_path,
+        check=True,
+    )
+    dispatch_argv = [
+        "--project-root",
+        str(tmp_path),
+        "dispatch",
+        "--command",
+        "ob-start",
+        "--intended-version",
+        "V1",
+    ]
+    assert manage_obconfig.main(dispatch_argv) == 1
+    assert "exact finalized Git index tree" in capsys.readouterr().err
+    assert not (tmp_path / ".obengineer/analysis-dispatch.json").exists()
+    with pytest.raises(obconfig.ObconfigError, match="analysis dispatch"):
+        obconfig.consume_claim(
+            tmp_path, command="ob-start", intended_version="V1"
+        )
+
+
+def test_verify_dispatch_and_consume_reject_head_after_dispatch(tmp_path):
+    configured_project(tmp_path)
+    output = tmp_path / "generated"
+    output.mkdir()
+    (output / "result.md").write_text("finalized\n")
+    subprocess.run(["git", "add", "generated"], cwd=tmp_path, check=True)
+    obconfig.authorize(tmp_path, command="ob-start", intended_version="V1")
+    obconfig.claim_authorization(
+        tmp_path, command="ob-start", intended_version="V1"
+    )
+    obconfig.finalize_claim(
+        tmp_path,
+        command="ob-start",
+        intended_version="V1",
+        generated_outputs=["generated"],
+    )
+    commit = [
+        "git",
+        "-c",
+        "user.name=Obengineer Test",
+        "-c",
+        "user.email=test@example.invalid",
+        "commit",
+        "-q",
+    ]
+    subprocess.run([*commit, "-m", "analysis V1"], cwd=tmp_path, check=True)
+    obconfig.record_dispatch(
+        tmp_path, command="ob-start", intended_version="V1"
+    )
+    (tmp_path / "unrelated.txt").write_text("not dispatched\n")
+    subprocess.run(["git", "add", "unrelated.txt"], cwd=tmp_path, check=True)
+    subprocess.run([*commit, "-m", "later commit"], cwd=tmp_path, check=True)
+    with pytest.raises(obconfig.ObconfigError, match="HEAD no longer matches"):
+        obconfig.verify_dispatch(
+            tmp_path, command="ob-start", intended_version="V1"
+        )
+    with pytest.raises(obconfig.ObconfigError, match="HEAD no longer matches"):
+        obconfig.consume_claim(
+            tmp_path, command="ob-start", intended_version="V1"
+        )
 
 
 def test_direct_api_discards_result_when_config_swaps_during_transport(

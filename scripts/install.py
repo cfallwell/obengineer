@@ -34,6 +34,7 @@ import os
 import shutil
 import sys
 import tempfile
+import time
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -256,6 +257,7 @@ class Planner:
             shutil.copytree(src, dst, ignore=shutil.ignore_patterns("__pycache__", "*.pyc"))
         else:
             dst.symlink_to(os.path.relpath(src, dst.parent), target_is_directory=True)
+        _mark_installer_mutation(dst)
 
     def write(self, dst: Path, text: str) -> None:
         self.note(f"write {dst}")
@@ -264,6 +266,7 @@ class Planner:
             return
         dst.parent.mkdir(parents=True, exist_ok=True)
         dst.write_text(text)
+        _mark_installer_mutation(dst)
 
     def remove(self, dst: Path) -> None:
         self.note(f"remove unchanged legacy path {dst}")
@@ -271,10 +274,123 @@ class Planner:
             return
         if dst.is_symlink() or dst.exists():
             shutil.rmtree(dst) if dst.is_dir() and not dst.is_symlink() else dst.unlink()
+            _mark_installer_mutation(dst)
 
 
 class InstallConflict(RuntimeError):
     """A target exists but cannot be proven to be installer-owned and unchanged."""
+
+
+class IncompleteRollback(RuntimeError):
+    """Rollback preserved a path whose identity no longer matched installer output."""
+
+
+@dataclass(frozen=True)
+class PathIdentity:
+    kind: str
+    device: int
+    inode: int
+    mode: int
+    digest: str
+
+
+@dataclass
+class RollbackEntry:
+    path: Path
+    backup: Path | None
+    before: PathIdentity | None
+    written: PathIdentity | None = None
+    touched: bool = False
+
+
+@dataclass
+class InstallTransaction:
+    staging: Path
+    entries: list[RollbackEntry]
+
+    def mark(self, changed: Path) -> None:
+        changed = changed.absolute()
+        for entry in self.entries:
+            candidate = entry.path.absolute()
+            if candidate == changed or candidate in changed.parents:
+                entry.written = path_identity(entry.path)
+                entry.touched = True
+
+
+_ACTIVE_INSTALL_TRANSACTIONS: list[InstallTransaction] = []
+
+
+def _digest_directory(path: Path) -> str:
+    digest = hashlib.sha256()
+    for candidate in sorted(path.rglob("*"), key=lambda item: item.as_posix()):
+        relative = candidate.relative_to(path).as_posix().encode()
+        info = candidate.lstat()
+        digest.update(len(relative).to_bytes(8, "big"))
+        digest.update(relative)
+        digest.update((info.st_mode & 0o177777).to_bytes(4, "big"))
+        if candidate.is_symlink():
+            payload = os.readlink(candidate).encode()
+        elif candidate.is_file():
+            payload = hashlib.sha256(candidate.read_bytes()).digest()
+        elif candidate.is_dir():
+            payload = b"directory"
+        else:
+            payload = b"special"
+        digest.update(len(payload).to_bytes(8, "big"))
+        digest.update(payload)
+    return digest.hexdigest()
+
+
+def path_identity(path: Path) -> PathIdentity | None:
+    try:
+        info = path.lstat()
+    except FileNotFoundError:
+        return None
+    if path.is_symlink():
+        kind = "symlink"
+        digest = hashlib.sha256(os.readlink(path).encode()).hexdigest()
+    elif path.is_file():
+        kind = "file"
+        digest = hashlib.sha256(path.read_bytes()).hexdigest()
+    elif path.is_dir():
+        kind = "directory"
+        digest = _digest_directory(path)
+    else:
+        kind = "special"
+        digest = hashlib.sha256(b"special").hexdigest()
+    return PathIdentity(
+        kind,
+        info.st_dev,
+        info.st_ino,
+        info.st_mode & 0o177777,
+        digest,
+    )
+
+
+def _mark_installer_mutation(path: Path) -> None:
+    for transaction in _ACTIVE_INSTALL_TRANSACTIONS:
+        transaction.mark(path)
+
+
+def _remove_owned_path(path: Path, expected: PathIdentity) -> bool:
+    """Quarantine and remove only the exact installer-written pathname."""
+    parent = path.parent
+    quarantine = parent / (
+        f".{path.name}.obengineer-rollback-{os.getpid()}-"
+        f"{time.time_ns()}"
+    )
+    try:
+        os.rename(path, quarantine)
+    except FileNotFoundError:
+        return False
+    if path_identity(quarantine) != expected:
+        try:
+            os.rename(quarantine, path)
+        except (FileExistsError, OSError):
+            pass
+        return False
+    _remove_path(quarantine)
+    return True
 
 
 def _host_relative(base: Path, path: Path) -> str:
@@ -753,10 +869,11 @@ def install_host(
         return
 
     base.parent.mkdir(parents=True, exist_ok=True)
-    staging = Path(tempfile.mkdtemp(prefix=".obengineer-install-", dir=base.parent))
-    backups: list[tuple[Path, Path]] = []
+    transaction: InstallTransaction | None = None
+    rollback_incomplete = False
     try:
         transaction_paths = [
+            manifest_path,
             *targets,
             *stale_cleanup.paths,
             *external_cleanup.paths,
@@ -771,12 +888,12 @@ def install_host(
                 else []
             ),
         ]
-        for index, path in enumerate(dict.fromkeys(transaction_paths)):
-            if path.exists() or path.is_symlink():
-                backup = staging / str(index)
-                backup.parent.mkdir(parents=True, exist_ok=True)
-                shutil.move(str(path), str(backup))
-                backups.append((path, backup))
+        transaction = _snapshot_install_paths(transaction_paths)
+        _ACTIVE_INSTALL_TRANSACTIONS.append(transaction)
+        for entry in transaction.entries:
+            if entry.before is not None:
+                _remove_path(entry.path)
+                _mark_installer_mutation(entry.path)
 
         for stale_path in [*stale_cleanup.paths, *external_cleanup.paths]:
             planner.remove(stale_path)
@@ -822,20 +939,29 @@ def install_host(
             )
             + "\n",
         )
-    except BaseException:
-        for path in targets:
-            _remove_path(path)
-        for path, backup in reversed(backups):
-            if (
-                external_cleanup.manifest_update is not None
-                and path == external_cleanup.manifest_update[0]
-            ):
-                _remove_path(path)
-            path.parent.mkdir(parents=True, exist_ok=True)
-            shutil.move(str(backup), str(path))
+    except BaseException as original_error:
+        if transaction is not None:
+            preserved = _rollback_install_paths(transaction)
+            rollback_incomplete = bool(preserved)
+            if preserved:
+                joined = ", ".join(str(path) for path in preserved)
+                raise IncompleteRollback(
+                    "installer rollback was incomplete; concurrent replacements "
+                    f"were preserved at {joined}; backups retained at "
+                    f"{transaction.staging}"
+                ) from original_error
         raise
     finally:
-        shutil.rmtree(staging, ignore_errors=True)
+        if transaction is not None:
+            if (
+                _ACTIVE_INSTALL_TRANSACTIONS
+                and _ACTIVE_INSTALL_TRANSACTIONS[-1] is transaction
+            ):
+                _ACTIVE_INSTALL_TRANSACTIONS.pop()
+            elif transaction in _ACTIVE_INSTALL_TRANSACTIONS:
+                _ACTIVE_INSTALL_TRANSACTIONS.remove(transaction)
+            if not rollback_incomplete:
+                shutil.rmtree(transaction.staging, ignore_errors=True)
 
 
 def _outer_install_paths(
@@ -883,12 +1009,21 @@ def _outer_install_paths(
     return list(dict.fromkeys(paths))
 
 
-def _snapshot_install_paths(paths: list[Path]) -> tuple[Path, list[tuple[Path, Path | None]]]:
+def _snapshot_install_paths(paths: list[Path]) -> InstallTransaction:
     staging = Path(tempfile.mkdtemp(prefix="obengineer-outer-install-"))
-    journal: list[tuple[Path, Path | None]] = []
-    for index, path in enumerate(paths):
-        if not path.exists() and not path.is_symlink():
-            journal.append((path, None))
+    entries: list[RollbackEntry] = []
+    absent_ancestors: list[Path] = []
+    ordered = sorted(
+        dict.fromkeys(path.absolute() for path in paths),
+        key=lambda path: (len(path.parts), path.as_posix()),
+    )
+    for index, path in enumerate(ordered):
+        if any(ancestor == path or ancestor in path.parents for ancestor in absent_ancestors):
+            continue
+        before = path_identity(path)
+        if before is None:
+            entries.append(RollbackEntry(path, None, None))
+            absent_ancestors.append(path)
             continue
         backup = staging / str(index)
         if path.is_symlink():
@@ -898,14 +1033,29 @@ def _snapshot_install_paths(paths: list[Path]) -> tuple[Path, list[tuple[Path, P
         else:
             backup.parent.mkdir(parents=True, exist_ok=True)
             shutil.copy2(path, backup, follow_symlinks=False)
-        journal.append((path, backup))
-    return staging, journal
+        entries.append(RollbackEntry(path, backup, before))
+    return InstallTransaction(staging, entries)
 
 
-def _rollback_install_paths(journal: list[tuple[Path, Path | None]]) -> None:
-    for path, backup in reversed(journal):
-        _remove_path(path)
+def _rollback_install_paths(transaction: InstallTransaction) -> list[Path]:
+    preserved: list[Path] = []
+    for entry in reversed(transaction.entries):
+        if not entry.touched:
+            continue
+        path = entry.path
+        backup = entry.backup
+        if path_identity(path) != entry.written:
+            preserved.append(path)
+            continue
+        if entry.written is not None and not _remove_owned_path(
+            path, entry.written
+        ):
+            preserved.append(path)
+            continue
         if backup is None:
+            for active in _ACTIVE_INSTALL_TRANSACTIONS:
+                if active is not transaction:
+                    active.mark(path)
             continue
         path.parent.mkdir(parents=True, exist_ok=True)
         if backup.is_symlink():
@@ -914,6 +1064,10 @@ def _rollback_install_paths(journal: list[tuple[Path, Path | None]]) -> None:
             shutil.copytree(backup, path, symlinks=True)
         else:
             shutil.copy2(backup, path, follow_symlinks=False)
+        for active in _ACTIVE_INSTALL_TRANSACTIONS:
+            if active is not transaction:
+                active.mark(path)
+    return preserved
 
 
 def read_manifest(path: Path) -> dict:
@@ -939,6 +1093,7 @@ def atomic_write(path: Path, text: str) -> None:
         os.fsync(handle.fileno())
         temporary = Path(handle.name)
     os.replace(temporary, path)
+    _mark_installer_mutation(path)
 
 
 def read_scaffold_manifest(path: Path) -> dict:
@@ -1068,6 +1223,7 @@ def install_project_scaffold(scope_root: Path, dry_run: bool) -> list[str]:
             actions.append(f"remove unchanged installer-owned {legacy_template}")
             if not dry_run:
                 legacy_template.unlink()
+                _mark_installer_mutation(legacy_template)
                 created.pop(".env.template", None)
         else:
             actions.append(f"preserve modified legacy template {legacy_template}")
@@ -1093,14 +1249,25 @@ def install_project_scaffold(scope_root: Path, dry_run: bool) -> list[str]:
         except FileExistsError:
             actions[-1] = f"preserve concurrently-created {destination}"
             continue
+        created_info = os.fstat(descriptor)
         try:
             with os.fdopen(descriptor, "wb") as handle:
                 handle.write(source.read_bytes())
                 handle.flush()
                 os.fsync(handle.fileno())
         except BaseException:
-            destination.unlink(missing_ok=True)
+            try:
+                current_info = destination.lstat()
+            except FileNotFoundError:
+                current_info = None
+            if current_info is not None and (
+                current_info.st_dev,
+                current_info.st_ino,
+            ) == (created_info.st_dev, created_info.st_ino):
+                destination.unlink(missing_ok=True)
+                _mark_installer_mutation(destination)
             raise
+        _mark_installer_mutation(destination)
         created[str(destination_rel)] = {"sha256": file_digest(destination)}
 
     if not dry_run and (
@@ -1411,12 +1578,13 @@ def main(argv=None) -> int:
         print("Resolve or back up the reported paths, then rerun the installer.")
         return 1
 
-    outer_staging: Path | None = None
-    outer_journal: list[tuple[Path, Path | None]] = []
+    outer_transaction: InstallTransaction | None = None
+    rollback_incomplete = False
     if not args.dry_run:
-        outer_staging, outer_journal = _snapshot_install_paths(
+        outer_transaction = _snapshot_install_paths(
             _outer_install_paths(selected, scope_root, project, args.copy)
         )
+        _ACTIVE_INSTALL_TRANSACTIONS.append(outer_transaction)
     try:
         if project:
             print("  Project scaffold")
@@ -1442,13 +1610,31 @@ def main(argv=None) -> int:
                     print(f"      would {line}")
             for note in host.notes:
                 print(f"    {note}")
-    except BaseException:
-        if outer_journal:
-            _rollback_install_paths(outer_journal)
+    except BaseException as original_error:
+        if outer_transaction is not None:
+            preserved = _rollback_install_paths(outer_transaction)
+            rollback_incomplete = bool(preserved)
+            if preserved:
+                joined = ", ".join(str(path) for path in preserved)
+                raise IncompleteRollback(
+                    "outer installer rollback was incomplete; concurrent "
+                    f"replacements were preserved at {joined}; backups retained "
+                    f"at {outer_transaction.staging}"
+                ) from original_error
         raise
     finally:
-        if outer_staging is not None:
-            shutil.rmtree(outer_staging, ignore_errors=True)
+        if outer_transaction is not None:
+            if (
+                _ACTIVE_INSTALL_TRANSACTIONS
+                and _ACTIVE_INSTALL_TRANSACTIONS[-1] is outer_transaction
+            ):
+                _ACTIVE_INSTALL_TRANSACTIONS.pop()
+            elif outer_transaction in _ACTIVE_INSTALL_TRANSACTIONS:
+                _ACTIVE_INSTALL_TRANSACTIONS.remove(outer_transaction)
+            if not rollback_incomplete:
+                shutil.rmtree(
+                    outer_transaction.staging, ignore_errors=True
+                )
 
     print("\nCursor and Claude Code commands, in order:")
     for command in command_files():

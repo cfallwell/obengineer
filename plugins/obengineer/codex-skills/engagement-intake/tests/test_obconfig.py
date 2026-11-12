@@ -65,15 +65,36 @@ def prepare_config_creation(root: Path) -> None:
 
 
 def finalize_for_test(root: Path, command: str, version: str) -> None:
+    if not (root / ".git").exists():
+        subprocess.run(["git", "init", "-q"], cwd=root, check=True)
     output = root / "generated"
     output.mkdir(exist_ok=True)
     (output / "result.md").write_text(f"{command} {version}\n")
+    subprocess.run(["git", "add", "generated"], cwd=root, check=True)
     obconfig.finalize_claim(
         root,
         command=command,
         intended_version=version,
         generated_outputs=["generated"],
         enforce_git=False,
+    )
+    subprocess.run(
+        [
+            "git",
+            "-c",
+            "user.name=Obengineer Test",
+            "-c",
+            "user.email=test@example.invalid",
+            "commit",
+            "-q",
+            "-m",
+            f"analysis {version}",
+        ],
+        cwd=root,
+        check=True,
+    )
+    obconfig.record_dispatch(
+        root, command=command, intended_version=version
     )
 
 
@@ -1159,7 +1180,7 @@ def test_init_and_migration_reject_local_state_symlink_before_secrets(tmp_path):
     assert list(external.iterdir()) == []
 
 
-def test_init_refuses_config_symlink_substitution_without_writing_secret(
+def test_init_preserves_config_symlink_substitution_without_writing_secret(
     tmp_path, monkeypatch
 ):
     prepare_config_creation(tmp_path)
@@ -1175,11 +1196,11 @@ def test_init_refuses_config_symlink_substitution_without_writing_secret(
     with pytest.raises(obconfig.ObconfigError, match="symlink"):
         obconfig.initialize(tmp_path, TEMPLATE)
     assert external.read_text() == "unchanged"
-    assert not (tmp_path / "obconfig.yaml").exists()
-    assert not (tmp_path / "obconfig.yaml").is_symlink()
+    assert (tmp_path / "obconfig.yaml").is_symlink()
+    assert (tmp_path / "obconfig.yaml").resolve() == external
 
 
-def test_migration_rolls_back_config_symlink_substitution(
+def test_migration_preserves_unowned_config_symlink_substitution(
     tmp_path, monkeypatch
 ):
     prepare_config_creation(tmp_path)
@@ -1211,7 +1232,81 @@ def test_migration_rolls_back_config_symlink_substitution(
     with pytest.raises(obconfig.ObconfigError, match="symlink"):
         manage_obconfig.migrate_legacy(tmp_path, TEMPLATE)
     assert external.read_text() == "unchanged"
-    assert not (tmp_path / "obconfig.yaml").exists()
+    assert (tmp_path / "obconfig.yaml").is_symlink()
+    assert (tmp_path / "obconfig.yaml").resolve() == external
+    assert not (tmp_path / ".obengineer/migration.json").exists()
+
+
+@pytest.mark.parametrize("operation", ("init", "migration"))
+@pytest.mark.parametrize("replacement_type", ("file", "symlink", "directory"))
+def test_atomic_creation_preserves_replacement_after_link(
+    tmp_path, monkeypatch, operation, replacement_type
+):
+    prepare_config_creation(tmp_path)
+    if operation == "migration":
+        (tmp_path / "artifacts").mkdir()
+        legacy = tmp_path / "docs/observability/engagement-inputs.yaml"
+        legacy.parent.mkdir(parents=True)
+        legacy.write_text(
+            yaml.safe_dump(
+                {
+                    "schema_version": 3,
+                    "engagement": {"application": "atomic-race-fixture"},
+                    "artifacts": {
+                        "location": "artifacts",
+                        "front_end_scan_notes": "no browser: atomic race",
+                    },
+                }
+            )
+        )
+    original_link = os.link
+    replacement = b"concurrent replacement bytes\n"
+    substituted = False
+
+    def replace_after_link(source, destination, *args, **kwargs):
+        nonlocal substituted
+        result = original_link(source, destination, *args, **kwargs)
+        if destination == "obconfig.yaml" and not substituted:
+            substituted = True
+            directory = kwargs["dst_dir_fd"]
+            os.unlink(destination, dir_fd=directory)
+            if replacement_type == "file":
+                descriptor = os.open(
+                    destination,
+                    os.O_WRONLY | os.O_CREAT | os.O_EXCL,
+                    0o600,
+                    dir_fd=directory,
+                )
+                os.write(descriptor, replacement)
+                os.close(descriptor)
+            elif replacement_type == "symlink":
+                external = tmp_path / "concurrent-target"
+                external.write_bytes(replacement)
+                os.symlink(
+                    external.name,
+                    destination,
+                    dir_fd=directory,
+                )
+            else:
+                os.mkdir(destination, 0o700, dir_fd=directory)
+                (tmp_path / "obconfig.yaml/marker").write_bytes(replacement)
+        return result
+
+    monkeypatch.setattr(os, "link", replace_after_link)
+    with pytest.raises(obconfig.ObconfigError, match="changed after atomic creation"):
+        if operation == "init":
+            obconfig.initialize(tmp_path, TEMPLATE)
+        else:
+            manage_obconfig.migrate_legacy(tmp_path, TEMPLATE)
+    config = tmp_path / "obconfig.yaml"
+    if replacement_type == "file":
+        assert config.read_bytes() == replacement
+    elif replacement_type == "symlink":
+        assert config.is_symlink()
+        assert config.resolve().read_bytes() == replacement
+    else:
+        assert config.is_dir()
+        assert (config / "marker").read_bytes() == replacement
     assert not (tmp_path / ".obengineer/migration.json").exists()
 
 

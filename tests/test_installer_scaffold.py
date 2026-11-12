@@ -566,6 +566,111 @@ def test_outer_transaction_rolls_back_all_hosts_on_later_failure(
     assert not (tmp_path / "artifacts/README.md").exists()
 
 
+def replace_path_for_race(path: Path, replacement_type: str) -> bytes:
+    if path.is_symlink() or path.exists():
+        installer._remove_path(path)
+    marker = b"concurrent replacement\n"
+    if replacement_type == "file":
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(marker)
+    elif replacement_type == "symlink":
+        target = path.parent / "concurrent-target"
+        target.write_bytes(marker)
+        path.symlink_to(target.name)
+    else:
+        path.mkdir(parents=True)
+        (path / "marker.txt").write_bytes(marker)
+    return marker
+
+
+def assert_race_replacement(
+    path: Path, replacement_type: str, marker: bytes
+) -> None:
+    if replacement_type == "file":
+        assert path.read_bytes() == marker
+    elif replacement_type == "symlink":
+        assert path.is_symlink()
+        assert path.resolve().read_bytes() == marker
+    else:
+        assert path.is_dir() and not path.is_symlink()
+        assert (path / "marker.txt").read_bytes() == marker
+
+
+@pytest.mark.parametrize("preexisting", (False, True))
+@pytest.mark.parametrize("replacement_type", ("file", "symlink", "directory"))
+def test_inner_rollback_preserves_concurrent_replacement_and_backup(
+    tmp_path, monkeypatch, preexisting, replacement_type
+):
+    if preexisting:
+        run_install(tmp_path, "--cursor", "--copy")
+    original = installer.Planner.link_or_copy
+    first_target: Path | None = None
+    marker = b""
+    calls = 0
+
+    def replace_then_fail(self, source, destination, copy):
+        nonlocal calls, first_target, marker
+        calls += 1
+        if calls == 1:
+            result = original(self, source, destination, copy)
+            first_target = destination
+            return result
+        assert first_target is not None
+        marker = replace_path_for_race(first_target, replacement_type)
+        raise OSError("injected inner failure after replacement")
+
+    monkeypatch.setattr(installer.Planner, "link_or_copy", replace_then_fail)
+    with pytest.raises(installer.IncompleteRollback) as raised:
+        installer.install_host(
+            installer.HOSTS["cursor"],
+            tmp_path,
+            True,
+            True,
+            installer.Planner(False),
+        )
+    assert first_target is not None
+    assert_race_replacement(first_target, replacement_type, marker)
+    staging = Path(str(raised.value).rsplit("backups retained at ", 1)[1])
+    assert staging.is_dir()
+    if preexisting:
+        assert any(staging.iterdir())
+
+
+@pytest.mark.parametrize("preexisting", (False, True))
+@pytest.mark.parametrize("replacement_type", ("file", "symlink", "directory"))
+def test_outer_rollback_preserves_concurrent_replacement_and_backup(
+    tmp_path, monkeypatch, preexisting, replacement_type
+):
+    target = (
+        tmp_path / ".gitignore"
+        if preexisting
+        else tmp_path / ".cursor/commands/ob-start.md"
+    )
+    if preexisting:
+        target.write_bytes(b"customer rule\n")
+    original = installer.install_host
+    calls = 0
+    marker = b""
+
+    def replace_then_fail(*args, **kwargs):
+        nonlocal calls, marker
+        calls += 1
+        if calls == 1:
+            original(*args, **kwargs)
+            marker = replace_path_for_race(target, replacement_type)
+            raise OSError("injected outer failure after replacement")
+        return original(*args, **kwargs)
+
+    monkeypatch.setattr(installer, "install_host", replace_then_fail)
+    with pytest.raises(installer.IncompleteRollback) as raised:
+        installer.main(["--cursor", "--project", str(tmp_path), "--copy"])
+    assert_race_replacement(target, replacement_type, marker)
+    staging = Path(str(raised.value).rsplit("backups retained at ", 1)[1])
+    assert staging.is_dir()
+    if preexisting:
+        assert any(staging.iterdir())
+
+
 def test_project_install_and_reinstall_never_overwrite_existing_content(tmp_path):
     (tmp_path / ".gitignore").write_text("custom-ignore\n")
     (tmp_path / "artifacts").mkdir()

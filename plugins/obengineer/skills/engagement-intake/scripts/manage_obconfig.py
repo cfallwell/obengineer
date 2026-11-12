@@ -42,6 +42,7 @@ from obconfig import (
     prepare_local_state,
     read_project_file,
     read_project_file_version,
+    record_dispatch,
     redacted_issue,
     remove_config_from_index,
     repair,
@@ -50,6 +51,7 @@ from obconfig import (
     validate_claim,
     validate_authorization,
     validate_config,
+    verify_dispatch,
 )
 
 LEGACY_YAML = Path("docs/observability/engagement-inputs.yaml")
@@ -435,19 +437,16 @@ def migrate_legacy(project_root: Path, template: Path) -> list[str]:
     migration_identity: tuple[int, int] | None = None
     migration_version: RegularFileVersion | None = None
     try:
-        atomic_write(destination, text, 0o600, expect_absent=True)
+        config_version = atomic_write(
+            destination, text, 0o600, expect_absent=True
+        )
         config_written = True
-        written = destination.lstat()
-        config_identity = (written.st_dev, written.st_ino)
-        _, config_version = read_project_file_version(
-            project_root,
-            Path(CONFIG_NAME),
-            CONFIG_NAME,
-            limit=1024 * 1024,
-            required_mode=0o600,
+        config_identity = (
+            config_version.device,
+            config_version.inode,
         )
         preflight_config_creation(project_root)
-        atomic_write_json(
+        migration_version = atomic_write_json(
             migration_path,
             {
                 "schema_version": 1,
@@ -476,16 +475,9 @@ def migrate_legacy(project_root: Path, template: Path) -> list[str]:
             ),
         )
         migration_written = True
-        written_migration = migration_path.lstat()
         migration_identity = (
-            written_migration.st_dev,
-            written_migration.st_ino,
-        )
-        _, migration_version = read_project_file_version(
-            project_root,
-            Path(".obengineer/migration.json"),
-            "migration state",
-            required_mode=0o600,
+            migration_version.device,
+            migration_version.inode,
         )
         preflight_config_creation(project_root)
         for source, expected in source_versions.items():
@@ -532,13 +524,19 @@ def migrate_legacy(project_root: Path, template: Path) -> list[str]:
         rollback_errors: list[BaseException] = []
         try:
             if config_written:
-                secure_unlink(destination, expected_identity=config_identity)
-            elif destination.exists() or destination.is_symlink():
-                appeared = destination.lstat()
                 secure_unlink(
                     destination,
-                    expected_identity=(appeared.st_dev, appeared.st_ino),
-                    allow_symlink=True,
+                    expected_identity=config_identity,
+                    expected_digest=(
+                        config_version.digest
+                        if config_version is not None
+                        else None
+                    ),
+                    expected_mode=(
+                        config_version.mode
+                        if config_version is not None
+                        else None
+                    ),
                 )
         except BaseException as cleanup_error:
             rollback_errors.append(cleanup_error)
@@ -546,7 +544,18 @@ def migrate_legacy(project_root: Path, template: Path) -> list[str]:
             if migration_written:
                 if previous_migration is None:
                     secure_unlink(
-                        migration_path, expected_identity=migration_identity
+                        migration_path,
+                        expected_identity=migration_identity,
+                        expected_digest=(
+                            migration_version.digest
+                            if migration_version is not None
+                            else None
+                        ),
+                        expected_mode=(
+                            migration_version.mode
+                            if migration_version is not None
+                            else None
+                        ),
                     )
                 else:
                     assert migration_version is not None
@@ -615,6 +624,12 @@ def main(
     finalize_parser.add_argument("--command", required=True)
     finalize_parser.add_argument("--intended-version", required=True)
     finalize_parser.add_argument("--output", action="append", required=True)
+    dispatch_parser = sub.add_parser("dispatch")
+    dispatch_parser.add_argument("--command", required=True)
+    dispatch_parser.add_argument("--intended-version", required=True)
+    verify_dispatch_parser = sub.add_parser("verify-dispatch")
+    verify_dispatch_parser.add_argument("--command", required=True)
+    verify_dispatch_parser.add_argument("--intended-version", required=True)
     consume_parser = sub.add_parser("consume")
     consume_parser.add_argument("--command", required=True)
     consume_parser.add_argument("--intended-version", required=True)
@@ -788,12 +803,36 @@ def main(
                 "finalized": True,
                 "command": args.command,
                 "intended_version": args.intended_version,
+                "git_index_tree_sha": finalized["git_index_tree_sha"],
                 "generated_output_sha256": finalized[
                     "generated_output_sha256"
                 ],
                 "output_count": finalized[
                     "generated_output_manifest"
                 ]["output_count"],
+            }
+            print(json.dumps(payload, sort_keys=True, separators=(",", ":")))
+            return 0
+        if args.operation in {"dispatch", "verify-dispatch"}:
+            dispatched = (
+                record_dispatch(
+                    root,
+                    command=args.command,
+                    intended_version=args.intended_version,
+                )
+                if args.operation == "dispatch"
+                else verify_dispatch(
+                    root,
+                    command=args.command,
+                    intended_version=args.intended_version,
+                )
+            )
+            payload = {
+                "dispatch_verified": True,
+                "command": args.command,
+                "intended_version": args.intended_version,
+                "commit_sha": dispatched["commit_sha"],
+                "tree_sha": dispatched["tree_sha"],
             }
             if dispatch_callback is not None:
                 dispatch_callback(dict(payload))
