@@ -26,6 +26,9 @@ dummy access after use.
 Validation detects duplicate YAML keys and reports exact redacted line/column errors.
 Only exact `yes` permits a catalogued safe repair, with a mode-0600 backup and
 post-repair validation. Arbitrary malformed YAML is never guessed.
+Identity-bound local-state updates/removals use atomic exchange and quarantine; a
+concurrent pathname replacement is restored and preserved. Platforms without the
+required exchange syscall fail closed.
 
 A valid run hashes every regular file under `artifacts.directory`, shows a condensed
 redacted summary, and asks:

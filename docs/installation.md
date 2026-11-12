@@ -168,7 +168,9 @@ changes back. Inner host and outer scaffold transactions journal the exact inode
 mode, and content digest they write. Rollback removes or restores only a current exact
 match. A concurrent file, symlink, or directory replacement is preserved, the backup
 staging directory is retained for manual recovery, and installation exits nonzero with
-an incomplete-rollback error.
+an incomplete-rollback error. After a backup move, every host target is created
+exclusively; the installer never removes or overwrites a pathname that appears before
+the initial link, copy, or write.
 
 Root scaffold files follow a stricter rule: existing files are never replaced, including
 files created by an earlier install. An owned file changed after installation is treated

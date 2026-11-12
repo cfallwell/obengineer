@@ -64,7 +64,9 @@ YAML or ask field questions. Unchanged config prints
 - Every terminal message, error, state/provenance projection, and adapter result passes
   through `Redactor`. No source excerpt or config value appears in parser errors.
 - Local state, backups, temporary rewrites, and actual config are regular non-symlink
-  files at `0600`; writes are same-directory atomic and fsynced.
+  files at `0600`; writes are same-directory atomic and fsynced. Identity-bound updates
+  and removals use atomic exchange/quarantine, restore a raced replacement, and fail
+  closed where the required syscall is unavailable.
 - Artifact paths are project-relative and directory-only. Traversal, symlinks, special
   files, unreadable files, and stat/open/read races fail closed.
 - `passive` performs no safe-active probes. `safe-active` requires normalized exact
