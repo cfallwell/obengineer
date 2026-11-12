@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://obengineer.dev/schemas/analysis-contract.schema.json",
+  "$id": "https://obengineer.dev/schemas/analysis-contract-v3.schema.json",
   "title": "Canonical observability analysis contract",
   "type": "object",
   "additionalProperties": false,
@@ -23,7 +23,7 @@
     "reference"
   ],
   "properties": {
-    "schemaVersion": { "const": 2 },
+    "schemaVersion": { "const": 3 },
     "application": {
       "type": "object",
       "additionalProperties": false,

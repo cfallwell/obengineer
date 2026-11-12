@@ -40,7 +40,8 @@ The target is read-only. Application changes happen only through accepted work o
 | [`../references/entitlement-exposure.md`](../references/entitlement-exposure.md) | Measured usage and enforced-system-limit appendix |
 | [`schemas/analysis-job-manifest.schema.json`](schemas/analysis-job-manifest.schema.json) | Six bounded host-run evidence workstreams and coordinator reservation |
 | [`schemas/analysis-worker-result.schema.json`](schemas/analysis-worker-result.schema.json) | Auditable worker evidence and execution intervals |
-| [`schemas/analysis-contract.schema.json`](schemas/analysis-contract.schema.json) | Canonical content rendered into the linked analysis site |
+| [`schemas/analysis-contract-v3.schema.json`](schemas/analysis-contract-v3.schema.json) | Current canonical content rendered into the linked analysis site |
+| [`schemas/analysis-contract-v2.schema.json`](schemas/analysis-contract-v2.schema.json) | Frozen historical accepted-contract compatibility |
 
 ## Output
 
@@ -76,11 +77,17 @@ contains the summary, architecture, findings, path, work-order summary, and use 
 - Derive the number of business transactions and workflows from current evidence. A
   same-customer prior guide is a quality and continuity input, not a fixed taxonomy or
   required count; retain, revise, add, or retire names with provenance.
-- Load only digest-authorized root `obconfig.yaml`. Rehash the complete artifact
+- Load analysis configuration only through the claim-bound redacted projection. Rehash the complete artifact
   directory, reread added/changed files, remove deleted context, and preserve accepted
   historical versions.
 - Atomically run `manage_obconfig.py claim --command <origin> --intended-version
   V<N>` and use its sanitized full artifact delta. Then run exactly
+  `python3 <obengineer-root>/skills/engagement-intake/scripts/manage_obconfig.py
+  --project-root . config-projection --command <origin> --intended-version V<N>`.
+  Its centralized-redacted output is the sole supported downstream configuration source;
+  it supplies production targets, constraints, scope, standards, outcomes, context,
+  artifact metadata/delta, and availability. Never read raw `obconfig.yaml`, `.env`,
+  process environment, or legacy engagement inputs during analysis. Then run exactly
   `python3 <obengineer-root>/skills/engagement-intake/scripts/manage_obconfig.py
   --project-root . direct-api --phase analysis --command <origin>
   --intended-version V<N>`. This supported path securely loads the
@@ -215,10 +222,11 @@ Validate:
 
 - job manifest, worker intervals, host capacity, and coordinator reservation;
 - canonical analysis contract and deterministic repeated rendering;
-- schema-v1 analysis contracts migrate deterministically with
-  `scripts/migrate_analysis_contract.py`; newly generated contracts use schema v2;
+- schema-v1/v2 mutable working contracts migrate explicitly with
+  `scripts/migrate_analysis_contract.py`; newly generated contracts use schema v3,
+  while accepted schema-v2 snapshots validate and render without mutation;
 - provenance ledger and analysis seal;
-- schema version 2 analysis contract and content-bound acceptance inputs;
+- schema version 3 analysis contract and content-bound acceptance inputs;
 - schema and implementation map;
 - verification plan schema version 2 with stable `source_ref` values and actionable
   `VC-*` criteria;

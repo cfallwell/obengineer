@@ -57,15 +57,19 @@ PLACEHOLDER = re.compile(
     r"\bplaceholder\b|<(?!(?:https?://|/?[a-z][a-z0-9-]*>))[A-Za-z][^>\n]{0,50}>)",
     re.IGNORECASE,
 )
-CONTRACT_SCHEMA = (
-    Path(__file__).resolve().parent.parent / "schemas" /
-    "analysis-contract.schema.json"
-)
+SCHEMA_DIRECTORY = Path(__file__).resolve().parent.parent / "schemas"
+CONTRACT_SCHEMAS = {
+    2: SCHEMA_DIRECTORY / "analysis-contract-v2.schema.json",
+    3: SCHEMA_DIRECTORY / "analysis-contract-v3.schema.json",
+}
 
 
-@lru_cache(maxsize=1)
-def _contract_schema() -> dict[str, Any]:
-    return load_json(CONTRACT_SCHEMA)
+@lru_cache(maxsize=len(CONTRACT_SCHEMAS))
+def _contract_schema(version: int) -> dict[str, Any]:
+    path = CONTRACT_SCHEMAS.get(version)
+    if path is None:
+        raise ValueError(f"unsupported analysis contract schema version {version!r}")
+    return load_json(path)
 
 
 def _json_equal(left: Any, right: Any) -> bool:
@@ -188,7 +192,12 @@ def _validate_schema_node(
 def validate_contract_schema(contract: Any) -> list[str]:
     """Validate against every assertion used by the published 2020-12 schema."""
     failures: list[str] = []
-    schema = _contract_schema()
+    version = contract.get("schemaVersion") if isinstance(contract, dict) else None
+    if version not in CONTRACT_SCHEMAS:
+        return [
+            "contract.schemaVersion: expected a supported integer version (2 or 3)"
+        ]
+    schema = _contract_schema(version)
     _validate_schema_node(contract, schema, schema, "contract", failures)
     return sorted(set(failures))
 
@@ -660,11 +669,33 @@ def validate_run_timing(
 
 
 def migrate_contract(contract: Any) -> Any:
-    """Return a deterministic schema-v2 projection of a schema-v1 contract."""
-    if not isinstance(contract, dict) or contract.get("schemaVersion") != 1:
+    """Return a deterministic schema-v3 copy of a schema-v1/v2 working contract."""
+    if not isinstance(contract, dict):
+        return contract
+    if contract.get("schemaVersion") == 2:
+        migrated = copy.deepcopy(contract)
+        migrated["schemaVersion"] = 3
+        cardinality = (migrated.get("contracts") or {}).get("cardinality")
+        if isinstance(cardinality, dict):
+            cardinality.pop("entitlement", None)
+            cardinality.pop("inUse", None)
+            cardinality.pop("headroomAfter", None)
+            cardinality["budgetStatus"] = "unavailable"
+            cardinality["contractualEntitlement"] = None
+            cardinality["usage"] = None
+            cardinality["enforcedSystemLimit"] = None
+            cardinality["reserved"] = None
+            cardinality["systemHeadroomAfter"] = None
+            cardinality["basis"] = (
+                "Migrated from schema v2: the historical entitlement budget remains "
+                "available in the immutable source snapshot, but it is not reclassified "
+                "as a directly measured enforced system limit in schema v3."
+            )
+        return migrated
+    if contract.get("schemaVersion") != 1:
         return contract
     migrated = copy.deepcopy(contract)
-    migrated["schemaVersion"] = 2
+    migrated["schemaVersion"] = 3
 
     workflow_names = {
         item.get("id"): item.get("name")
@@ -750,11 +781,16 @@ def migrate_contract(contract: Any) -> Any:
     return migrated
 
 
+def normalize_contract(contract: Any) -> Any:
+    """Return a non-mutating schema-v3 compatibility view for rendering."""
+    return migrate_contract(contract)
+
+
 def validate_implementation_mapping(
     contract: Any, implementation_map: Any
 ) -> list[str]:
     failures: list[str] = []
-    contract = migrate_contract(contract)
+    contract = normalize_contract(contract)
     if not isinstance(contract, dict) or not isinstance(implementation_map, dict):
         return ["implementation mapping validation requires two objects"]
     if implementation_map.get("schema_version") != 1:
@@ -907,14 +943,21 @@ def validate_implementation_mapping(
 
 
 def validate_contract(contract: Any) -> list[str]:
-    contract = migrate_contract(contract)
-    failures = validate_contract_schema(contract)
+    source_version = (
+        contract.get("schemaVersion") if isinstance(contract, dict) else None
+    )
+    if source_version == 2:
+        failures = validate_contract_schema(contract)
+        contract = normalize_contract(contract)
+    else:
+        contract = normalize_contract(contract)
+        failures = validate_contract_schema(contract)
     if not isinstance(contract, dict):
         return failures
     if not _require(contract, TOP_LEVEL_KEYS, "contract", failures):
         return failures
-    if contract.get("schemaVersion") != 2:
-        failures.append("contract.schemaVersion: expected 2")
+    if contract.get("schemaVersion") != 3:
+        failures.append("contract.schemaVersion: expected 3")
     app = contract.get("application")
     _require(app, ("id", "name", "version", "status", "scope", "changes", "nextSteps"), "contract.application", failures)
     _substantive(app.get("scope") if isinstance(app, dict) else None, "contract.application.scope", failures)

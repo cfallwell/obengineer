@@ -1,0 +1,874 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://obengineer.dev/schemas/analysis-contract-v3.schema.json",
+  "title": "Canonical observability analysis contract",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "application",
+    "summaries",
+    "architecture",
+    "technology",
+    "currentTelemetry",
+    "findings",
+    "strategy",
+    "implementationPhases",
+    "workOrders",
+    "useCases",
+    "workflows",
+    "businessTransactions",
+    "contracts",
+    "operations",
+    "reference"
+  ],
+  "properties": {
+    "schemaVersion": { "const": 3 },
+    "application": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "name", "version", "status", "scope", "changes", "nextSteps"],
+      "properties": {
+        "id": { "$ref": "#/$defs/pathId" },
+        "name": { "type": "string", "minLength": 3 },
+        "version": { "type": "string", "pattern": "^V[1-9][0-9]*$" },
+        "status": { "enum": ["analysis-complete", "awaiting-acceptance", "accepted", "superseded"] },
+        "scope": { "$ref": "#/$defs/substantive" },
+        "changes": { "$ref": "#/$defs/stringList" },
+        "nextSteps": { "$ref": "#/$defs/stringList" }
+      }
+    },
+    "summaries": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "architecture",
+        "technology",
+        "currentTelemetry",
+        "findings",
+        "strategy",
+        "implementationPath",
+        "workOrders",
+        "useCases",
+        "workflows",
+        "businessTransactions",
+        "contracts",
+        "operations",
+        "reference"
+      ],
+      "properties": {
+        "architecture": { "$ref": "#/$defs/substantive" },
+        "technology": { "$ref": "#/$defs/substantive" },
+        "currentTelemetry": { "$ref": "#/$defs/substantive" },
+        "findings": { "$ref": "#/$defs/substantive" },
+        "strategy": { "$ref": "#/$defs/substantive" },
+        "implementationPath": { "$ref": "#/$defs/substantive" },
+        "workOrders": { "$ref": "#/$defs/substantive" },
+        "useCases": { "$ref": "#/$defs/substantive" },
+        "workflows": { "$ref": "#/$defs/substantive" },
+        "businessTransactions": { "$ref": "#/$defs/substantive" },
+        "contracts": { "$ref": "#/$defs/substantive" },
+        "operations": { "$ref": "#/$defs/substantive" },
+        "reference": { "$ref": "#/$defs/substantive" }
+      }
+    },
+    "architecture": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "narrative",
+        "frontend",
+        "backends",
+        "accounts",
+        "buses",
+        "downstreams",
+        "thirdParties",
+        "failurePoints",
+        "diagrams"
+      ],
+      "properties": {
+        "narrative": { "$ref": "#/$defs/substantive" },
+        "frontend": { "$ref": "#/$defs/frontend" },
+        "backends": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/backend" } },
+        "accounts": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/account" } },
+        "buses": { "type": "array", "items": { "$ref": "#/$defs/bus" } },
+        "downstreams": { "type": "array", "items": { "$ref": "#/$defs/downstream" } },
+        "thirdParties": { "type": "array", "items": { "$ref": "#/$defs/thirdParty" } },
+        "failurePoints": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/failurePoint" } },
+        "diagrams": { "type": "array", "items": { "$ref": "#/$defs/evidenceRef" } }
+      }
+    },
+    "technology": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/technology" } },
+    "currentTelemetry": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/telemetry" } },
+    "findings": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/finding" } },
+    "strategy": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/strategy" } },
+    "implementationPhases": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/phase" } },
+    "workOrders": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/workOrder" } },
+    "useCases": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/useCase" } },
+    "workflows": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/workflow" } },
+    "businessTransactions": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/businessTransaction" } },
+    "contracts": { "$ref": "#/$defs/contracts" },
+    "operations": { "$ref": "#/$defs/operations" },
+    "reference": { "$ref": "#/$defs/reference" }
+  },
+  "$defs": {
+    "slug": { "type": "string", "pattern": "^[a-z0-9][a-z0-9.-]*$" },
+    "pathId": {
+      "type": "string",
+      "pattern": "^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$"
+    },
+    "substantive": { "type": "string", "minLength": 80 },
+    "stringList": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "type": "string", "minLength": 12 }
+    },
+    "idList": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": { "type": "string", "minLength": 2 }
+    },
+    "evidenceRef": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "label", "provenance"],
+      "properties": {
+        "id": { "type": "string", "pattern": "^EV-[A-Z0-9-]+$" },
+        "label": { "type": "string", "minLength": 8 },
+        "provenance": { "enum": ["measured", "stated", "public", "derived"] }
+      }
+    },
+    "frontend": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["applicable", "evidence"],
+      "properties": {
+        "applicable": { "type": "boolean" },
+        "evidence": { "type": "string", "minLength": 20 },
+        "runtimeModel": { "type": "string", "minLength": 3 },
+        "router": { "type": "string", "minLength": 3 },
+        "initOwner": { "type": "string", "minLength": 3 },
+        "singleInit": { "type": "boolean" },
+        "routes": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["pathClass", "pageType", "navigation", "evidenceIds"],
+            "properties": {
+              "pathClass": { "type": "string", "minLength": 1 },
+              "pageType": { "$ref": "#/$defs/slug" },
+              "navigation": { "enum": ["document", "client"] },
+              "evidenceIds": { "$ref": "#/$defs/idList" }
+            }
+          }
+        },
+        "evidenceIds": { "$ref": "#/$defs/idList" }
+      },
+      "allOf": [{
+        "if": { "properties": { "applicable": { "const": true } } },
+        "then": { "required": ["runtimeModel", "router", "initOwner", "singleInit", "routes", "evidenceIds"] }
+      }]
+    },
+    "backend": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "name", "runtime", "accountId", "role", "failurePoints", "evidenceIds"],
+      "properties": {
+        "id": { "$ref": "#/$defs/slug" },
+        "name": { "type": "string", "minLength": 3 },
+        "runtime": { "type": "string", "minLength": 2 },
+        "accountId": { "$ref": "#/$defs/slug" },
+        "role": { "type": "string", "minLength": 12 },
+        "failurePoints": { "$ref": "#/$defs/stringList" },
+        "evidenceIds": { "$ref": "#/$defs/idList" }
+      }
+    },
+    "account": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "provider", "boundary", "evidenceIds"],
+      "properties": {
+        "id": { "$ref": "#/$defs/slug" },
+        "provider": { "type": "string", "minLength": 3 },
+        "boundary": { "type": "string", "minLength": 12 },
+        "evidenceIds": { "$ref": "#/$defs/idList" }
+      }
+    },
+    "bus": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "technology", "crossesAccounts", "contextCarrier", "failurePoints", "evidenceIds"],
+      "properties": {
+        "id": { "$ref": "#/$defs/slug" },
+        "technology": { "type": "string", "minLength": 3 },
+        "crossesAccounts": { "type": "boolean" },
+        "contextCarrier": { "type": "string", "minLength": 12 },
+        "failurePoints": { "$ref": "#/$defs/stringList" },
+        "evidenceIds": { "$ref": "#/$defs/idList" }
+      }
+    },
+    "downstream": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "role", "protocol", "consequence", "evidenceIds"],
+      "properties": {
+        "id": { "$ref": "#/$defs/slug" },
+        "role": { "type": "string", "minLength": 5 },
+        "protocol": { "type": "string", "minLength": 3 },
+        "consequence": { "type": "string", "minLength": 20 },
+        "evidenceIds": { "$ref": "#/$defs/idList" }
+      }
+    },
+    "thirdParty": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "category", "consequence", "controls", "evidenceIds"],
+      "properties": {
+        "name": { "type": "string", "minLength": 3 },
+        "category": { "type": "string", "minLength": 3 },
+        "consequence": { "type": "string", "minLength": 20 },
+        "controls": { "$ref": "#/$defs/stringList" },
+        "evidenceIds": { "$ref": "#/$defs/idList" }
+      }
+    },
+    "failurePoint": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "surface", "effect", "detection", "evidenceIds"],
+      "properties": {
+        "id": { "$ref": "#/$defs/slug" },
+        "surface": { "type": "string", "minLength": 3 },
+        "effect": { "type": "string", "minLength": 20 },
+        "detection": { "type": "string", "minLength": 20 },
+        "evidenceIds": { "$ref": "#/$defs/idList" }
+      }
+    },
+    "technology": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "category", "versionEvidence", "observabilityConsequence", "evidenceIds"],
+      "properties": {
+        "name": { "type": "string", "minLength": 2 },
+        "category": { "type": "string", "minLength": 3 },
+        "versionEvidence": { "type": "string", "minLength": 3 },
+        "observabilityConsequence": { "type": "string", "minLength": 20 },
+        "evidenceIds": { "$ref": "#/$defs/idList" }
+      }
+    },
+    "telemetry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "component", "status", "trust", "applicationScope", "observedFrom",
+        "observedTo", "readAt", "source", "provenance", "portfolioEvidence",
+        "observed", "gaps", "evidenceIds"
+      ],
+      "properties": {
+        "component": { "type": "string", "minLength": 3 },
+        "status": { "enum": ["present", "partial", "absent"] },
+        "trust": { "enum": ["trusted", "untrusted", "unverified"] },
+        "applicationScope": { "type": "string", "minLength": 20 },
+        "observedFrom": { "type": "string", "format": "date-time" },
+        "observedTo": { "type": "string", "format": "date-time" },
+        "readAt": { "type": "string", "format": "date-time" },
+        "source": { "type": "string", "minLength": 8 },
+        "provenance": { "enum": ["measured", "stated", "public", "derived"] },
+        "portfolioEvidence": { "$ref": "#/$defs/portfolioEvidence" },
+        "observed": { "type": "string", "minLength": 20 },
+        "gaps": { "$ref": "#/$defs/stringList" },
+        "evidenceIds": { "$ref": "#/$defs/idList" }
+      }
+    },
+    "portfolioEvidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["disposition"],
+      "properties": {
+        "disposition": { "enum": ["available", "unavailable"] },
+        "volume": { "type": "string", "minLength": 20 },
+        "metricSets": { "type": "string", "minLength": 20 },
+        "mts": { "type": "string", "minLength": 20 },
+        "signalFlow": { "type": "string", "minLength": 20 },
+        "reason": { "type": "string", "minLength": 20 }
+      },
+      "allOf": [{
+        "if": { "properties": { "disposition": { "const": "available" } } },
+        "then": { "required": ["volume", "metricSets", "mts", "signalFlow"] },
+        "else": { "required": ["reason"] }
+      }]
+    },
+    "finding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id", "title", "severity", "confidence", "priority", "class", "observed",
+        "evidenceIds", "surfaces", "exposure", "risk", "remediation", "verification",
+        "useCaseIds", "workflowIds", "businessTransactionIds", "contractIds", "workOrderIds"
+      ],
+      "properties": {
+        "id": { "type": "string", "pattern": "^F-[0-9]{2,}$" },
+        "title": { "type": "string", "minLength": 8 },
+        "severity": { "enum": ["critical", "high", "medium", "low"] },
+        "confidence": { "enum": ["confirmed", "high", "medium", "low"] },
+        "priority": { "enum": ["P0", "P1", "P2", "backlog"] },
+        "class": { "type": "string", "minLength": 3 },
+        "observed": { "$ref": "#/$defs/substantive" },
+        "evidenceIds": { "$ref": "#/$defs/idList" },
+        "surfaces": { "$ref": "#/$defs/stringList" },
+        "exposure": { "type": "string", "minLength": 20 },
+        "risk": { "type": "string", "minLength": 20 },
+        "remediation": { "$ref": "#/$defs/stringList" },
+        "verification": { "type": "string", "minLength": 20 },
+        "useCaseIds": { "$ref": "#/$defs/idList" },
+        "workflowIds": { "$ref": "#/$defs/idList" },
+        "businessTransactionIds": { "$ref": "#/$defs/idList" },
+        "contractIds": { "$ref": "#/$defs/idList" },
+        "workOrderIds": { "$ref": "#/$defs/idList" }
+      }
+    },
+    "strategy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "title", "question", "productSurface", "retentionClass", "recommendation", "evidenceIds"],
+      "properties": {
+        "id": { "$ref": "#/$defs/slug" },
+        "title": { "type": "string", "minLength": 5 },
+        "question": { "type": "string", "minLength": 20 },
+        "productSurface": { "type": "string", "minLength": 3 },
+        "retentionClass": { "type": "string", "minLength": 3 },
+        "recommendation": { "$ref": "#/$defs/substantive" },
+        "evidenceIds": { "$ref": "#/$defs/idList" }
+      }
+    },
+    "phase": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "title", "outcome", "dependsOn", "workOrderIds", "exitCriteria"],
+      "properties": {
+        "id": { "$ref": "#/$defs/slug" },
+        "title": { "type": "string", "minLength": 5 },
+        "outcome": { "type": "string", "minLength": 30 },
+        "dependsOn": { "$ref": "#/$defs/idList" },
+        "workOrderIds": { "$ref": "#/$defs/idList" },
+        "exitCriteria": { "$ref": "#/$defs/stringList" }
+      }
+    },
+    "workOrder": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "title", "outcome", "status", "dependsOn", "unlocks", "repositoryMapping", "repositoryLegs", "acceptanceCriteria", "verification"],
+      "properties": {
+        "id": { "type": "string", "pattern": "^WO-[0-9]{3,}$" },
+        "title": { "type": "string", "minLength": 8 },
+        "outcome": { "type": "string", "minLength": 30 },
+        "status": { "enum": ["proposed", "ready", "blocked", "implemented", "verified"] },
+        "dependsOn": { "$ref": "#/$defs/idList" },
+        "unlocks": { "$ref": "#/$defs/idList" },
+        "repositoryMapping": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["status", "evidence"],
+          "properties": {
+            "status": { "enum": ["mapped", "unresolved"] },
+            "evidence": { "$ref": "#/$defs/substantive" }
+          }
+        },
+        "repositoryLegs": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["repository", "paths", "changes", "tests"],
+            "properties": {
+              "repository": {
+                "type": "string",
+                "pattern": "^[A-Za-z0-9_.-]+(?:/[A-Za-z0-9_.-]+)?$"
+              },
+              "paths": {
+                "type": "array",
+                "minItems": 1,
+                "items": {
+                  "type": "string",
+                  "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$))[A-Za-z0-9._/-]+$"
+                }
+              },
+              "changes": { "$ref": "#/$defs/stringList" },
+              "tests": { "$ref": "#/$defs/stringList" }
+            }
+          }
+        },
+        "acceptanceCriteria": { "$ref": "#/$defs/stringList" },
+        "verification": { "$ref": "#/$defs/stringList" }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "repositoryMapping": {
+                "properties": { "status": { "const": "mapped" } },
+                "required": ["status"]
+              }
+            }
+          },
+          "then": { "properties": { "repositoryLegs": { "minItems": 1 } } },
+          "else": {
+            "properties": {
+              "status": { "const": "blocked" },
+              "repositoryLegs": { "maxItems": 0 }
+            }
+          }
+        }
+      ]
+    },
+    "span": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "name", "kind", "parentId", "joinType", "service", "attributes"],
+      "properties": {
+        "id": { "$ref": "#/$defs/slug" },
+        "name": { "type": "string", "minLength": 3 },
+        "kind": { "enum": ["internal", "client", "server", "producer", "consumer"] },
+        "parentId": { "type": ["string", "null"] },
+        "joinType": { "enum": ["root", "continue-trace", "span-link", "attribute-pivot"] },
+        "service": { "type": "string", "minLength": 3 },
+        "attributes": { "$ref": "#/$defs/idList" }
+      }
+    },
+    "event": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "when", "attributes"],
+      "properties": {
+        "name": { "$ref": "#/$defs/slug" },
+        "when": { "type": "string", "minLength": 12 },
+        "attributes": { "$ref": "#/$defs/idList" }
+      }
+    },
+    "metric": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "type", "unit", "purpose", "dimensions"],
+      "properties": {
+        "name": { "$ref": "#/$defs/slug" },
+        "type": { "enum": ["counter", "histogram", "gauge"] },
+        "unit": { "type": "string", "minLength": 1 },
+        "purpose": { "type": "string", "minLength": 12 },
+        "dimensions": {
+          "type": "array",
+          "minItems": 3,
+          "maxItems": 6,
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/slug" }
+        }
+      }
+    },
+    "join": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["from", "to", "type", "carrier", "reason"],
+      "properties": {
+        "from": { "type": "string", "minLength": 3 },
+        "to": { "type": "string", "minLength": 3 },
+        "type": { "enum": ["continue-trace", "span-link", "attribute-pivot"] },
+        "carrier": { "type": "string", "minLength": 3 },
+        "reason": { "type": "string", "minLength": 20 }
+      }
+    },
+    "dashboard": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "title", "variables", "panels", "signalFlow", "releaseOverlay"],
+      "properties": {
+        "id": { "$ref": "#/$defs/pathId" },
+        "title": { "type": "string", "minLength": 5 },
+        "variables": { "$ref": "#/$defs/stringList" },
+        "panels": { "$ref": "#/$defs/stringList" },
+        "signalFlow": { "$ref": "#/$defs/substantive" },
+        "releaseOverlay": { "type": "boolean" }
+      }
+    },
+    "useCase": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id", "title", "narrative", "question", "workflowIds", "businessTransactionIds",
+        "spanIds", "eventNames", "metricNames", "dashboardId", "detectorIds", "objectiveIds",
+        "joins", "verification", "workOrderIds", "evidenceIds"
+      ],
+      "properties": {
+        "id": { "$ref": "#/$defs/pathId" },
+        "title": { "type": "string", "minLength": 5 },
+        "narrative": { "$ref": "#/$defs/substantive" },
+        "question": { "type": "string", "minLength": 20 },
+        "workflowIds": { "$ref": "#/$defs/idList" },
+        "businessTransactionIds": { "$ref": "#/$defs/idList" },
+        "spanIds": { "$ref": "#/$defs/idList" },
+        "eventNames": { "$ref": "#/$defs/idList" },
+        "metricNames": { "$ref": "#/$defs/idList" },
+        "dashboardId": { "$ref": "#/$defs/slug" },
+        "detectorIds": { "$ref": "#/$defs/idList" },
+        "objectiveIds": { "$ref": "#/$defs/idList" },
+        "joins": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/join" } },
+        "verification": { "$ref": "#/$defs/stringList" },
+        "workOrderIds": { "$ref": "#/$defs/idList" },
+        "evidenceIds": { "$ref": "#/$defs/idList" }
+      }
+    },
+    "workflow": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id", "name", "narrative", "businessTransactionIds", "spans", "events", "metrics",
+        "joins", "dashboardId", "detectorIds", "objectiveIds", "codeMapping", "codeLocations",
+        "verification", "workOrderIds", "evidenceIds"
+      ],
+      "properties": {
+        "id": { "$ref": "#/$defs/pathId" },
+        "name": { "type": "string", "pattern": "^[a-z0-9]+(?:[.-][a-z0-9]+)+$" },
+        "narrative": { "type": "string", "minLength": 40 },
+        "businessTransactionIds": { "$ref": "#/$defs/idList" },
+        "spans": { "type": "array", "minItems": 2, "items": { "$ref": "#/$defs/span" } },
+        "events": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/event" } },
+        "metrics": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/metric" } },
+        "joins": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/join" } },
+        "dashboardId": { "$ref": "#/$defs/slug" },
+        "detectorIds": { "$ref": "#/$defs/idList" },
+        "objectiveIds": { "$ref": "#/$defs/idList" },
+        "codeMapping": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["status", "evidence"],
+          "properties": {
+            "status": { "enum": ["mapped", "unresolved"] },
+            "evidence": { "$ref": "#/$defs/substantive" }
+          }
+        },
+        "codeLocations": {
+          "type": "array", "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$))[A-Za-z0-9._/-]+(?::[1-9][0-9]*(?:-[1-9][0-9]*)?)?$"
+          }
+        },
+        "verification": { "$ref": "#/$defs/stringList" },
+        "workOrderIds": { "$ref": "#/$defs/idList" },
+        "evidenceIds": { "$ref": "#/$defs/idList" }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "codeMapping": {
+                "properties": { "status": { "const": "mapped" } },
+                "required": ["status"]
+              }
+            }
+          },
+          "then": { "properties": { "codeLocations": { "minItems": 1 } } },
+          "else": { "properties": { "codeLocations": { "maxItems": 0 } } }
+        }
+      ]
+    },
+    "businessTransaction": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id", "name", "groupingValue", "artifact", "summary", "catalogStatus",
+        "catalogEvidence", "workflowCatalog", "workflowIds",
+        "whereSet", "propagation", "tenantRule", "verification", "workOrderIds", "evidenceIds"
+      ],
+      "properties": {
+        "id": { "$ref": "#/$defs/pathId" },
+        "name": { "type": "string", "minLength": 3 },
+        "groupingValue": { "$ref": "#/$defs/slug" },
+        "artifact": { "type": "string", "minLength": 3 },
+        "summary": { "type": "string", "minLength": 40 },
+        "catalogStatus": { "enum": ["observed", "none-by-design", "unresolved"] },
+        "catalogEvidence": { "$ref": "#/$defs/substantive" },
+        "workflowCatalog": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/slug" }
+        },
+        "workflowIds": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/slug" }
+        },
+        "whereSet": { "type": "string", "minLength": 20 },
+        "propagation": { "type": "string", "minLength": 20 },
+        "tenantRule": { "type": "string", "minLength": 20 },
+        "verification": { "type": "string", "minLength": 20 },
+        "workOrderIds": { "$ref": "#/$defs/idList" },
+        "evidenceIds": { "$ref": "#/$defs/idList" }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": { "catalogStatus": { "const": "observed" } },
+            "required": ["catalogStatus"]
+          },
+          "then": {
+            "properties": { "workflowCatalog": { "minItems": 1 } }
+          },
+          "else": {
+            "properties": {
+              "workflowCatalog": { "maxItems": 0 },
+              "workflowIds": { "maxItems": 0 }
+            }
+          }
+        }
+      ]
+    },
+    "contracts": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["singleInit", "spaRoutes", "crossCutting", "attribution", "joins", "collector", "cardinality"],
+      "properties": {
+        "singleInit": { "$ref": "#/$defs/substantive" },
+        "spaRoutes": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["applicable", "evidence"],
+          "properties": {
+            "applicable": { "type": "boolean" },
+            "evidence": { "type": "string", "minLength": 20 },
+            "owner": { "type": "string", "minLength": 3 },
+            "classifier": { "type": "string", "minLength": 20 },
+            "navigationSpan": { "type": "string", "minLength": 3 },
+            "code": { "type": "string", "minLength": 80 }
+          },
+          "allOf": [{
+            "if": { "properties": { "applicable": { "const": true } } },
+            "then": { "required": ["owner", "classifier", "navigationSpan", "code"] }
+          }]
+        },
+        "crossCutting": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["attributes", "providerBootstrap", "spanProcessor", "identityWrite", "backendPropagator", "messagePropagation"],
+          "properties": {
+            "attributes": { "type": "array", "minItems": 3, "items": { "$ref": "#/$defs/attribute" } },
+            "providerBootstrap": { "type": "string", "minLength": 80 },
+            "spanProcessor": { "type": "string", "minLength": 80 },
+            "identityWrite": { "type": "string", "minLength": 80 },
+            "backendPropagator": { "type": "string", "minLength": 80 },
+            "messagePropagation": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["applicable", "evidence"],
+              "properties": {
+                "applicable": { "type": "boolean" },
+                "evidence": { "type": "string", "minLength": 20 },
+                "code": { "type": "string", "minLength": 80 }
+              },
+              "allOf": [{
+                "if": { "properties": { "applicable": { "const": true } } },
+                "then": { "required": ["code"] }
+              }]
+            }
+          }
+        },
+        "attribution": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["applicable", "evidence"],
+          "properties": {
+            "applicable": { "type": "boolean" },
+            "evidence": { "type": "string", "minLength": 20 },
+            "trigger": { "type": "string", "minLength": 20 },
+            "event": { "$ref": "#/$defs/slug" },
+            "firstTouch": { "type": "string", "minLength": 20 },
+            "lastTouch": { "type": "string", "minLength": 20 },
+            "baggageKeys": { "$ref": "#/$defs/idList" },
+            "code": { "type": "string", "minLength": 80 }
+          },
+          "allOf": [{
+            "if": { "properties": { "applicable": { "const": true } } },
+            "then": { "required": ["trigger", "event", "firstTouch", "lastTouch", "baggageKeys", "code"] }
+          }]
+        },
+        "joins": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/join" } },
+        "collector": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["applicable", "evidence"],
+          "properties": {
+            "applicable": { "type": "boolean" },
+            "evidence": { "type": "string", "minLength": 20 },
+            "placement": { "type": "string", "minLength": 20 },
+            "processorOrder": { "type": "array", "minItems": 3, "items": { "type": "string" } },
+            "ottl": { "type": "string", "minLength": 80 },
+            "redactions": { "type": "array", "minItems": 3, "items": { "$ref": "#/$defs/redaction" } }
+          },
+          "allOf": [{
+            "if": { "properties": { "applicable": { "const": true } } },
+            "then": { "required": ["placement", "processorOrder", "ottl", "redactions"] }
+          }]
+        },
+        "cardinality": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["budgetStatus", "basis", "contractualEntitlement", "usage", "enforcedSystemLimit", "reserved", "proposedCost", "systemHeadroomAfter", "dimensionEligible", "attributeOnly"],
+          "properties": {
+            "budgetStatus": { "enum": ["measured", "unavailable"] },
+            "basis": { "$ref": "#/$defs/substantive" },
+            "contractualEntitlement": { "type": "null" },
+            "usage": { "type": ["integer", "null"], "minimum": 0 },
+            "enforcedSystemLimit": { "type": ["integer", "null"], "minimum": 1 },
+            "reserved": { "type": ["integer", "null"], "minimum": 0 },
+            "proposedCost": { "type": "integer", "minimum": 0 },
+            "systemHeadroomAfter": { "type": ["integer", "null"] },
+            "dimensionEligible": { "$ref": "#/$defs/idList" },
+            "attributeOnly": { "$ref": "#/$defs/idList" }
+          },
+          "allOf": [
+            {
+              "if": {
+                "properties": { "budgetStatus": { "const": "unavailable" } },
+                "required": ["budgetStatus"]
+              },
+              "then": {
+                "properties": {
+                  "contractualEntitlement": { "type": "null" },
+                  "usage": { "type": "null" },
+                  "enforcedSystemLimit": { "type": "null" },
+                  "reserved": { "type": "null" },
+                  "systemHeadroomAfter": { "type": "null" }
+                }
+              },
+              "else": {
+                "properties": {
+                  "contractualEntitlement": { "type": "null" },
+                  "usage": { "type": "integer", "minimum": 0 },
+                  "enforcedSystemLimit": { "type": "integer", "minimum": 1 },
+                  "reserved": { "type": "integer", "minimum": 0 },
+                  "systemHeadroomAfter": { "type": "integer" }
+                }
+              }
+            }
+          ]
+        }
+      }
+    },
+    "attribute": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "type", "source", "setAt", "cardinalityClass", "dimensionEligible", "propagation", "consumers"],
+      "properties": {
+        "name": { "$ref": "#/$defs/slug" },
+        "type": { "type": "string", "minLength": 3 },
+        "source": { "type": "string", "minLength": 3 },
+        "setAt": { "type": "string", "minLength": 8 },
+        "cardinalityClass": { "enum": ["bounded", "high", "unbounded"] },
+        "dimensionEligible": { "type": "boolean" },
+        "propagation": { "enum": ["resource", "baggage", "collector", "local"] },
+        "consumers": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "type": "string", "minLength": 1 }
+        }
+      }
+    },
+    "redaction": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["field", "action", "reason"],
+      "properties": {
+        "field": { "type": "string", "minLength": 3 },
+        "action": { "enum": ["delete", "hash", "truncate", "allowlist"] },
+        "reason": { "type": "string", "minLength": 12 }
+      }
+    },
+    "operations": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["dashboards", "detectors", "objectives", "releaseCorrelation", "synthetics", "thousandEyes", "logCorrelation", "verificationCriteria", "performanceBudgets"],
+      "properties": {
+        "dashboards": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/dashboard" } },
+        "detectors": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/detector" } },
+        "objectives": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/objective" } },
+        "releaseCorrelation": { "$ref": "#/$defs/substantive" },
+        "synthetics": { "$ref": "#/$defs/conditionalOperation" },
+        "thousandEyes": { "$ref": "#/$defs/conditionalOperation" },
+        "logCorrelation": { "$ref": "#/$defs/substantive" },
+        "verificationCriteria": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/verificationCriterion" } },
+        "performanceBudgets": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["validationSeconds", "renderSeconds", "maxOutputFiles", "maxOutputBytes"],
+          "properties": {
+            "validationSeconds": { "type": "number", "exclusiveMinimum": 0 },
+            "renderSeconds": { "type": "number", "exclusiveMinimum": 0 },
+            "maxOutputFiles": { "type": "integer", "minimum": 10 },
+            "maxOutputBytes": { "type": "integer", "minimum": 10000 }
+          }
+        }
+      }
+    },
+    "detector": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "name", "signal", "threshold", "window", "groupBy", "severity", "runbook", "verification"],
+      "properties": {
+        "id": { "$ref": "#/$defs/slug" },
+        "name": { "type": "string", "minLength": 5 },
+        "signal": { "type": "string", "minLength": 3 },
+        "threshold": { "type": "string", "minLength": 3 },
+        "window": { "type": "string", "minLength": 2 },
+        "groupBy": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/slug" } },
+        "severity": { "enum": ["critical", "high", "medium", "low"] },
+        "runbook": { "type": "string", "minLength": 20 },
+        "verification": { "type": "string", "minLength": 20 }
+      }
+    },
+    "objective": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "name", "sli", "target", "window", "errorBudget", "verification"],
+      "properties": {
+        "id": { "$ref": "#/$defs/slug" },
+        "name": { "type": "string", "minLength": 5 },
+        "sli": { "type": "string", "minLength": 20 },
+        "target": { "type": "string", "minLength": 3 },
+        "window": { "type": "string", "minLength": 3 },
+        "errorBudget": { "type": "string", "minLength": 8 },
+        "verification": { "type": "string", "minLength": 20 }
+      }
+    },
+    "conditionalOperation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["applicable", "evidence", "design"],
+      "properties": {
+        "applicable": { "type": "boolean" },
+        "evidence": { "type": "string", "minLength": 20 },
+        "design": { "type": "string", "minLength": 20 }
+      }
+    },
+    "verificationCriterion": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "criterion", "method", "expected"],
+      "properties": {
+        "id": { "type": "string", "pattern": "^VC-[0-9]{3,}$" },
+        "criterion": { "type": "string", "minLength": 20 },
+        "method": { "type": "string", "minLength": 20 },
+        "expected": { "type": "string", "minLength": 12 }
+      }
+    },
+    "reference": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["evidence", "sources", "priorArtifacts", "unknowns"],
+      "properties": {
+        "evidence": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/evidenceRef" } },
+        "sources": { "$ref": "#/$defs/stringList" },
+        "priorArtifacts": { "$ref": "#/$defs/stringList" },
+        "unknowns": { "$ref": "#/$defs/stringList" }
+      }
+    }
+  }
+}

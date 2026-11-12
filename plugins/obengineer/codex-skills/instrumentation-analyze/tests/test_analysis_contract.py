@@ -16,6 +16,7 @@ sys.path.insert(0, str(SCRIPTS))
 from analysis_contract import (  # noqa: E402
     load_json,
     migrate_contract,
+    normalize_contract,
     validate_contract,
     validate_implementation_mapping,
     validate_manifest,
@@ -23,6 +24,7 @@ from analysis_contract import (  # noqa: E402
     validate_worker_results,
 )
 from render_analysis_site import Renderer  # noqa: E402
+from migrate_analysis_contract import main as migrate_contract_main  # noqa: E402
 from validate_analysis import main as validate_analysis_main  # noqa: E402
 
 
@@ -91,6 +93,7 @@ def digest_tree(root: Path) -> str:
 
 
 def test_representative_contract_and_job_audit_pass():
+    assert contract()["schemaVersion"] == 3
     assert validate_contract(contract()) == []
     assert validate_manifest(manifest()) == []
     assert validate_worker_results(manifest(), results()) == []
@@ -198,7 +201,7 @@ def test_schema_v1_contract_migrates_deterministically_before_validation():
     migrated = migrate_contract(old)
 
     assert old["schemaVersion"] == 1
-    assert migrated["schemaVersion"] == 2
+    assert migrated["schemaVersion"] == 3
     assert migrated["workflows"][0]["codeMapping"]["status"] == "mapped"
     assert migrated["businessTransactions"][0]["workflowCatalog"] == [
         "checkout.payment.authorize",
@@ -212,6 +215,54 @@ def test_schema_v1_contract_migrates_deterministically_before_validation():
     assert cardinality["systemHeadroomAfter"] is None
     assert validate_contract(old) == []
     assert migrate_contract(migrated) == migrated
+
+
+def test_frozen_parent_schema_v2_validates_and_normalizes_without_mutation():
+    fixture = (
+        Path(__file__).resolve().parent
+        / "fixtures"
+        / "representative-v2"
+        / "analysis-contract.json"
+    )
+    frozen_schema = SKILL / "schemas" / "analysis-contract-v2.schema.json"
+    assert hashlib.sha256(fixture.read_bytes()).hexdigest() == (
+        "fda17b65c6b5a2cd026aeb42e891356bd93c069c5edac515756b8ad1ced36ab8"
+    )
+    assert hashlib.sha256(frozen_schema.read_bytes()).hexdigest() == (
+        "aca0c133553ef27cc140bdc71fb65807b783e69c0bfeecfadf8b4a026705c969"
+    )
+    original_bytes = fixture.read_bytes()
+    value = load_json(fixture)
+    original_value = copy.deepcopy(value)
+
+    assert validate_contract(value) == []
+    normalized = normalize_contract(value)
+    assert normalized["schemaVersion"] == 3
+    assert normalized["contracts"]["cardinality"]["usage"] is None
+    assert normalized["contracts"]["cardinality"]["enforcedSystemLimit"] is None
+    assert value == original_value
+    assert fixture.read_bytes() == original_bytes
+
+
+def test_explicit_schema_v2_working_copy_migration_writes_schema_v3(tmp_path):
+    source = (
+        Path(__file__).resolve().parent
+        / "fixtures"
+        / "representative-v2"
+        / "analysis-contract.json"
+    )
+    before = source.read_bytes()
+    output = tmp_path / "analysis-contract-v3.json"
+
+    assert migrate_contract_main([str(source), "--output", str(output)]) == 0
+    migrated = load_json(output)
+    assert migrated["schemaVersion"] == 3
+    assert validate_contract(migrated) == []
+    assert source.read_bytes() == before
+    assert migrate_contract_main(
+        [str(source), "--output", str(source)]
+    ) == 1
+    assert source.read_bytes() == before
 
 
 def test_schema_v1_empty_transaction_catalog_migrates_as_unresolved():
@@ -565,7 +616,13 @@ def test_published_json_schemas_capture_bounded_jobs_and_required_objects():
         "contracts",
         "operations",
     }
-    assert contract_schema["properties"]["schemaVersion"]["const"] == 2
+    assert contract_schema["properties"]["schemaVersion"]["const"] == 3
+    assert contract_schema == json.loads(
+        (SKILL / "schemas" / "analysis-contract-v3.schema.json").read_text()
+    )
+    assert json.loads(
+        (SKILL / "schemas" / "analysis-contract-v2.schema.json").read_text()
+    )["properties"]["schemaVersion"]["const"] == 2
     definitions = contract_schema["$defs"]
     assert {"applicationScope", "observedFrom", "observedTo", "readAt", "source",
             "provenance", "portfolioEvidence"} <= set(
