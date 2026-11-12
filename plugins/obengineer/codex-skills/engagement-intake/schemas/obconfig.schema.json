@@ -411,7 +411,15 @@
       ],
       "properties": {
         "percentile": {
-          "type": "string",
+          "oneOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "number",
+              "x-obengineer-finite": true
+            }
+          ],
           "x-obengineer-source-line": 85
         },
         "workflow_naming": {
@@ -429,7 +437,9 @@
           "x-obengineer-source-line": 88
         },
         "unknown_dimension_threshold_pct": {
-          "type": "integer",
+          "type": "number",
+          "minimum": 0,
+          "x-obengineer-finite": true,
           "x-obengineer-source-line": 89
         }
       },
@@ -541,7 +551,8 @@
               "oneOf": [
                 {
                   "type": "number",
-                  "minimum": 0
+                  "minimum": 0,
+                  "x-obengineer-finite": true
                 },
                 {
                   "const": "unknown"
@@ -553,7 +564,8 @@
               "oneOf": [
                 {
                   "type": "number",
-                  "minimum": 0
+                  "minimum": 0,
+                  "x-obengineer-finite": true
                 },
                 {
                   "const": "unknown"
@@ -565,7 +577,8 @@
               "oneOf": [
                 {
                   "type": "number",
-                  "minimum": 0
+                  "minimum": 0,
+                  "x-obengineer-finite": true
                 },
                 {
                   "const": "unknown"
@@ -589,7 +602,8 @@
               "oneOf": [
                 {
                   "type": "number",
-                  "minimum": 0
+                  "minimum": 0,
+                  "x-obengineer-finite": true
                 },
                 {
                   "const": "unknown"
@@ -601,7 +615,8 @@
               "oneOf": [
                 {
                   "type": "number",
-                  "minimum": 0
+                  "minimum": 0,
+                  "x-obengineer-finite": true
                 },
                 {
                   "const": "unknown"
@@ -613,7 +628,8 @@
               "oneOf": [
                 {
                   "type": "number",
-                  "minimum": 0
+                  "minimum": 0,
+                  "x-obengineer-finite": true
                 },
                 {
                   "const": "unknown"
@@ -636,7 +652,8 @@
               "oneOf": [
                 {
                   "type": "number",
-                  "minimum": 0
+                  "minimum": 0,
+                  "x-obengineer-finite": true
                 },
                 {
                   "const": "unknown"
@@ -648,7 +665,8 @@
               "oneOf": [
                 {
                   "type": "number",
-                  "minimum": 0
+                  "minimum": 0,
+                  "x-obengineer-finite": true
                 },
                 {
                   "const": "unknown"
@@ -717,7 +735,8 @@
               "oneOf": [
                 {
                   "type": "number",
-                  "minimum": 0
+                  "minimum": 0,
+                  "x-obengineer-finite": true
                 },
                 {
                   "const": "unknown"
@@ -729,7 +748,8 @@
               "oneOf": [
                 {
                   "type": "number",
-                  "minimum": 0
+                  "minimum": 0,
+                  "x-obengineer-finite": true
                 },
                 {
                   "const": "unknown"
@@ -741,7 +761,8 @@
               "oneOf": [
                 {
                   "type": "number",
-                  "minimum": 0
+                  "minimum": 0,
+                  "x-obengineer-finite": true
                 },
                 {
                   "const": "unknown"
@@ -753,7 +774,8 @@
               "oneOf": [
                 {
                   "type": "number",
-                  "minimum": 0
+                  "minimum": 0,
+                  "x-obengineer-finite": true
                 },
                 {
                   "const": "unknown"
@@ -765,7 +787,8 @@
               "oneOf": [
                 {
                   "type": "number",
-                  "minimum": 0
+                  "minimum": 0,
+                  "x-obengineer-finite": true
                 },
                 {
                   "const": "unknown"
@@ -777,7 +800,8 @@
               "oneOf": [
                 {
                   "type": "number",
-                  "minimum": 0
+                  "minimum": 0,
+                  "x-obengineer-finite": true
                 },
                 {
                   "const": "unknown"
@@ -789,7 +813,8 @@
               "oneOf": [
                 {
                   "type": "number",
-                  "minimum": 0
+                  "minimum": 0,
+                  "x-obengineer-finite": true
                 },
                 {
                   "const": "unknown"
@@ -801,7 +826,8 @@
               "oneOf": [
                 {
                   "type": "number",
-                  "minimum": 0
+                  "minimum": 0,
+                  "x-obengineer-finite": true
                 },
                 {
                   "const": "unknown"
@@ -813,7 +839,8 @@
               "oneOf": [
                 {
                   "type": "number",
-                  "minimum": 0
+                  "minimum": 0,
+                  "x-obengineer-finite": true
                 },
                 {
                   "const": "unknown"
@@ -848,7 +875,8 @@
               "oneOf": [
                 {
                   "type": "number",
-                  "minimum": 0
+                  "minimum": 0,
+                  "x-obengineer-finite": true
                 },
                 {
                   "const": "unknown"
@@ -860,7 +888,8 @@
               "oneOf": [
                 {
                   "type": "number",
-                  "minimum": 0
+                  "minimum": 0,
+                  "x-obengineer-finite": true
                 },
                 {
                   "const": "unknown"
@@ -872,7 +901,8 @@
               "oneOf": [
                 {
                   "type": "number",
-                  "minimum": 0
+                  "minimum": 0,
+                  "x-obengineer-finite": true
                 },
                 {
                   "const": "unknown"
@@ -884,7 +914,8 @@
               "oneOf": [
                 {
                   "type": "number",
-                  "minimum": 0
+                  "minimum": 0,
+                  "x-obengineer-finite": true
                 },
                 {
                   "const": "unknown"
@@ -916,7 +947,8 @@
               "oneOf": [
                 {
                   "type": "number",
-                  "minimum": 0
+                  "minimum": 0,
+                  "x-obengineer-finite": true
                 },
                 {
                   "const": "unknown"
@@ -928,7 +960,8 @@
               "oneOf": [
                 {
                   "type": "number",
-                  "minimum": 0
+                  "minimum": 0,
+                  "x-obengineer-finite": true
                 },
                 {
                   "const": "unknown"
@@ -940,7 +973,8 @@
               "oneOf": [
                 {
                   "type": "number",
-                  "minimum": 0
+                  "minimum": 0,
+                  "x-obengineer-finite": true
                 },
                 {
                   "const": "unknown"
@@ -952,7 +986,8 @@
               "oneOf": [
                 {
                   "type": "number",
-                  "minimum": 0
+                  "minimum": 0,
+                  "x-obengineer-finite": true
                 },
                 {
                   "const": "unknown"
@@ -964,7 +999,8 @@
               "oneOf": [
                 {
                   "type": "number",
-                  "minimum": 0
+                  "minimum": 0,
+                  "x-obengineer-finite": true
                 },
                 {
                   "const": "unknown"

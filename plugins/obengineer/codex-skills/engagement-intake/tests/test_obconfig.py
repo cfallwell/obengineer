@@ -64,6 +64,19 @@ def prepare_config_creation(root: Path) -> None:
     subprocess.run(["git", "init", "-q"], cwd=root, check=True)
 
 
+def finalize_for_test(root: Path, command: str, version: str) -> None:
+    output = root / "generated"
+    output.mkdir(exist_ok=True)
+    (output / "result.md").write_text(f"{command} {version}\n")
+    obconfig.finalize_claim(
+        root,
+        command=command,
+        intended_version=version,
+        generated_outputs=["generated"],
+        enforce_git=False,
+    )
+
+
 def test_template_has_schema_v4_and_complete_secret_registry():
     data, marks = obconfig.parse_yaml(TEMPLATE.read_bytes())
     assert data["schema_version"] == 4
@@ -129,6 +142,36 @@ def test_schema_runtime_rejects_numeric_schema_version_and_invalid_list_items(
     write_data(peak_root, data)
     with pytest.raises(obconfig.ObconfigError):
         obconfig.load_config(peak_root, enforce_git=False)
+
+
+@pytest.mark.parametrize("invalid", (float("nan"), float("inf"), float("-inf")))
+@pytest.mark.parametrize(
+    "path",
+    (
+        ("standards", "unknown_dimension_threshold_pct"),
+        ("standards", "percentile"),
+        ("traffic_baseline", "rum", "sessions_per_day_avg"),
+    ),
+)
+def test_numeric_contract_rejects_non_finite_values(tmp_path, path, invalid):
+    root = project(tmp_path)
+    data = load_data(root)
+    target = data
+    for part in path[:-1]:
+        target = target[part]
+    target[path[-1]] = invalid
+    write_data(root, data)
+    with pytest.raises(obconfig.ObconfigError, match="finite|nonnegative"):
+        obconfig.load_config(root, enforce_git=False)
+
+
+def test_threshold_and_percentile_accept_finite_numbers(tmp_path):
+    root = project(tmp_path)
+    data = load_data(root)
+    data["standards"]["unknown_dimension_threshold_pct"] = 0.5
+    data["standards"]["percentile"] = 95.5
+    write_data(root, data)
+    obconfig.load_config(root, enforce_git=False)
 
 
 def test_duplicate_key_reports_exact_redacted_location(tmp_path):
@@ -381,7 +424,7 @@ def test_authorization_is_one_shot_and_bound_to_both_digests(tmp_path):
         obconfig.validate_claim(
             root, command="ob-start", intended_version="V1", enforce_git=False
         )
-    with pytest.raises(obconfig.ObconfigError, match="no longer matches"):
+    with pytest.raises(obconfig.ObconfigError, match="finalized"):
         obconfig.consume_claim(
             root, command="ob-start", intended_version="V1", enforce_git=False
         )
@@ -429,6 +472,7 @@ def test_baseline_updates_only_after_successful_claim_consume(tmp_path):
         root, command="ob-start", intended_version="V1", enforce_git=False
     )
     assert claim["artifact_delta"]["added"] == ["input.txt"]
+    finalize_for_test(root, "ob-start", "V1")
     obconfig.consume_claim(
         root, command="ob-start", intended_version="V1", enforce_git=False
     )
@@ -486,6 +530,82 @@ def test_mutated_claim_can_abort_without_advancing_baseline(tmp_path):
     assert not (root / ".obengineer/last-analysis-binding.json").exists()
 
 
+def test_abort_preserves_claim_replacement_raced_after_validation(
+    tmp_path, monkeypatch
+):
+    root = project(tmp_path)
+    obconfig.authorize(
+        root, command="ob-start", intended_version="V1", enforce_git=False
+    )
+    obconfig.claim_authorization(
+        root, command="ob-start", intended_version="V1", enforce_git=False
+    )
+    claim = root / ".obengineer/analysis-claim.json"
+    replacement_raw = claim.read_bytes()
+    original_rename = os.rename
+    substituted = False
+
+    def racing_rename(source, destination, *args, **kwargs):
+        nonlocal substituted
+        if source == "analysis-claim.json" and not substituted:
+            substituted = True
+            source_dir = kwargs["src_dir_fd"]
+            original_rename(
+                source,
+                "validated-original.json",
+                src_dir_fd=source_dir,
+                dst_dir_fd=source_dir,
+            )
+            descriptor = os.open(
+                source,
+                os.O_WRONLY | os.O_CREAT | os.O_EXCL,
+                0o600,
+                dir_fd=source_dir,
+            )
+            try:
+                os.write(descriptor, replacement_raw)
+                os.fsync(descriptor)
+            finally:
+                os.close(descriptor)
+        return original_rename(source, destination, *args, **kwargs)
+
+    monkeypatch.setattr(os, "rename", racing_rename)
+    with pytest.raises(obconfig.ObconfigError, match="changed before removal"):
+        obconfig.abort_claim(root, command="ob-start", intended_version="V1")
+    assert claim.read_bytes() == replacement_raw
+    assert (root / ".obengineer/validated-original.json").is_file()
+    assert not (root / ".obengineer/artifact-manifest.json").exists()
+
+
+def test_state_directory_rename_during_abort_fails_without_deleting_claim(
+    tmp_path, monkeypatch
+):
+    root = project(tmp_path)
+    obconfig.authorize(
+        root, command="ob-start", intended_version="V1", enforce_git=False
+    )
+    obconfig.claim_authorization(
+        root, command="ob-start", intended_version="V1", enforce_git=False
+    )
+    original_rename = os.rename
+    moved = root / ".obengineer-moved"
+    substituted = False
+
+    def racing_rename(source, destination, *args, **kwargs):
+        nonlocal substituted
+        if source == "analysis-claim.json" and not substituted:
+            substituted = True
+            original_rename(root / ".obengineer", moved)
+            (root / ".obengineer").mkdir(mode=0o700)
+        return original_rename(source, destination, *args, **kwargs)
+
+    monkeypatch.setattr(os, "rename", racing_rename)
+    with pytest.raises(obconfig.ObconfigError, match="state directory changed"):
+        obconfig.abort_claim(root, command="ob-start", intended_version="V1")
+    assert (moved / "analysis-claim.json").is_file()
+    assert not (root / ".obengineer/analysis-claim.json").exists()
+
+
 def test_consume_journal_recovers_after_write_and_unlink_interruptions(
     tmp_path, monkeypatch
 ):
@@ -497,6 +617,7 @@ def test_consume_journal_recovers_after_write_and_unlink_interruptions(
     obconfig.claim_authorization(
         root, command="ob-start", intended_version="V1", enforce_git=False
     )
+    finalize_for_test(root, "ob-start", "V1")
     original_write = obconfig.atomic_write_json
     failed = False
 
@@ -517,6 +638,14 @@ def test_consume_journal_recovers_after_write_and_unlink_interruptions(
         (root / ".obengineer/consume-journal.json").stat().st_mode
     ) == 0o600
     monkeypatch.setattr(obconfig, "atomic_write_json", original_write)
+    with pytest.raises(obconfig.ObconfigError, match="recovery request"):
+        obconfig.consume_claim(
+            root,
+            command="ob-edit-inputs",
+            intended_version="V9",
+            enforce_git=False,
+        )
+    assert (root / ".obengineer/consume-journal.json").exists()
     obconfig.consume_claim(
         root, command="ob-start", intended_version="V1", enforce_git=False
     )
@@ -533,17 +662,18 @@ def test_consume_journal_recovers_after_write_and_unlink_interruptions(
     obconfig.claim_authorization(
         root, command="ob-edit-inputs", intended_version="V2", enforce_git=False
     )
-    original_unlink = obconfig._unlink_state_identity
+    finalize_for_test(root, "ob-edit-inputs", "V2")
+    original_unlink = obconfig._quarantine_remove_state
     failed = False
 
-    def interrupt_unlink(path):
+    def interrupt_unlink(project_root, name, expected):
         nonlocal failed
-        if path.name == "analysis-claim.json" and not failed:
+        if name == "analysis-claim.json" and not failed:
             failed = True
             raise OSError("injected consume unlink interruption")
-        return original_unlink(path)
+        return original_unlink(project_root, name, expected)
 
-    monkeypatch.setattr(obconfig, "_unlink_state_identity", interrupt_unlink)
+    monkeypatch.setattr(obconfig, "_quarantine_remove_state", interrupt_unlink)
     with pytest.raises(OSError, match="unlink"):
         obconfig.consume_claim(
             root,
@@ -551,7 +681,7 @@ def test_consume_journal_recovers_after_write_and_unlink_interruptions(
             intended_version="V2",
             enforce_git=False,
         )
-    monkeypatch.setattr(obconfig, "_unlink_state_identity", original_unlink)
+    monkeypatch.setattr(obconfig, "_quarantine_remove_state", original_unlink)
     obconfig.consume_claim(
         root,
         command="ob-edit-inputs",
@@ -570,6 +700,7 @@ def test_abort_and_consume_are_serialized(tmp_path):
     obconfig.claim_authorization(
         root, command="ob-start", intended_version="V1", enforce_git=False
     )
+    finalize_for_test(root, "ob-start", "V1")
 
     def abort():
         try:
@@ -734,20 +865,44 @@ def test_repair_commit_refuses_inode_substitution(tmp_path, monkeypatch):
     config = root / "obconfig.yaml"
     config.chmod(0o644)
     concurrent = b"concurrent commit content\n"
-    original_write = obconfig.atomic_write
+    original_exchange = obconfig._rename_exchange
+    substituted = False
 
-    def substitute_before_commit(path, data, mode=0o600, **kwargs):
-        if path == config and kwargs.get("expected_identity"):
+    def substitute_before_exchange(directory, left, right):
+        nonlocal substituted
+        if not substituted:
+            substituted = True
             replacement = root / "replacement"
             replacement.write_bytes(concurrent)
             replacement.chmod(0o600)
             replacement.replace(config)
-        return original_write(path, data, mode, **kwargs)
+        return original_exchange(directory, left, right)
 
-    monkeypatch.setattr(obconfig, "atomic_write", substitute_before_commit)
-    with pytest.raises(obconfig.ObconfigError, match="identity changed"):
+    monkeypatch.setattr(obconfig, "_rename_exchange", substitute_before_exchange)
+    with pytest.raises(obconfig.ObconfigError, match="concurrent config"):
         obconfig.repair(root)
     assert config.read_bytes() == concurrent
+
+
+def test_repair_fails_closed_when_atomic_exchange_is_unsupported(
+    tmp_path, monkeypatch
+):
+    root = project(tmp_path)
+    config = root / "obconfig.yaml"
+    config.chmod(0o644)
+    original = config.read_bytes()
+
+    def unsupported(*args, **kwargs):
+        raise obconfig.ObconfigError(
+            obconfig.ConfigIssue(
+                1, 1, "", "atomic repair exchange is unsupported"
+            )
+        )
+
+    monkeypatch.setattr(obconfig, "_rename_exchange", unsupported)
+    with pytest.raises(obconfig.ObconfigError, match="unsupported"):
+        obconfig.repair(root)
+    assert config.read_bytes() == original
 
 
 def test_repair_rollback_never_overwrites_concurrent_replacement(
@@ -1151,3 +1306,147 @@ def test_migration_rechecks_git_at_each_commit_boundary(
     for path in (tmp_path / ".obengineer").glob("*"):
         if path.is_file():
             assert canary not in path.read_text(errors="ignore")
+
+
+@pytest.mark.parametrize(
+    "boundary", ("after-config", "after-state", "during-final-read")
+)
+def test_migration_revalidates_secret_source_through_final_commit(
+    tmp_path, monkeypatch, boundary
+):
+    prepare_config_creation(tmp_path)
+    (tmp_path / "artifacts").mkdir()
+    legacy = tmp_path / "docs/observability/engagement-inputs.yaml"
+    legacy.parent.mkdir(parents=True)
+    legacy.write_text(
+        yaml.safe_dump(
+            {
+                "schema_version": 3,
+                "engagement": {"application": "source-race-fixture"},
+                "artifacts": {
+                    "location": "artifacts",
+                    "front_end_scan_notes": "no browser: source race",
+                },
+            }
+        )
+    )
+    original_secret = secrets.token_urlsafe(33)
+    replacement_secret = secrets.token_urlsafe(33)
+    env = tmp_path / ".env"
+    env.write_text(
+        f"SPLUNK_REALM=us1\nSPLUNK_ACCESS_TOKEN={original_secret}\n"
+    )
+    env.chmod(0o600)
+
+    def replace_source():
+        replacement = tmp_path / ".env.replacement"
+        replacement.write_text(
+            f"SPLUNK_REALM=us1\nSPLUNK_ACCESS_TOKEN={replacement_secret}\n"
+        )
+        replacement.chmod(0o600)
+        replacement.replace(env)
+
+    if boundary == "after-config":
+        original_write = manage_obconfig.atomic_write
+
+        def write_then_replace(path, data, mode=0o600, **kwargs):
+            result = original_write(path, data, mode, **kwargs)
+            if path.name == "obconfig.yaml":
+                replace_source()
+            return result
+
+        monkeypatch.setattr(manage_obconfig, "atomic_write", write_then_replace)
+    elif boundary == "after-state":
+        original_json = manage_obconfig.atomic_write_json
+
+        def state_then_replace(path, value, mode=0o600, **kwargs):
+            result = original_json(path, value, mode, **kwargs)
+            if path.name == "migration.json":
+                replace_source()
+            return result
+
+        monkeypatch.setattr(
+            manage_obconfig, "atomic_write_json", state_then_replace
+        )
+    else:
+        original_read = manage_obconfig.read_project_file_version
+        env_reads = 0
+
+        def replace_during_final(root, relative, label, **kwargs):
+            nonlocal env_reads
+            if Path(relative) == Path(".env"):
+                env_reads += 1
+                if env_reads == 2:
+                    replace_source()
+            return original_read(root, relative, label, **kwargs)
+
+        monkeypatch.setattr(
+            manage_obconfig,
+            "read_project_file_version",
+            replace_during_final,
+        )
+
+    with pytest.raises(obconfig.ObconfigError, match="changed before migration commit"):
+        manage_obconfig.migrate_legacy(tmp_path, TEMPLATE)
+    assert not (tmp_path / "obconfig.yaml").exists()
+    assert not (tmp_path / ".obengineer/migration.json").exists()
+    assert replacement_secret in env.read_text()
+
+
+@pytest.mark.parametrize("destination", ("config", "state"))
+def test_migration_preserves_hostile_destination_replacement(
+    tmp_path, monkeypatch, destination
+):
+    prepare_config_creation(tmp_path)
+    (tmp_path / "artifacts").mkdir()
+    legacy = tmp_path / "docs/observability/engagement-inputs.yaml"
+    legacy.parent.mkdir(parents=True)
+    legacy.write_text(
+        yaml.safe_dump(
+            {
+                "schema_version": 3,
+                "engagement": {"application": "destination-race-fixture"},
+                "artifacts": {
+                    "location": "artifacts",
+                    "front_end_scan_notes": "no browser: destination race",
+                },
+            }
+        )
+    )
+    hostile = b"hostile same-user replacement\n"
+    original_preflight = manage_obconfig.preflight_config_creation
+    calls = 0
+
+    def replace_at_boundary(root):
+        nonlocal calls
+        calls += 1
+        result = original_preflight(root)
+        target_call = 2 if destination == "config" else 3
+        if calls == target_call:
+            target = (
+                root / "obconfig.yaml"
+                if destination == "config"
+                else root / ".obengineer/migration.json"
+            )
+            replacement = root / f".{destination}.replacement"
+            replacement.write_bytes(hostile)
+            replacement.chmod(0o600)
+            replacement.replace(target)
+        return result
+
+    monkeypatch.setattr(
+        manage_obconfig, "preflight_config_creation", replace_at_boundary
+    )
+    with pytest.raises(
+        obconfig.ObconfigError,
+        match="replacement was preserved|destination changed",
+    ):
+        manage_obconfig.migrate_legacy(tmp_path, TEMPLATE)
+    target = (
+        tmp_path / "obconfig.yaml"
+        if destination == "config"
+        else tmp_path / ".obengineer/migration.json"
+    )
+    assert target.read_bytes() == hostile
+    if destination == "state":
+        assert not (tmp_path / "obconfig.yaml").exists()

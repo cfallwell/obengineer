@@ -408,6 +408,46 @@ def test_safe_active_host_header_preserves_exact_authority(
     assert f"\r\nHost: {expected_authority}\r\n".encode() in fake.sent
 
 
+def test_safe_active_status_line_read_is_bounded(monkeypatch):
+    class FakeSocket:
+        def getpeername(self):
+            return ("8.8.8.8", 443)
+
+        def sendall(self, value):
+            pass
+
+        def recv(self, size):
+            return b"X" * size
+
+        def close(self):
+            pass
+
+    class FakeContext:
+        def wrap_socket(self, raw, server_hostname):
+            return raw
+
+    monkeypatch.setattr(
+        direct_api.ssl, "create_default_context", lambda: FakeContext()
+    )
+    with pytest.raises(ValueError, match="exceeded limit"):
+        direct_api.safe_active_https_probe(
+            {
+                "method": "HEAD",
+                "url": "https://www.example.com/robots.txt",
+            },
+            resolver=lambda *args, **kwargs: [
+                (
+                    socket.AF_INET,
+                    socket.SOCK_STREAM,
+                    6,
+                    "",
+                    ("8.8.8.8", 443),
+                )
+            ],
+            connection_factory=lambda *args, **kwargs: FakeSocket(),
+        )
+
+
 def test_unrecognized_success_body_is_not_labeled_measured():
     request = direct_api.platform_request(
         "https://splunk.example.test:8089",
@@ -541,6 +581,86 @@ def test_supported_abort_cli_releases_mutated_claim_without_baseline(
     assert not (tmp_path / ".obengineer/analysis-claim.json").exists()
     assert not (tmp_path / ".obengineer/artifact-manifest.json").exists()
     assert not (tmp_path / ".obengineer/last-analysis-binding.json").exists()
+
+
+def test_finalize_cli_binds_runtime_outputs_before_dispatch_and_consume(
+    tmp_path, capsys
+):
+    configured_project(tmp_path)
+    output = tmp_path / "docs/observability/analysis/app/V1"
+    output.mkdir(parents=True)
+    (output / "index.md").write_text("generated analysis\n")
+    artifact = tmp_path / "artifacts/input.txt"
+    artifact.write_text("authorized input")
+    obconfig.authorize(tmp_path, command="ob-start", intended_version="V1")
+    claim = obconfig.claim_authorization(
+        tmp_path, command="ob-start", intended_version="V1"
+    )
+    dispatched = []
+    argv = [
+        "--project-root",
+        str(tmp_path),
+        "finalize",
+        "--command",
+        "ob-start",
+        "--intended-version",
+        "V1",
+        "--output",
+        "docs/observability/analysis/app/V1",
+    ]
+    assert manage_obconfig.main(argv, dispatch_callback=dispatched.append) == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert dispatched == [payload]
+    assert payload["finalized"] is True
+    assert payload["output_count"] == 1
+
+    # Inputs after finalization belong to the next run and do not alter the
+    # finalized/published baseline committed by consume.
+    artifact.write_text("next-run input")
+    obconfig.consume_claim(
+        tmp_path, command="ob-start", intended_version="V1"
+    )
+    baseline = json.loads(
+        (tmp_path / ".obengineer/artifact-manifest.json").read_text()
+    )
+    history = json.loads(
+        (tmp_path / ".obengineer/last-analysis-binding.json").read_text()
+    )
+    assert baseline["tree_sha256"] == claim["artifact_tree_sha256"]
+    assert history["generated_output_sha256"] == payload[
+        "generated_output_sha256"
+    ]
+
+
+def test_finalize_mutation_blocks_dispatch_callback(tmp_path, capsys):
+    configured_project(tmp_path)
+    output = tmp_path / "generated"
+    output.mkdir()
+    (output / "result.md").write_text("generated\n")
+    artifact = tmp_path / "artifacts/input.txt"
+    artifact.write_text("before")
+    obconfig.authorize(tmp_path, command="ob-start", intended_version="V1")
+    obconfig.claim_authorization(
+        tmp_path, command="ob-start", intended_version="V1"
+    )
+    artifact.write_text("mutated before finalize")
+    dispatched = []
+    argv = [
+        "--project-root",
+        str(tmp_path),
+        "finalize",
+        "--command",
+        "ob-start",
+        "--intended-version",
+        "V1",
+        "--output",
+        "generated",
+    ]
+    assert manage_obconfig.main(argv, dispatch_callback=dispatched.append) == 1
+    terminal = capsys.readouterr()
+    assert terminal.out == ""
+    assert dispatched == []
+    assert "no longer matches" in terminal.err
 
 
 def test_direct_api_discards_result_when_config_swaps_during_transport(

@@ -20,6 +20,7 @@ from obconfig import (
     ConfigIssue,
     ObconfigError,
     Redactor,
+    RegularFileVersion,
     UniqueLoader,
     atomic_write,
     atomic_write_json,
@@ -32,6 +33,7 @@ from obconfig import (
     config_changed_since_authorization,
     consume_claim,
     find_template,
+    finalize_claim,
     hash_artifact_tree,
     initialize,
     load_config,
@@ -39,8 +41,8 @@ from obconfig import (
     preflight_config_creation,
     prepare_local_state,
     read_project_file,
+    read_project_file_version,
     redacted_issue,
-    recover_pending_consume,
     remove_config_from_index,
     repair,
     secure_unlink,
@@ -128,11 +130,13 @@ def _merge_value(
     changed.append(destination)
 
 
-def _read_legacy_env(project_root: Path, relative: Path) -> dict[str, str]:
+def _read_legacy_env(
+    project_root: Path, relative: Path
+) -> tuple[dict[str, str], RegularFileVersion | None]:
     path = project_root / relative
     if not path.exists() and not path.is_symlink():
-        return {}
-    raw = read_project_file(
+        return {}, None
+    raw, version = read_project_file_version(
         project_root,
         relative,
         relative.as_posix(),
@@ -147,7 +151,7 @@ def _read_legacy_env(project_root: Path, relative: Path) -> dict[str, str]:
         key, value = line.split("=", 1)
         if key in ENV_MAPPING:
             result[key] = value.strip().strip("\"'")
-    return result
+    return result, version
 
 
 def _merge_retained(
@@ -346,11 +350,12 @@ def migrate_legacy(project_root: Path, template: Path) -> list[str]:
         )
     )
     target = copy.deepcopy(template_data)
+    source_versions: dict[Path, RegularFileVersion] = {}
     changed: list[str] = []
     legacy: Mapping[str, Any] = {}
     legacy_path = project_root / LEGACY_YAML
-    if legacy_path.exists():
-        legacy_raw = read_project_file(
+    if legacy_path.exists() or legacy_path.is_symlink():
+        legacy_raw, legacy_version = read_project_file_version(
             project_root,
             LEGACY_YAML,
             LEGACY_YAML.as_posix(),
@@ -359,9 +364,12 @@ def migrate_legacy(project_root: Path, template: Path) -> list[str]:
         legacy = yaml.load(legacy_raw.decode("utf-8"), Loader=UniqueLoader)
         if not isinstance(legacy, Mapping):
             raise ValueError(f"{LEGACY_YAML} top level must be a mapping")
+        source_versions[LEGACY_YAML] = legacy_version
         changed.extend(_merge_retained(target, legacy, project_root))
 
-    env = _read_legacy_env(project_root, LEGACY_ENV)
+    env, env_version = _read_legacy_env(project_root, LEGACY_ENV)
+    if env_version is not None:
+        source_versions[LEGACY_ENV] = env_version
     for name, destination_path in ENV_MAPPING.items():
         value = env.get(name)
         if not _supplied(value):
@@ -410,25 +418,34 @@ def migrate_legacy(project_root: Path, template: Path) -> list[str]:
         or (project_root / relative).is_symlink()
     ]
     migration_path = local / "migration.json"
-    previous_migration = (
-        read_project_file(
+    previous_migration: bytes | None = None
+    previous_migration_version: RegularFileVersion | None = None
+    if migration_path.exists() or migration_path.is_symlink():
+        previous_migration, previous_migration_version = read_project_file_version(
             project_root,
             Path(".obengineer/migration.json"),
             "migration state",
+            limit=1024 * 1024,
             required_mode=0o600,
         )
-        if migration_path.exists()
-        else None
-    )
     config_written = False
     config_identity: tuple[int, int] | None = None
+    config_version: RegularFileVersion | None = None
     migration_written = False
     migration_identity: tuple[int, int] | None = None
+    migration_version: RegularFileVersion | None = None
     try:
         atomic_write(destination, text, 0o600, expect_absent=True)
         config_written = True
         written = destination.lstat()
         config_identity = (written.st_dev, written.st_ino)
+        _, config_version = read_project_file_version(
+            project_root,
+            Path(CONFIG_NAME),
+            CONFIG_NAME,
+            limit=1024 * 1024,
+            required_mode=0o600,
+        )
         preflight_config_creation(project_root)
         atomic_write_json(
             migration_path,
@@ -438,6 +455,25 @@ def migrate_legacy(project_root: Path, template: Path) -> list[str]:
                 "changed_key_paths": changed_paths,
             },
             0o600,
+            expect_absent=previous_migration_version is None,
+            expected_identity=(
+                None
+                if previous_migration_version is None
+                else (
+                    previous_migration_version.device,
+                    previous_migration_version.inode,
+                )
+            ),
+            expected_digest=(
+                None
+                if previous_migration_version is None
+                else previous_migration_version.digest
+            ),
+            expected_mode=(
+                None
+                if previous_migration_version is None
+                else previous_migration_version.mode
+            ),
         )
         migration_written = True
         written_migration = migration_path.lstat()
@@ -445,35 +481,97 @@ def migrate_legacy(project_root: Path, template: Path) -> list[str]:
             written_migration.st_dev,
             written_migration.st_ino,
         )
+        _, migration_version = read_project_file_version(
+            project_root,
+            Path(".obengineer/migration.json"),
+            "migration state",
+            required_mode=0o600,
+        )
         preflight_config_creation(project_root)
-    except BaseException:
-        remove_config_from_index(project_root)
-        if config_written:
-            secure_unlink(destination, expected_identity=config_identity)
-        elif destination.exists() or destination.is_symlink():
-            appeared = destination.lstat()
-            secure_unlink(
-                destination,
-                expected_identity=(appeared.st_dev, appeared.st_ino),
-                allow_symlink=True,
+        for source, expected in source_versions.items():
+            _, current = read_project_file_version(
+                project_root,
+                source,
+                source.as_posix(),
+                limit=1024 * 1024,
+                required_mode=0o600 if source == LEGACY_ENV else None,
             )
-        if migration_written:
-            if previous_migration is None:
-                secure_unlink(
-                    migration_path, expected_identity=migration_identity
-                )
-            else:
-                current = migration_path.lstat()
-                if (current.st_dev, current.st_ino) != migration_identity:
-                    raise ObconfigError(
-                        ConfigIssue(
-                            1,
-                            1,
-                            "",
-                            "migration state changed before rollback",
-                        )
+            if current != expected:
+                raise ObconfigError(
+                    ConfigIssue(
+                        1,
+                        1,
+                        "",
+                        f"{source.as_posix()} changed before migration commit",
                     )
-                atomic_write(migration_path, previous_migration, 0o600)
+                )
+        config_raw, final_config = read_project_file_version(
+            project_root,
+            Path(CONFIG_NAME),
+            CONFIG_NAME,
+            limit=1024 * 1024,
+            required_mode=0o600,
+        )
+        state_raw, final_state = read_project_file_version(
+            project_root,
+            Path(".obengineer/migration.json"),
+            "migration state",
+            required_mode=0o600,
+        )
+        if (
+            config_raw != text
+            or final_config != config_version
+            or final_state != migration_version
+            or not state_raw
+        ):
+            raise ObconfigError(
+                ConfigIssue(1, 1, "", "migration destination changed before commit")
+            )
+    except BaseException as original_error:
+        remove_config_from_index(project_root)
+        rollback_errors: list[BaseException] = []
+        try:
+            if config_written:
+                secure_unlink(destination, expected_identity=config_identity)
+            elif destination.exists() or destination.is_symlink():
+                appeared = destination.lstat()
+                secure_unlink(
+                    destination,
+                    expected_identity=(appeared.st_dev, appeared.st_ino),
+                    allow_symlink=True,
+                )
+        except BaseException as cleanup_error:
+            rollback_errors.append(cleanup_error)
+        try:
+            if migration_written:
+                if previous_migration is None:
+                    secure_unlink(
+                        migration_path, expected_identity=migration_identity
+                    )
+                else:
+                    assert migration_version is not None
+                    atomic_write(
+                        migration_path,
+                        previous_migration,
+                        0o600,
+                        expected_identity=(
+                            migration_version.device,
+                            migration_version.inode,
+                        ),
+                        expected_digest=migration_version.digest,
+                        expected_mode=migration_version.mode,
+                    )
+        except BaseException as cleanup_error:
+            rollback_errors.append(cleanup_error)
+        if rollback_errors:
+            raise ObconfigError(
+                ConfigIssue(
+                    1,
+                    1,
+                    "",
+                    "concurrent replacement was preserved during migration rollback",
+                )
+            ) from original_error
         raise
     return changed_paths
 
@@ -492,6 +590,7 @@ def main(
     *,
     direct_transport: Any | None = None,
     safe_active_executor: Any | None = None,
+    dispatch_callback: Any | None = None,
 ) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--project-root", default=".")
@@ -512,6 +611,10 @@ def main(
     abort_parser = sub.add_parser("abort")
     abort_parser.add_argument("--command", required=True)
     abort_parser.add_argument("--intended-version", required=True)
+    finalize_parser = sub.add_parser("finalize")
+    finalize_parser.add_argument("--command", required=True)
+    finalize_parser.add_argument("--intended-version", required=True)
+    finalize_parser.add_argument("--output", action="append", required=True)
     consume_parser = sub.add_parser("consume")
     consume_parser.add_argument("--command", required=True)
     consume_parser.add_argument("--intended-version", required=True)
@@ -530,16 +633,6 @@ def main(
     enforce_git = True
     data: Mapping[str, Any] | None = None
     try:
-        journal = root / ".obengineer/consume-journal.json"
-        if args.operation not in {
-            "init",
-            "migrate-legacy",
-            "authorize",
-            "claim",
-            "abort",
-            "consume",
-        } and (journal.exists() or journal.is_symlink()):
-            recover_pending_consume(root)
         if args.operation == "init":
             template = find_template(Path(__file__))
             legacy_sources = [
@@ -682,6 +775,29 @@ def main(
                 intended_version=args.intended_version,
             )
             print("Aborted one-shot analysis claim without advancing the baseline.")
+            return 0
+        if args.operation == "finalize":
+            finalized = finalize_claim(
+                root,
+                command=args.command,
+                intended_version=args.intended_version,
+                generated_outputs=args.output,
+                enforce_git=enforce_git,
+            )
+            payload = {
+                "finalized": True,
+                "command": args.command,
+                "intended_version": args.intended_version,
+                "generated_output_sha256": finalized[
+                    "generated_output_sha256"
+                ],
+                "output_count": finalized[
+                    "generated_output_manifest"
+                ]["output_count"],
+            }
+            if dispatch_callback is not None:
+                dispatch_callback(dict(payload))
+            print(json.dumps(payload, sort_keys=True, separators=(",", ":")))
             return 0
 
         data, _, _, warnings = load_config(root, enforce_git=enforce_git)

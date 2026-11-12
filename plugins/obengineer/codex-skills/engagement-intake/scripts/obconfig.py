@@ -5,6 +5,8 @@ from __future__ import annotations
 
 import copy
 import contextlib
+import ctypes
+import errno
 import hashlib
 import ipaddress
 import json
@@ -37,11 +39,13 @@ CONFIG_NAME = "obconfig.yaml"
 TEMPLATE_NAME = "obconfig.yaml.template"
 STATE_DIRECTORY = ".obengineer"
 TREE_ALGORITHM = "ob-artifact-tree-v1"
+GENERATED_OUTPUT_ALGORITHM = "ob-generated-output-v1"
 MAX_CONFIG_BYTES = 1024 * 1024
 SAFE_ACTIVE_MAX_REQUESTS = 100
 SAFE_ACTIVE_REQUESTS_PER_SECOND = 1
 SAFE_ACTIVE_METHODS = frozenset({"GET", "HEAD", "OPTIONS"})
 SAFE_ACTIVE_PATHS = ("/robots.txt", "/.well-known/security.txt")
+RENAME_EXCHANGE = 2
 SCHEMA_PATH = Path(__file__).resolve().parents[1] / "schemas/obconfig.schema.json"
 _FALLBACK_GATE_LOCKS: dict[str, threading.RLock] = {}
 _FALLBACK_GATE_LOCKS_GUARD = threading.Lock()
@@ -342,6 +346,13 @@ def _validate_schema_node(
         raise ObconfigError(_issue(marks, path, f"must be {expected}"))
     if "enum" in schema and value not in schema["enum"]:
         raise ObconfigError(_issue(marks, path, "must be one of the allowed values"))
+    if (
+        schema.get("x-obengineer-finite")
+        and isinstance(value, (int, float))
+        and not isinstance(value, bool)
+        and not math.isfinite(value)
+    ):
+        raise ObconfigError(_issue(marks, path, "must be finite"))
     if isinstance(value, str) and len(value) < schema.get("minLength", 0):
         raise ObconfigError(_issue(marks, path, "must not be empty"))
     if (
@@ -446,7 +457,12 @@ def _number_or_unknown(
     value = get_path(data, path)
     if value == "unknown":
         return
-    if isinstance(value, bool) or not isinstance(value, (int, float)) or value < 0:
+    if (
+        isinstance(value, bool)
+        or not isinstance(value, (int, float))
+        or not math.isfinite(value)
+        or value < 0
+    ):
         raise ObconfigError(
             _issue(marks, path, "must be a nonnegative number or unknown")
         )
@@ -752,9 +768,20 @@ def validate_config(
     ):
         _string(data, marks, path)
     percentile = get_path(data, "standards.percentile")
-    if not isinstance(percentile, (str, int, float)) or isinstance(percentile, bool):
+    if (
+        not isinstance(percentile, (str, int, float))
+        or isinstance(percentile, bool)
+        or (
+            isinstance(percentile, (int, float))
+            and not math.isfinite(percentile)
+        )
+    ):
         raise ObconfigError(
-            _issue(marks, "standards.percentile", "must be a scalar percentile")
+            _issue(
+                marks,
+                "standards.percentile",
+                "must be a string or finite numeric percentile",
+            )
         )
     _integer(data, marks, "standards.baggage_header_budget_bytes", minimum=1)
     _integer(data, marks, "standards.baggage_value_ceiling_bytes", minimum=1)
@@ -762,6 +789,7 @@ def validate_config(
     if (
         isinstance(threshold, bool)
         or not isinstance(threshold, (int, float))
+        or not math.isfinite(threshold)
         or threshold < 0
     ):
         raise ObconfigError(
@@ -957,6 +985,14 @@ def _read_regular_bytes(
             raise ObconfigError(
                 ConfigIssue(1, 1, "", f"{label} changed while being read")
             )
+        current_parent = path.parent.lstat()
+        if (current_parent.st_dev, current_parent.st_ino) != (
+            opened_parent.st_dev,
+            opened_parent.st_ino,
+        ):
+            raise ObconfigError(
+                ConfigIssue(1, 1, "", f"{label} parent changed while being read")
+            )
         return b"".join(chunks)
     except FileNotFoundError:
         raise ObconfigError(
@@ -1066,6 +1102,57 @@ def read_project_file(
             os.close(descriptor)
     finally:
         os.close(directory)
+
+
+def read_project_file_version(
+    project_root: Path,
+    relative: str | Path,
+    label: str,
+    *,
+    limit: int = 64 * 1024 * 1024,
+    required_mode: int | None = None,
+) -> tuple[bytes, RegularFileVersion]:
+    raw = read_project_file(
+        project_root,
+        relative,
+        label,
+        limit=limit,
+        required_mode=required_mode,
+    )
+    path = project_root.resolve() / Path(relative)
+    info = _regular_no_symlink(path, label)
+    repeated = read_project_file(
+        project_root,
+        relative,
+        label,
+        limit=limit,
+        required_mode=required_mode,
+    )
+    after = _regular_no_symlink(path, label)
+    fields = (
+        info.st_dev,
+        info.st_ino,
+        stat.S_IMODE(info.st_mode),
+        info.st_size,
+        info.st_mtime_ns,
+        info.st_ctime_ns,
+    )
+    after_fields = (
+        after.st_dev,
+        after.st_ino,
+        stat.S_IMODE(after.st_mode),
+        after.st_size,
+        after.st_mtime_ns,
+        after.st_ctime_ns,
+    )
+    if raw != repeated or fields != after_fields:
+        raise ObconfigError(
+            ConfigIssue(1, 1, "", f"{label} changed while capturing identity")
+        )
+    return raw, RegularFileVersion(
+        *fields,
+        hashlib.sha256(raw).hexdigest(),
+    )
 
 
 def _git_check(project_root: Path, config: Path) -> None:
@@ -1604,6 +1691,97 @@ def redact_path(path: str) -> str:
     return "/".join("[REDACTED]" if SECRET_KEY.search(part) else part for part in parts)
 
 
+def hash_generated_outputs(
+    project_root: Path,
+    relative_paths: Iterable[str],
+) -> dict[str, Any]:
+    normalized: list[str] = []
+    for value in relative_paths:
+        candidate = PurePosixPath(value.replace("\\", "/"))
+        if (
+            candidate.is_absolute()
+            or not candidate.parts
+            or any(part in {"", ".", ".."} for part in candidate.parts)
+            or candidate.parts[0] in {".git", STATE_DIRECTORY}
+            or candidate.as_posix() == CONFIG_NAME
+        ):
+            raise ObconfigError(
+                ConfigIssue(1, 1, "", "generated output path is unsafe")
+            )
+        normalized.append(candidate.as_posix())
+    normalized = sorted(set(normalized))
+    if not normalized:
+        raise ObconfigError(
+            ConfigIssue(1, 1, "", "at least one generated output path is required")
+        )
+    for index, value in enumerate(normalized):
+        prefix = value + "/"
+        if any(other.startswith(prefix) for other in normalized[index + 1 :]):
+            raise ObconfigError(
+                ConfigIssue(1, 1, "", "generated output paths must not overlap")
+            )
+
+    records: list[dict[str, Any]] = []
+    root = project_root.resolve()
+    for value in normalized:
+        path = root / value
+        try:
+            info = path.lstat()
+        except OSError:
+            raise ObconfigError(
+                ConfigIssue(1, 1, "", "generated output path does not exist")
+            ) from None
+        if stat.S_ISLNK(info.st_mode):
+            raise ObconfigError(
+                ConfigIssue(1, 1, "", "generated output must not be a symlink")
+            )
+        if stat.S_ISREG(info.st_mode):
+            raw, version = read_project_file_version(
+                root,
+                Path(value),
+                "generated output",
+                required_mode=None,
+            )
+            records.append(
+                {
+                    "path": value,
+                    "type": "file",
+                    "bytes": len(raw),
+                    "sha256": version.digest,
+                }
+            )
+        elif stat.S_ISDIR(info.st_mode):
+            tree = hash_artifact_tree(root, value)
+            records.append(
+                {
+                    "path": value,
+                    "type": "directory",
+                    "file_count": tree["file_count"],
+                    "total_bytes": tree["total_bytes"],
+                    "tree_sha256": tree["tree_sha256"],
+                }
+            )
+        else:
+            raise ObconfigError(
+                ConfigIssue(1, 1, "", "generated output must be a file or directory")
+            )
+    encoded = json.dumps(
+        {
+            "algorithm": GENERATED_OUTPUT_ALGORITHM,
+            "outputs": records,
+        },
+        sort_keys=True,
+        separators=(",", ":"),
+    ).encode()
+    return {
+        "schema_version": 1,
+        "algorithm": GENERATED_OUTPUT_ALGORITHM,
+        "output_count": len(records),
+        "sha256": hashlib.sha256(encoded).hexdigest(),
+        "outputs": records,
+    }
+
+
 def _descriptor_digest(
     directory: int,
     name: str,
@@ -1642,6 +1820,47 @@ def _descriptor_digest(
         return digest.hexdigest()
     finally:
         os.close(descriptor)
+
+
+def _rename_exchange(directory: int, left: str, right: str) -> None:
+    if os.name != "posix":
+        raise ObconfigError(
+            ConfigIssue(1, 1, "", "atomic repair exchange is unsupported")
+        )
+    libc = ctypes.CDLL(None, use_errno=True)
+    renameat2 = getattr(libc, "renameat2", None)
+    if renameat2 is None:
+        raise ObconfigError(
+            ConfigIssue(1, 1, "", "atomic repair exchange is unsupported")
+        )
+    renameat2.argtypes = [
+        ctypes.c_int,
+        ctypes.c_char_p,
+        ctypes.c_int,
+        ctypes.c_char_p,
+        ctypes.c_uint,
+    ]
+    renameat2.restype = ctypes.c_int
+    result = renameat2(
+        directory,
+        os.fsencode(left),
+        directory,
+        os.fsencode(right),
+        RENAME_EXCHANGE,
+    )
+    if result != 0:
+        error = ctypes.get_errno()
+        if error in {
+            errno.ENOSYS,
+            errno.EINVAL,
+            getattr(errno, "EOPNOTSUPP", errno.EINVAL),
+        }:
+            raise ObconfigError(
+                ConfigIssue(1, 1, "", "atomic repair exchange is unsupported")
+            )
+        raise ObconfigError(
+            ConfigIssue(1, 1, "", "atomic repair exchange failed")
+        )
 
 
 def atomic_write(
@@ -1792,6 +2011,14 @@ def atomic_write(
             raise ObconfigError(
                 ConfigIssue(1, 1, "", f"{path.name} mode was not preserved")
             )
+        current_parent = parent.lstat()
+        if (current_parent.st_dev, current_parent.st_ino) != (
+            opened_parent.st_dev,
+            opened_parent.st_ino,
+        ):
+            raise ObconfigError(
+                ConfigIssue(1, 1, "", f"{path.name} parent changed during write")
+            )
     except BaseException:
         try:
             if descriptor is not None:
@@ -1813,12 +2040,18 @@ def atomic_write_json(
     mode: int = 0o600,
     *,
     expect_absent: bool = False,
+    expected_identity: tuple[int, int] | None = None,
+    expected_digest: str | None = None,
+    expected_mode: int | None = None,
 ) -> None:
     atomic_write(
         path,
         (json.dumps(value, indent=2, sort_keys=True) + "\n").encode(),
         mode,
         expect_absent=expect_absent,
+        expected_identity=expected_identity,
+        expected_digest=expected_digest,
+        expected_mode=expected_mode,
     )
 
 
@@ -1857,6 +2090,15 @@ def secure_unlink(
             )
         os.unlink(path.name, dir_fd=descriptor)
         os.fsync(descriptor)
+        current_parent = path.parent.lstat()
+        opened_parent = os.fstat(descriptor)
+        if (current_parent.st_dev, current_parent.st_ino) != (
+            opened_parent.st_dev,
+            opened_parent.st_ino,
+        ):
+            raise ObconfigError(
+                ConfigIssue(1, 1, "", f"{path.name} parent changed during removal")
+            )
     finally:
         os.close(descriptor)
 
@@ -1995,57 +2237,112 @@ def repair(project_root: Path, *, allow_mode_fix: bool = True) -> list[str]:
         raise ObconfigError(
             ConfigIssue(1, 1, "", "no safe catalogued repair exists")
         ) from None
-    committed: RegularFileVersion | None = None
-    try:
-        atomic_write(
-            path,
-            repaired,
-            0o600,
-            expected_identity=(original.device, original.inode),
-            expected_digest=original.digest,
-            expected_mode=original.mode,
+    candidate = path.parent / f".obconfig.repair.{os.getpid()}.{time.time_ns()}"
+    atomic_write(candidate, repaired, 0o600, expect_absent=True)
+    candidate_raw, candidate_version = _capture_regular_version(
+        candidate, "repair candidate", required_mode=0o600
+    )
+    if candidate_raw != repaired:
+        secure_unlink(
+            candidate,
+            expected_identity=(candidate_version.device, candidate_version.inode),
         )
+        raise ObconfigError(
+            ConfigIssue(1, 1, "", "repair candidate bytes did not match")
+        )
+
+    directory_flags = (
+        os.O_RDONLY
+        | getattr(os, "O_DIRECTORY", 0)
+        | getattr(os, "O_NOFOLLOW", 0)
+    )
+    directory = os.open(path.parent, directory_flags)
+    exchanged = False
+    try:
+        _rename_exchange(directory, candidate.name, path.name)
+        exchanged = True
+        exchanged_old = os.stat(
+            candidate.name, dir_fd=directory, follow_symlinks=False
+        )
+        old_matches = (
+            exchanged_old.st_dev,
+            exchanged_old.st_ino,
+            stat.S_IMODE(exchanged_old.st_mode),
+        ) == (original.device, original.inode, original.mode) and (
+            _descriptor_digest(directory, candidate.name, exchanged_old)
+            == original.digest
+        )
+        if not old_matches:
+            _rename_exchange(directory, candidate.name, path.name)
+            exchanged = False
+            raise ObconfigError(
+                ConfigIssue(
+                    1,
+                    1,
+                    "",
+                    "repair exchange found concurrent config and restored it",
+                )
+            )
         committed_raw, committed = _capture_regular_version(
             path, CONFIG_NAME, required_mode=0o600
         )
-        if committed_raw != repaired:
+        if committed_raw != repaired or (
+            committed.device,
+            committed.inode,
+        ) != (candidate_version.device, candidate_version.inode):
             raise ObconfigError(
-                ConfigIssue(1, 1, "", "repair commit bytes did not match")
+                ConfigIssue(1, 1, "", "repair exchange identity did not match")
             )
         load_config(project_root, enforce_git=False)
+        secure_unlink(
+            candidate,
+            expected_identity=(original.device, original.inode),
+        )
+        exchanged = False
     except BaseException:
-        if committed is not None:
-            try:
-                observed_raw, observed = _capture_regular_version(
-                    path, CONFIG_NAME, required_mode=None
-                )
-            except BaseException:
-                raise ObconfigError(
-                    ConfigIssue(
-                        1,
-                        1,
-                        "",
-                        "repair rollback refused because config identity changed",
-                    )
-                ) from None
-            if observed != committed or observed_raw != repaired:
-                raise ObconfigError(
-                    ConfigIssue(
-                        1,
-                        1,
-                        "",
-                        "repair rollback refused because config changed concurrently",
-                    )
-                ) from None
-            atomic_write(
-                path,
-                raw,
-                original.mode,
-                expected_identity=(committed.device, committed.inode),
-                expected_digest=committed.digest,
-                expected_mode=committed.mode,
+        if exchanged:
+            target_raw, target_version = _capture_regular_version(
+                path, CONFIG_NAME, required_mode=None
             )
+            old_raw, old_version = _capture_regular_version(
+                candidate, "repair exchanged original", required_mode=None
+            )
+            if (
+                target_raw != repaired
+                or (
+                    target_version.device,
+                    target_version.inode,
+                )
+                != (candidate_version.device, candidate_version.inode)
+                or old_raw != raw
+                or old_version != original
+            ):
+                raise ObconfigError(
+                    ConfigIssue(
+                        1,
+                        1,
+                        "",
+                        "repair rollback refused because exchanged files changed",
+                    )
+                ) from None
+            _rename_exchange(directory, candidate.name, path.name)
+            exchanged = False
+        if candidate.exists() and not candidate.is_symlink():
+            candidate_info = candidate.lstat()
+            if (candidate_info.st_dev, candidate_info.st_ino) == (
+                candidate_version.device,
+                candidate_version.inode,
+            ):
+                secure_unlink(
+                    candidate,
+                    expected_identity=(
+                        candidate_version.device,
+                        candidate_version.inode,
+                    ),
+                )
         raise
+    finally:
+        os.close(directory)
     return changes
 
 
@@ -2163,7 +2460,11 @@ def authorize(
     intended_version: str,
     enforce_git: bool = True,
 ) -> dict[str, Any]:
-    with _gate_lock(project_root):
+    with _gate_lock(
+        project_root,
+        recovery_command=command,
+        recovery_version=intended_version,
+    ):
         if _claim_path(project_root).exists() or _claim_path(project_root).is_symlink():
             raise ObconfigError(
                 ConfigIssue(1, 1, "", "an analysis claim already exists")
@@ -2197,11 +2498,121 @@ def _load_bound_state(path: Path, label: str) -> dict[str, Any]:
     return saved
 
 
-@contextlib.contextmanager
-def _gate_lock(project_root: Path):
+def _load_bound_state_version(
+    path: Path, label: str
+) -> tuple[dict[str, Any], RegularFileVersion]:
+    raw, version = _capture_regular_version(
+        path,
+        label,
+        required_mode=0o600,
+    )
+    try:
+        saved = json.loads(raw.decode("utf-8"))
+    except (UnicodeDecodeError, json.JSONDecodeError):
+        raise ObconfigError(ConfigIssue(1, 1, "", f"{label} is invalid")) from None
+    if not isinstance(saved, dict):
+        raise ObconfigError(ConfigIssue(1, 1, "", f"{label} is invalid"))
+    return saved, version
+
+
+def _quarantine_remove_state(
+    project_root: Path,
+    name: str,
+    expected: RegularFileVersion,
+) -> None:
     local = _safe_local_directory(project_root)
-    descriptor = os.open(
-        local,
+    local_info = local.lstat()
+    flags = os.O_RDONLY | getattr(os, "O_DIRECTORY", 0) | getattr(os, "O_NOFOLLOW", 0)
+    descriptor = os.open(local, flags)
+    quarantine = f".{name}.quarantine.{os.getpid()}.{time.time_ns()}"
+    moved = False
+    try:
+        opened = os.fstat(descriptor)
+        if (opened.st_dev, opened.st_ino) != (
+            local_info.st_dev,
+            local_info.st_ino,
+        ):
+            raise ObconfigError(
+                ConfigIssue(1, 1, "", "state directory changed before quarantine")
+            )
+        os.rename(
+            name,
+            quarantine,
+            src_dir_fd=descriptor,
+            dst_dir_fd=descriptor,
+        )
+        moved = True
+        moved_info = os.stat(
+            quarantine, dir_fd=descriptor, follow_symlinks=False
+        )
+        current_local = local.lstat()
+        identity_matches = (
+            moved_info.st_dev,
+            moved_info.st_ino,
+        ) == (expected.device, expected.inode)
+        content_matches = (
+            stat.S_IMODE(moved_info.st_mode) == expected.mode
+            and _descriptor_digest(descriptor, quarantine, moved_info)
+            == expected.digest
+        )
+        state_matches = (
+            current_local.st_dev,
+            current_local.st_ino,
+        ) == (opened.st_dev, opened.st_ino)
+        if not identity_matches or not content_matches or not state_matches:
+            try:
+                os.link(
+                    quarantine,
+                    name,
+                    src_dir_fd=descriptor,
+                    dst_dir_fd=descriptor,
+                    follow_symlinks=False,
+                )
+                os.unlink(quarantine, dir_fd=descriptor)
+                moved = False
+            except FileExistsError:
+                pass
+            raise ObconfigError(
+                ConfigIssue(
+                    1,
+                    1,
+                    "",
+                    f"{name} or state directory changed before removal",
+                )
+            )
+        os.unlink(quarantine, dir_fd=descriptor)
+        moved = False
+        os.fsync(descriptor)
+        final_local = local.lstat()
+        if (final_local.st_dev, final_local.st_ino) != (
+            opened.st_dev,
+            opened.st_ino,
+        ):
+            raise ObconfigError(
+                ConfigIssue(1, 1, "", "state directory changed after removal")
+            )
+    finally:
+        # A mismatched replacement is preserved under quarantine if its original
+        # pathname was concurrently occupied before it could be restored.
+        if moved:
+            try:
+                os.fsync(descriptor)
+            except OSError:
+                pass
+        os.close(descriptor)
+
+
+@contextlib.contextmanager
+def _gate_lock(
+    project_root: Path,
+    *,
+    recovery_command: str | None = None,
+    recovery_version: str | None = None,
+):
+    root = project_root.resolve()
+    root_info = root.lstat()
+    root_descriptor = os.open(
+        root,
         os.O_RDONLY
         | getattr(os, "O_DIRECTORY", 0)
         | getattr(os, "O_NOFOLLOW", 0),
@@ -2209,53 +2620,60 @@ def _gate_lock(project_root: Path):
     lock_descriptor: int | None = None
     fallback_lock: threading.RLock | None = None
     try:
-        lock_descriptor = os.open(
-            "analysis-gate.lock",
-            os.O_RDWR
-            | os.O_CREAT
-            | getattr(os, "O_NOFOLLOW", 0),
-            0o600,
-            dir_fd=descriptor,
-        )
-        lock_info = os.fstat(lock_descriptor)
-        if not stat.S_ISREG(lock_info.st_mode):
+        opened_root = os.fstat(root_descriptor)
+        if (opened_root.st_dev, opened_root.st_ino) != (
+            root_info.st_dev,
+            root_info.st_ino,
+        ):
             raise ObconfigError(
-                ConfigIssue(1, 1, "", "analysis gate lock must be a regular file")
-            )
-        if os.name == "posix":
-            os.fchmod(lock_descriptor, 0o600)
-        if os.name == "posix" and stat.S_IMODE(os.fstat(lock_descriptor).st_mode) != 0o600:
-            raise ObconfigError(
-                ConfigIssue(1, 1, "", "analysis gate lock mode must be 0600")
+                ConfigIssue(1, 1, "", "project root changed during gate open")
             )
         if fcntl is not None:
-            fcntl.flock(lock_descriptor, fcntl.LOCK_EX)
+            fcntl.flock(root_descriptor, fcntl.LOCK_EX)
         elif msvcrt is not None:  # pragma: no cover - Windows
+            local = _safe_local_directory(project_root)
+            lock_descriptor = os.open(
+                local / "analysis-gate.lock",
+                os.O_RDWR | os.O_CREAT | getattr(os, "O_NOFOLLOW", 0),
+                0o600,
+            )
             if os.fstat(lock_descriptor).st_size == 0:
                 os.write(lock_descriptor, b"\0")
                 os.fsync(lock_descriptor)
             os.lseek(lock_descriptor, 0, os.SEEK_SET)
             msvcrt.locking(lock_descriptor, msvcrt.LK_LOCK, 1)
         else:  # Last-resort in-process lock without residual-file ownership semantics.
-            key = str(local.resolve())
+            key = str(root)
             with _FALLBACK_GATE_LOCKS_GUARD:
                 fallback_lock = _FALLBACK_GATE_LOCKS.setdefault(
                     key, threading.RLock()
                 )
             fallback_lock.acquire()
-        recovered = _recover_consume_locked(project_root)
+        current_root = root.lstat()
+        if (current_root.st_dev, current_root.st_ino) != (
+            opened_root.st_dev,
+            opened_root.st_ino,
+        ):
+            raise ObconfigError(
+                ConfigIssue(1, 1, "", "project root changed after gate lock")
+            )
+        recovered = _recover_consume_locked(
+            project_root,
+            expected_command=recovery_command,
+            expected_version=recovery_version,
+        )
         yield recovered
     finally:
         if fallback_lock is not None:
             fallback_lock.release()
-        if fcntl is not None and lock_descriptor is not None:
-            fcntl.flock(lock_descriptor, fcntl.LOCK_UN)
+        if fcntl is not None:
+            fcntl.flock(root_descriptor, fcntl.LOCK_UN)
         elif msvcrt is not None and lock_descriptor is not None:  # pragma: no cover
             os.lseek(lock_descriptor, 0, os.SEEK_SET)
             msvcrt.locking(lock_descriptor, msvcrt.LK_UNLCK, 1)
         if lock_descriptor is not None:
             os.close(lock_descriptor)
-        os.close(descriptor)
+        os.close(root_descriptor)
 
 
 def _validate_bound_state(
@@ -2322,21 +2740,41 @@ def claim_authorization(
     intended_version: str,
     enforce_git: bool = True,
 ) -> dict[str, Any]:
-    with _gate_lock(project_root):
-        validate_authorization(
+    with _gate_lock(
+        project_root,
+        recovery_command=command,
+        recovery_version=intended_version,
+    ):
+        authorization_path = _authorization_path(project_root)
+        saved, authorization_version = _load_bound_state_version(
+            authorization_path, "authorization state"
+        )
+        _validate_bound_state(
+            saved,
             project_root,
             command=command,
             intended_version=intended_version,
             enforce_git=enforce_git,
+            label="authorization",
         )
         local = _safe_local_directory(project_root)
+        local_info = local.lstat()
         directory_flags = (
             os.O_RDONLY
             | getattr(os, "O_DIRECTORY", 0)
             | getattr(os, "O_NOFOLLOW", 0)
         )
         descriptor = os.open(local, directory_flags)
+        linked = False
         try:
+            opened_local = os.fstat(descriptor)
+            if (opened_local.st_dev, opened_local.st_ino) != (
+                local_info.st_dev,
+                local_info.st_ino,
+            ):
+                raise ObconfigError(
+                    ConfigIssue(1, 1, "", "state directory changed during claim open")
+                )
             try:
                 os.link(
                     "authorization.json",
@@ -2353,20 +2791,49 @@ def claim_authorization(
                 raise ObconfigError(
                     ConfigIssue(1, 1, "", "analysis authorization is unavailable")
                 ) from None
+            linked = True
             os.unlink("authorization.json", dir_fd=descriptor)
             os.fsync(descriptor)
+            current_local = local.lstat()
+            if (current_local.st_dev, current_local.st_ino) != (
+                opened_local.st_dev,
+                opened_local.st_ino,
+            ):
+                raise ObconfigError(
+                    ConfigIssue(1, 1, "", "state directory changed during claim")
+                )
         finally:
             os.close(descriptor)
-    try:
-        return validate_claim(
-            project_root,
-            command=command,
-            intended_version=intended_version,
-            enforce_git=enforce_git,
-        )
-    except BaseException:
-        _unlink_local_state(project_root, "analysis-claim.json")
-        raise
+        try:
+            claimed, claim_version = _load_bound_state_version(
+                _claim_path(project_root), "analysis claim"
+            )
+            if (
+                claimed != saved
+                or claim_version.device != authorization_version.device
+                or claim_version.inode != authorization_version.inode
+                or claim_version.digest != authorization_version.digest
+                or claim_version.mode != authorization_version.mode
+            ):
+                raise ObconfigError(
+                    ConfigIssue(1, 1, "", "analysis claim identity changed")
+                )
+            return _validate_bound_state(
+                claimed,
+                project_root,
+                command=command,
+                intended_version=intended_version,
+                enforce_git=enforce_git,
+                label="analysis claim",
+            )
+        except BaseException:
+            if linked:
+                _quarantine_remove_state(
+                    project_root,
+                    "analysis-claim.json",
+                    authorization_version,
+                )
+            raise
 
 
 def validate_claim(
@@ -2387,27 +2854,67 @@ def validate_claim(
     )
 
 
-def _unlink_local_state(project_root: Path, name: str) -> None:
-    local = _safe_local_directory(project_root)
-    descriptor = os.open(
-        local,
-        os.O_RDONLY
-        | getattr(os, "O_DIRECTORY", 0)
-        | getattr(os, "O_NOFOLLOW", 0),
-    )
-    try:
-        try:
-            os.unlink(name, dir_fd=descriptor)
-        except FileNotFoundError:
-            return
-        os.fsync(descriptor)
-    finally:
-        os.close(descriptor)
-
-
-def _unlink_state_identity(path: Path) -> None:
-    info = path.lstat()
-    secure_unlink(path, expected_identity=(info.st_dev, info.st_ino))
+def finalize_claim(
+    project_root: Path,
+    *,
+    command: str,
+    intended_version: str,
+    generated_outputs: Iterable[str],
+    enforce_git: bool = True,
+) -> dict[str, Any]:
+    with _gate_lock(
+        project_root,
+        recovery_command=command,
+        recovery_version=intended_version,
+    ):
+        path = _claim_path(project_root)
+        saved, version = _load_bound_state_version(path, "analysis claim")
+        if saved.get("finalized") is True:
+            raise ObconfigError(
+                ConfigIssue(1, 1, "", "analysis claim is already finalized")
+            )
+        _validate_bound_state(
+            saved,
+            project_root,
+            command=command,
+            intended_version=intended_version,
+            enforce_git=enforce_git,
+            label="analysis claim",
+        )
+        generated = hash_generated_outputs(project_root, generated_outputs)
+        _validate_bound_state(
+            saved,
+            project_root,
+            command=command,
+            intended_version=intended_version,
+            enforce_git=enforce_git,
+            label="analysis claim",
+        )
+        finalized = dict(saved)
+        finalized.update(
+            {
+                "finalized": True,
+                "generated_output_manifest": generated,
+                "generated_output_sha256": generated["sha256"],
+            }
+        )
+        encoded = (
+            json.dumps(finalized, indent=2, sort_keys=True) + "\n"
+        ).encode()
+        atomic_write(
+            path,
+            encoded,
+            0o600,
+            expected_identity=(version.device, version.inode),
+            expected_digest=version.digest,
+            expected_mode=version.mode,
+        )
+        persisted, _ = _load_bound_state_version(path, "analysis claim")
+        if persisted != finalized:
+            raise ObconfigError(
+                ConfigIssue(1, 1, "", "finalized claim did not persist exactly")
+            )
+        return finalized
 
 
 def abort_claim(
@@ -2417,9 +2924,13 @@ def abort_claim(
     intended_version: str,
 ) -> None:
     """Release an uncommitted claim without touching baseline or history."""
-    with _gate_lock(project_root):
+    with _gate_lock(
+        project_root,
+        recovery_command=command,
+        recovery_version=intended_version,
+    ):
         path = _claim_path(project_root)
-        saved = _load_bound_state(path, "analysis claim")
+        saved, version = _load_bound_state_version(path, "analysis claim")
         if (
             saved.get("schema_version") != SCHEMA_VERSION
             or saved.get("command") != command
@@ -2428,11 +2939,24 @@ def abort_claim(
             raise ObconfigError(
                 ConfigIssue(1, 1, "", "analysis claim command or version does not match")
             )
-        _unlink_state_identity(path)
+        _quarantine_remove_state(
+            project_root,
+            path.name,
+            version,
+        )
 
 
-def recover_pending_consume(project_root: Path) -> bool:
-    with _gate_lock(project_root) as recovered:
+def recover_pending_consume(
+    project_root: Path,
+    *,
+    command: str,
+    intended_version: str,
+) -> bool:
+    with _gate_lock(
+        project_root,
+        recovery_command=command,
+        recovery_version=intended_version,
+    ) as recovered:
         return bool(recovered)
 
 
@@ -2443,7 +2967,11 @@ def consume_claim(
     intended_version: str,
     enforce_git: bool = True,
 ) -> None:
-    with _gate_lock(project_root) as recovered:
+    with _gate_lock(
+        project_root,
+        recovery_command=command,
+        recovery_version=intended_version,
+    ) as recovered:
         if recovered:
             return
         _consume_claim_locked(
@@ -2461,28 +2989,46 @@ def _consume_claim_locked(
     intended_version: str,
     enforce_git: bool,
 ) -> None:
-    state = validate_claim(
-        project_root,
-        command=command,
-        intended_version=intended_version,
-        enforce_git=enforce_git,
+    state, claim_version = _load_bound_state_version(
+        _claim_path(project_root), "analysis claim"
     )
+    if (
+        state.get("schema_version") != SCHEMA_VERSION
+        or state.get("command") != command
+        or state.get("intended_version") != intended_version
+    ):
+        raise ObconfigError(
+            ConfigIssue(1, 1, "", "analysis claim command or version does not match")
+        )
+    generated_manifest = state.get("generated_output_manifest")
+    if (
+        state.get("finalized") is not True
+        or not isinstance(generated_manifest, Mapping)
+        or state.get("generated_output_sha256")
+        != generated_manifest.get("sha256")
+    ):
+        raise ObconfigError(
+            ConfigIssue(1, 1, "", "analysis claim must be finalized before consume")
+        )
     history = {
         key: state[key]
         for key in (
             "schema_version", "command", "intended_version",
             "config_sha256", "artifact_tree_sha256",
+            "generated_output_sha256",
         )
     }
+    history["generated_output_manifest"] = dict(generated_manifest)
     manifest = state.get("artifact_manifest")
     if not isinstance(manifest, Mapping):
         raise ObconfigError(
             ConfigIssue(1, 1, "", "analysis claim has no artifact manifest")
         )
-    claim_raw = _read_regular_bytes(_claim_path(project_root), "analysis claim")
     journal = {
         "schema_version": 1,
-        "claim_sha256": hashlib.sha256(claim_raw).hexdigest(),
+        "command": command,
+        "intended_version": intended_version,
+        "claim_sha256": claim_version.digest,
         "artifact_manifest": dict(manifest),
         "last_analysis_binding": history,
     }
@@ -2491,10 +3037,19 @@ def _consume_claim_locked(
         journal,
         expect_absent=True,
     )
-    _recover_consume_locked(project_root)
+    _recover_consume_locked(
+        project_root,
+        expected_command=command,
+        expected_version=intended_version,
+    )
 
 
-def _recover_consume_locked(project_root: Path) -> bool:
+def _recover_consume_locked(
+    project_root: Path,
+    *,
+    expected_command: str | None,
+    expected_version: str | None,
+) -> bool:
     """Finish a consume transaction whose durable journal is its commit point."""
     path = _consume_journal_path(project_root)
     if not path.exists() and not path.is_symlink():
@@ -2511,11 +3066,30 @@ def _recover_consume_locked(project_root: Path) -> bool:
         or not re.fullmatch(r"[0-9a-f]{64}", claim_sha256)
     ):
         raise ObconfigError(ConfigIssue(1, 1, "", "consume journal is invalid"))
+    if (
+        expected_command is None
+        or expected_version is None
+        or journal.get("command") != expected_command
+        or journal.get("intended_version") != expected_version
+    ):
+        raise ObconfigError(
+            ConfigIssue(
+                1,
+                1,
+                "",
+                "consume journal command or version does not match recovery request",
+            )
+        )
 
     claim_path = _claim_path(project_root)
     claim_exists = claim_path.exists() or claim_path.is_symlink()
+    claim_version: RegularFileVersion | None = None
     if claim_exists:
-        claim_raw = _read_regular_bytes(claim_path, "analysis claim")
+        claim_raw, claim_version = _capture_regular_version(
+            claim_path,
+            "analysis claim",
+            required_mode=0o600,
+        )
         if hashlib.sha256(claim_raw).hexdigest() != claim_sha256:
             raise ObconfigError(
                 ConfigIssue(1, 1, "", "consume journal does not match analysis claim")
@@ -2534,8 +3108,18 @@ def _recover_consume_locked(project_root: Path) -> bool:
             ConfigIssue(1, 1, "", "consume transaction did not persist exactly")
         )
     if claim_exists:
-        _unlink_state_identity(claim_path)
-    _unlink_state_identity(path)
+        assert claim_version is not None
+        _quarantine_remove_state(
+            project_root,
+            claim_path.name,
+            claim_version,
+        )
+    _, journal_version = _capture_regular_version(
+        path,
+        "consume journal",
+        required_mode=0o600,
+    )
+    _quarantine_remove_state(project_root, path.name, journal_version)
     return True
 
 

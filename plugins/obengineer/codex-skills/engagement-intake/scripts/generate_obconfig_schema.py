@@ -150,6 +150,21 @@ def schema_for(
             "const": 4,
             "x-obengineer-source-line": marks[path],
         }
+    if path == "standards.percentile":
+        return {
+            "oneOf": [
+                {"type": "string"},
+                {"type": "number", "x-obengineer-finite": True},
+            ],
+            "x-obengineer-source-line": marks[path],
+        }
+    if path == "standards.unknown_dimension_threshold_pct":
+        return {
+            "type": "number",
+            "minimum": 0,
+            "x-obengineer-finite": True,
+            "x-obengineer-source-line": marks[path],
+        }
     if path in ENUMS:
         return {
             "type": "string",
@@ -161,7 +176,11 @@ def schema_for(
     ):
         result = {
             "oneOf": [
-                {"type": "number", "minimum": 0},
+                {
+                    "type": "number",
+                    "minimum": 0,
+                    "x-obengineer-finite": True,
+                },
                 {"const": "unknown"},
             ]
         }

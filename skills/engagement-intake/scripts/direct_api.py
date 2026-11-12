@@ -31,6 +31,7 @@ MAX_RESPONSE_BYTES = 8 * 1024 * 1024
 CONNECT_READ_TIMEOUT_SECONDS = 15
 MAX_READ_ATTEMPTS = 3
 RETRYABLE_STATUS = frozenset({429, 500, 502, 503, 504})
+MAX_HTTP_STATUS_LINE_BYTES = 4096
 SF_ORG_METRICS = (
     "sf.org.numActiveTimeSeries",
     "sf.org.limit.activeTimeSeries",
@@ -132,8 +133,20 @@ def safe_active_https_probe(
             "User-Agent: obengineer-safe-active/1\r\n\r\n"
         ).encode("ascii")
         wrapped.sendall(outgoing)
-        response = wrapped.recv(64 * 1024)
-        first = response.split(b"\r\n", 1)[0].split()
+        response = bytearray()
+        while b"\r\n" not in response:
+            chunk = wrapped.recv(
+                min(1024, MAX_HTTP_STATUS_LINE_BYTES + 1 - len(response))
+            )
+            if not chunk:
+                raise ValueError("safe-active response ended before status line")
+            response.extend(chunk)
+            if len(response) > MAX_HTTP_STATUS_LINE_BYTES:
+                raise ValueError("safe-active response status line exceeded limit")
+        status_line = bytes(response).split(b"\r\n", 1)[0]
+        if len(status_line) > MAX_HTTP_STATUS_LINE_BYTES:
+            raise ValueError("safe-active response status line exceeded limit")
+        first = status_line.split()
         if len(first) < 2 or not first[1].isdigit():
             raise ValueError("safe-active response status was invalid")
         return {"status": int(first[1]), "response_bytes": len(response)}
