@@ -1,0 +1,26 @@
+{
+  "schemaVersion": 1,
+  "analysisId": "sample-storefront-V1",
+  "jobId": "source-technology",
+  "status": "completed",
+  "startedAt": "2026-11-10T20:00:30Z",
+  "completedAt": "2026-11-10T20:04:00Z",
+  "evidence": [
+    {
+      "id": "EV-SRC-CONTRACT",
+      "kind": "measured",
+      "source": "authorized source tree",
+      "observedAt": "2026-11-10T20:03:00Z",
+      "summary": "Routes, analytics event names, API clients, and message contracts identify the bounded storefront workflows."
+    }
+  ],
+  "facts": [
+    {
+      "id": "FACT-SRC-WORKFLOWS",
+      "evidenceIds": ["EV-SRC-CONTRACT"],
+      "statement": "The catalogue and checkout surfaces contain distinct search, item, payment, and submission intents.",
+      "confidence": "confirmed"
+    }
+  ],
+  "limitations": []
+}

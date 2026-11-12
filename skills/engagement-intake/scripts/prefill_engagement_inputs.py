@@ -17,10 +17,14 @@ try:
 except ImportError:  # pragma: no cover
     sys.exit("PyYAML is required: pip install PyYAML==6.0.3")
 
+SCRIPT_DIR = Path(__file__).resolve().parent
+if str(SCRIPT_DIR) not in sys.path:
+    sys.path.insert(0, str(SCRIPT_DIR))
+from skill_paths import engagement_inputs_template
+
 SKILL_ROOT = Path(__file__).resolve().parent.parent
-TOOLKIT_ROOT = SKILL_ROOT.parent.parent
 SCHEMA_PATH = SKILL_ROOT / "schemas" / "env-prefill.schema.json"
-DEFAULT_TEMPLATE = TOOLKIT_ROOT / "inputs" / "engagement-inputs.template.yaml"
+DEFAULT_TEMPLATE = engagement_inputs_template(SKILL_ROOT)
 PASSWORD_REFERENCE = re.compile(r"^\$\{[A-Za-z_][A-Za-z0-9_]*\}$")
 PROVENANCE_KEY = "input_provenance"
 SUPPLIED_PATHS_KEY = "supplied_paths"

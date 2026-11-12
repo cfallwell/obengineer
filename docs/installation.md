@@ -65,6 +65,10 @@ User-scoped installation omits `--project`:
 ```
 
 Restart the host after installation so it discovers the new commands and skills.
+Cursor and Claude Code invoke workflows as `/ob-start`. Codex CLI uses `$ob-start`;
+ChatGPT Desktop uses `@ob-start` only with its local executor available. These
+Python-backed workflows are not supported in ChatGPT web/cloud or Work surfaces that do
+not provide local execution.
 
 Project-scoped installation also creates only missing root scaffold files:
 
@@ -86,7 +90,15 @@ preexisting/user ignore lines, the `artifacts/` directory, or files the user add
 |---|---|---|
 | Cursor | `~/.cursor/{skills,commands}` | `<project>/.cursor/{skills,commands}` |
 | Claude Code | `~/.claude/{skills,commands}` | `<project>/.claude/{skills,commands}` |
-| Codex | `~/.codex/skills` and `~/.codex/prompts` | `<project>/.agents/skills` and `<project>/.agents/prompts` |
+| Codex CLI / ChatGPT Desktop | `~/.agents/skills` | `<project>/.agents/skills` |
+
+Codex receives the canonical skills plus nine explicit-only `ob-*` workflow wrapper
+skills. It receives no prompt files. Each wrapper delegates to the matching command
+contract, preserves invocation arguments as `$ARGUMENTS`, and disables implicit
+invocation. Canonical Codex skill directories are always copied because Codex does not
+discover skill-directory symlinks that resolve outside the opened repository. The
+authoritative input template is copied to the installer-owned namespaced companion
+directory `<Codex base>/obengineer/inputs`.
 
 Each host directory receives `.obengineer-install.json`. That manifest records the
 source checkout, scope, and a digest or symlink target for every installer-owned path.
@@ -104,7 +116,7 @@ and ignored.
 | `--codex` | Select Codex. |
 | `--all` | Select all supported hosts. It can be combined with individual host flags without changing the result. |
 | `--project PATH` | Resolve `PATH` to an absolute path and install into host-specific directories beneath it. Without this option, installation is under the current user's home directory. |
-| `--copy` | Copy skill trees instead of creating relative directory symlinks. Commands are always copied because the installer substitutes the toolkit's absolute path into them. |
+| `--copy` | Copy Cursor and Claude skill trees instead of creating relative directory symlinks, and install their namespaced `obengineer/inputs` companion. Codex canonical skills and companion are always copied; its workflow wrappers are always rendered. |
 | `--list` | Display all host paths and whether each host has an obengineer manifest, then exit without changing files. |
 | `--dry-run` | Print every planned link, copy, write, or removal without changing files or writing a manifest. |
 | `--uninstall` | Remove paths listed in the selected host's manifest. Combine it with a host selector and the same `--project` scope used for installation. |
@@ -114,9 +126,14 @@ At least one host selector is required except with `--list`.
 
 ### Symlink and copy behavior
 
-Symlinks are the default. A canonical skill edit in the toolkit is then visible to the
-host immediately, although the host may need a restart or new session. `--copy` is for
-hosts, filesystems, or distributable workspaces that cannot follow symlinks.
+Symlinks are the Cursor and Claude default. A canonical skill edit in the toolkit is then
+visible to those hosts immediately, although the host may need a restart or new session.
+Codex always receives materialized canonical skill directories plus the namespaced input
+companion so `/skills` discovery and direct `$engagement-intake` execution do not depend
+on links outside the opened repository. `--copy` selects materialized skills for Cursor
+and Claude as well and installs the same companion beneath their host base. Default
+Cursor and Claude symlink installs do not add the companion because their scripts resolve
+the canonical toolkit template through the symlink.
 
 Re-run installation after:
 
@@ -135,6 +152,12 @@ Reinstalling this release migrates `/ob-intake`, `/ob-generate`, and `/ob-wiki` 
 `/ob-build-terraform` to `/ob-terraform`. The installer removes retired command files
 only when the prior obengineer manifest proves it created them; same-named user files that
 were not installed by obengineer are left alone.
+
+A Codex reinstall also migrates installer-owned project `.agents/prompts` and
+user-scoped `~/.codex` installations to `.agents/skills`. Only paths whose current
+digest or symlink target still matches the legacy manifest are removed. Modified,
+unowned, unsafe, or unverifiable legacy paths are preserved. Legacy removals and the new
+workflow installation share the same rollback transaction.
 
 The installer never replaces an untracked destination with the same skill or command
 name. It reports `REFUSE` and leaves the host and project scaffold unchanged. Move or
@@ -215,7 +238,7 @@ source checkout remaining at its original path.
 
 ## Installation troubleshooting
 
-### No commands appear
+### No commands or Codex workflows appear
 
 1. Restart the host or open a new session.
 2. Run `./install.sh --list --project <repo>`.
@@ -223,6 +246,9 @@ source checkout remaining at its original path.
 4. Confirm the command directory in the status output matches the host's current
    convention.
 5. Re-run installation after moving the toolkit.
+
+For Codex CLI, type `/skills` and explicitly invoke `$ob-start`. In ChatGPT Desktop,
+select `@ob-start`. Codex wrappers intentionally do not activate implicitly.
 
 ### Rendering fails with an import error
 
@@ -233,9 +259,10 @@ python3 -m pip install python-docx markdown-it-py==4.2.0 PyYAML==6.0.3
 python3 -c "import docx, markdown_it, yaml; print(docx.__version__, markdown_it.__version__, yaml.__version__)"
 ```
 
-### A copied skill did not update
+### A materialized skill did not update
 
-Re-run the install with `--copy`, or uninstall and return to the default symlink mode.
+Re-run the install. For Cursor or Claude, omit `--copy` to return to symlink mode. Codex
+skills are always materialized and therefore require reinstall after canonical changes.
 
 ### Tenant data is reported as “Not in evidence”
 

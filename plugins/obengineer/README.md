@@ -5,8 +5,13 @@ Guided instrumentation analysis for Claude Code and Codex.
 ## Start
 
 ```text
-/ob-start
+Claude Code:     /ob-start
+Codex CLI:       $ob-start
+ChatGPT Desktop: @ob-start
 ```
+
+ChatGPT Desktop requires its local executor for these Python-backed workflows. ChatGPT
+web/cloud and Work surfaces without local execution are not supported.
 
 The command discovers measurable facts, asks for the minimum, offers numbered optional
 inputs, then creates analysis V1. Use `/ob-add-inputs` or `/ob-edit-inputs` at any time;
@@ -36,9 +41,9 @@ never prints tokens.
 ## Continue
 
 ```text
-/ob-implement work-order:<id>
-/ob-terraform
-/ob-verify
+Claude Code:     /ob-implement work-order:<id>, /ob-terraform, /ob-verify
+Codex CLI:       $ob-implement work-order:<id>, $ob-terraform, $ob-verify
+ChatGPT Desktop: @ob-implement work-order:<id>, @ob-terraform, @ob-verify
 ```
 
 Terraform never applies. Verification is read-only.

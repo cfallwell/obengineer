@@ -1,0 +1,7 @@
+interface:
+  display_name: "ob-verify"
+  short_description: "Verify accepted outcomes read-only"
+  default_prompt: "Use $ob-verify to verify accepted outcomes read-only."
+
+policy:
+  allow_implicit_invocation: false

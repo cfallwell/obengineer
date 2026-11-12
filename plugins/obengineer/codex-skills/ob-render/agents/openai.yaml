@@ -1,0 +1,7 @@
+interface:
+  display_name: "ob-render"
+  short_description: "Render the optional Word summary"
+  default_prompt: "Use $ob-render to render the optional Word summary."
+
+policy:
+  allow_implicit_invocation: false

@@ -1,0 +1,7 @@
+interface:
+  display_name: "ob-add-inputs"
+  short_description: "Add evidence and run the next analysis"
+  default_prompt: "Use $ob-add-inputs to add evidence and run the next analysis."
+
+policy:
+  allow_implicit_invocation: false

@@ -1,0 +1,7 @@
+interface:
+  display_name: "ob-start"
+  short_description: "Start a guided obengineer analysis"
+  default_prompt: "Use $ob-start to start a guided obengineer analysis."
+
+policy:
+  allow_implicit_invocation: false

@@ -17,13 +17,15 @@ try:
 except ImportError:  # pragma: no cover
     sys.exit("PyYAML is required: pip install PyYAML==6.0.3")
 
+SCRIPT_DIR = Path(__file__).resolve().parent
+if str(SCRIPT_DIR) not in sys.path:
+    sys.path.insert(0, str(SCRIPT_DIR))
+from skill_paths import engagement_inputs_template
+
 CONTEXT_RELATIVE_PATH = Path(".obengineer/run-context.json")
 INPUTS_RELATIVE_PATH = Path("docs/observability/engagement-inputs.yaml")
-DEFAULT_TEMPLATE = (
-    Path(__file__).resolve().parents[3]
-    / "inputs"
-    / "engagement-inputs.template.yaml"
-)
+SKILL_ROOT = Path(__file__).resolve().parent.parent
+DEFAULT_TEMPLATE = engagement_inputs_template(SKILL_ROOT)
 STATES = {"new", "required", "optional-review", "optional-answers"}
 STATUSES = {"pending", "complete", "skipped"}
 EVENTS = {

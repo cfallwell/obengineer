@@ -1,0 +1,7 @@
+interface:
+  display_name: "ob-analyze"
+  short_description: "Run an authorized analysis version"
+  default_prompt: "Use $ob-analyze to run an authorized analysis version."
+
+policy:
+  allow_implicit_invocation: false
