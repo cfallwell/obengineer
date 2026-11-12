@@ -29,7 +29,7 @@ Analysis emits `docs/observability/verification-plan.json`:
       "kind": "signalflow",
       "operation": "query",
       "method": "POST",
-      "endpoint": "https://stream.<realm>.observability.splunkcloud.com/v2/signalflow/execute",
+      "endpoint": "https://api.<realm>.observability.splunkcloud.com/v2/signalflow/execute",
       "reference": "SRC-signalflow-criterion"
     },
     "expected": {"operator": "equals", "value": true},

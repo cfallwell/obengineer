@@ -1,3 +1,6 @@
 __pycache__/
 *.pyc
 .pytest_cache/
+/obconfig.yaml
+/.obengineer/
+!/obconfig.yaml.template

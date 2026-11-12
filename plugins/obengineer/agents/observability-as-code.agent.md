@@ -45,9 +45,10 @@ accordingly: `plan` is your deliverable, `apply` is the human's decision.
 ## How you work
 
 **Ingest.** The verified acceptance record, accepted guide, `attribute-schema.json`,
-`implementation-map.json`, and `engagement-inputs.yaml` for
-realm, environments, and entitlement, and — where an MCP server is enabled — the tenant's
-current state so you can import rather than duplicate.
+`implementation-map.json`, and securely loaded non-secret obconfig projection for realm,
+singular deployment environment, constraints, and measured usage/system limits. Use
+direct read inventory plus supplemental MCP state so existing objects are imported
+rather than duplicated.
 
 **Decide.** For each contract artifact: which persona consumes it, which provider owns it,
 whether the dimensions it needs exist, and whether it should ship armed or disabled.

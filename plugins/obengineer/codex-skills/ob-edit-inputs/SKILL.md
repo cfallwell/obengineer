@@ -1,7 +1,7 @@
 ---
 name: ob-edit-inputs
 description: >-
-  Edit inputs — select existing values to change and automatically run the next analysis version. Explicit workflow wrapper for $ob-edit-inputs in Codex CLI and
+  Edit inputs — rerun from a changed local obconfig. Explicit workflow wrapper for $ob-edit-inputs in Codex CLI and
   @ob-edit-inputs in ChatGPT Desktop; do not invoke implicitly.
 ---
 
@@ -15,34 +15,16 @@ reinterpret those arguments before dispatch.
 
 ## Command contract
 
-Edit inputs already supplied to an obengineer engagement.
+Inputs are managed in local `obconfig.yaml`.
 
-1. Reopen the deterministic input review:
-   `python3 "${PLUGIN_ROOT}/skills/engagement-intake/scripts/manage_run_context.py" reopen --project-root .`
-   This clears prior analysis authorization without discarding supplied values.
-2. Read `${PLUGIN_ROOT}/prompts/00-manage-analysis-inputs.md` in `edit`
-   mode and follow it.
-3. Load the current inputs and latest analysis version.
-4. Show a numbered list of set, human-editable inputs and their redacted current
-   values. Secret references display only `configured`; never display a secret.
-5. Ask:
-   `These inputs are already set. Would you like to edit them?`
-   Accept `yes 1 3 4` or `no`.
-6. For each selection, show the current value and request the replacement.
-   `clear` is a reserved edit value that restores the template value, removes
-   explicit-supply provenance, and returns the field to the intake-recommendations
-   page; the prefill script never persists the literal word.
-   Persist replacements and clears through
-   `prefill_engagement_inputs.py --json - --overwrite-existing`;
-   this flag is reserved for explicit edit mode.
-   Then show the checked list and ask whether to edit more. A `yes` response never
-   starts analysis; only a response exactly equal to `no` authorizes it.
-7. Save and validate the edits, then follow
-   `${PLUGIN_ROOT}/commands/ob-analyze.md` as the next immutable `V<N>` run.
+1. Read `${PLUGIN_ROOT}/prompts/00-load-obconfig.md`.
+2. Run `manage_obconfig.py --project-root . changed`. If unchanged, print exactly
+   `Edit obconfig.yaml, then rerun this command.` and stop.
+3. Validate, hash the full artifact tree, and show the common redacted summary.
+4. Ask exactly `Proceed with analysis using this configuration? (yes/no)`. Exact `no`
+   stops. Exact `yes` authorizes `ob-edit-inputs` for the next immutable `V<N>` and
+   follows `ob-analyze.md`; any other answer repeats the gate.
 
-The new version records each edited field and every resulting change. Open one analysis
-PR and use the review/acceptance lifecycle in
-`${PLUGIN_ROOT}/skills/references/analysis-run-lifecycle.md`.
-Never start a web server, open a browser, or use a localhost URL.
+Do not edit YAML, list existing values, ask numbered questions, or expose secrets.
 
 $ARGUMENTS

@@ -1,284 +1,100 @@
-# Configuration and behavior controls
+# Configuration
 
-obengineer has four configuration layers:
+Project-root [`obconfig.yaml.template`](../obconfig.yaml.template) is the only authority
+for field definitions, defaults, examples, consequences, and secret annotations. Do not
+duplicate its field table in documentation.
 
-1. installer flags decide host, scope, and link-versus-copy behavior;
-2. environment variables provide tenant endpoints and secret values at run time;
-3. direct APIs and already-connected MCP tools decide which external systems can be inspected; and
-4. `docs/observability/engagement-inputs.yaml` controls engagement-specific behavior.
-
-Command arguments can narrow a single invocation, but they do not replace the accepted
-contract or engagement inputs.
-
-`docs/observability/provenance-ledger.json` is the machine authority for evidence and run
-state. `verification-plan.json` defines read-only exit criteria; optional
-`verification-exclusions.json` contains only human-approved unremediable criteria bound to
-the accepted version.
-
-## Environment variables
-
-Run `/path/to/obengineer/scripts/setup-splunk-access.sh` from the artifact repository.
-It creates or updates `.env` interactively, never prints a token, and ensures the file is
-ignored. Analysis reads `.env` or the process environment.
-
-Project install also creates a committed `.env.template` whose first names are
-`PRODUCTION_URL`, `TEST_LOGIN_ID`, and `PASSWORD_REF`. The allowlisted prefill schema
-maps required and optional onboarding names into missing engagement-input fields.
-`PASSWORD_REF` must be `${VAR}`. Raw Splunk token values are used only to establish that
-access is configured; committed inputs receive `${SPLUNK_ACCESS_TOKEN}` and
-`${SPLUNK_TOKEN}` references, never their values.
-
-| Variable | Used for | Effect when absent |
-|---|---|---|
-| `SPLUNK_REALM` | Observability Cloud realm; resource and `https://stream.<realm>.observability.splunkcloud.com` SignalFlow hosts are derived from it. | Observability inventory cannot run. |
-| `SPLUNK_ACCESS_TOKEN` | API-scope Observability Cloud token with least-privilege read-only usage access; use administrator only when the tenant's Subscription Usage version requires it. | Observability tenant facts remain stated or “Not in evidence.” |
-| `SPLUNK_HOST` | Splunk Enterprise API base URL, such as `https://<host>:8089`. | Enterprise search and introspection cannot run. |
-| `SPLUNK_TOKEN` | Splunk Enterprise API token. | Enterprise tenant facts remain stated or “Not in evidence.” |
-| `SPLUNK_ENTERPRISE_INDEXES` | Comma-separated allowlist of indexes the analyze run may search. | Log-volume inventory is “Not in evidence”; the run does not search arbitrary indexes. |
-| `TE_OAUTH_BEARER_TOKEN` | ThousandEyes API access when that optional integration is enabled. | ThousandEyes inventory is skipped. |
-
-`SPLUNK_ACCESS_TOKEN` is the one supported variable for the secret sometimes called
-`Splunk_O11y_API_Key`. `SPLUNK_TOKEN` is the one supported variable for the secret
-sometimes called `SPLUNK_ENTERPRISE_TOKEN`. Do not define duplicate aliases in
-engagement inputs.
-
-Keep values in `.env`, a host secret store, or the process environment. Put only
-references such as `${SPLUNK_ACCESS_TOKEN}` in committed files. The `.env.template`
-contains names and comments, never values.
-
-## Direct APIs and MCP integrations
-
-Direct Observability Cloud and Splunk Platform APIs are first-class evidence sources and
-often expose more than an MCP server. `/ob-start` uses configured API access and discovers
-relevant MCP tools already connected to Cursor, Claude, or Codex. It combines the sources;
-neither is a universal replacement for the other.
-
-The plugin's committed
-[`plugins/obengineer/.mcp.json`](../plugins/obengineer/.mcp.json) contains an empty
-`mcpServers` object. This prevents an unconfigured placeholder command from failing
-every host session.
-
-When an organization wants another MCP integration, use
-[`plugins/obengineer/.mcp.optional.json`](../plugins/obengineer/.mcp.optional.json)
-as a reference:
-
-1. copy only the required server entry into the active MCP configuration;
-2. replace its placeholder command or URL with the command your organization operates;
-3. retain `${ENV_VAR}` references instead of literal credential values; and
-4. restart the host and verify the server before analysis.
-
-Do not copy the `$comment` array into hosts that reject non-server keys.
-
-### Server classes
-
-| Class | Integration | Behavior |
-|---|---|---|
-| Use when already connected | `splunk-observability` | Supplements direct API inventory for MetricSets, APM, RUM, Synthetics, and usage. |
-| Use when already connected | `splunk-platform` | Supplements direct API search across approved indexes and configuration. |
-| Recommended when applicable | `local-otel-tools` | Audits local SDK or Collector configuration when the organization provides such a server. |
-| Recommended when applicable | `thousandeyes` | Inventories off-box path tests and agent locations. |
-| Recommended when applicable | a cloud inventory MCP already connected for the target cloud | Supports production architecture diagrams. obengineer does not install one or guess a provider. |
-| Use only if already connected | Jira and repository hosts | Matches developer tools during intake and supports explicitly requested work-order flow. obengineer does not add or authenticate these servers. |
-
-Analysis can continue without tenant access: it scans source and production surfaces,
-uses supplied facts, states the limitation on the evidence page, and lists useful access
-under Intake recommendations. It must not relabel stated information as measured.
-
-## Engagement inputs
-
-`/ob-start` creates and manages:
-
-```text
-docs/observability/engagement-inputs.yaml
-```
-
-The complete schema and comments live in
-[`inputs/engagement-inputs.template.yaml`](../inputs/engagement-inputs.template.yaml).
-Schema v3 separates contractual entitlement, enforced limits, and MMS cardinality.
-Validate or deterministically migrate v2 with:
+## Set up
 
 ```bash
-python3 /path/to/obengineer/skills/engagement-intake/scripts/verify_engagement_inputs.py \
-  docs/observability/engagement-inputs.yaml --project-root . --migrate
+cp obconfig.yaml.template obconfig.yaml
+chmod 600 obconfig.yaml
+# edit obconfig.yaml, then run /ob-start
 ```
 
-Humans never need to type `unknown` or edit this file. `/ob-add-inputs` and
-`/ob-edit-inputs` manage supplied values. Validators retain schema-compatible empty
-representations and unknown extension fields.
+Project install adds exact root ignores for `/obconfig.yaml` and `/.obengineer/`.
+`/ob-start` can create the local copy atomically and will stop so it can be edited.
+Actual config, backups, artifact manifests, and authorization state remain local.
 
-### Evidence precedence
+Plaintext values are accepted for the dummy test password and Splunk Observability
+Cloud/Platform read tokens. `${VAR}` is not required and has no special meaning.
+Use only a disposable dummy account and least-privilege read tokens. Rotate temporary
+dummy access after use.
 
-When sources disagree, the run uses:
+## Gates
 
-1. measured source, site, or tenant evidence;
-2. engagement inputs for facts that cannot be measured;
-3. documented platform behavior; then
-4. no assumption.
+Validation detects duplicate YAML keys and reports exact redacted line/column errors.
+Only exact `yes` permits a catalogued safe repair, with a mode-0600 backup and
+post-repair validation. Arbitrary malformed YAML is never guessed.
+Identity-bound local-state updates/removals use atomic exchange and quarantine; a
+concurrent pathname replacement is restored and preserved. Platforms without the
+required exchange syscall fail closed.
 
-The analysis records a disagreement when measured evidence overrides a stated input.
+A valid run hashes every regular file under `artifacts.directory`, shows a condensed
+redacted summary, and asks:
 
-### Core identity and scope
+```text
+Proceed with analysis using this configuration? (yes/no)
+```
 
-| Input | Controls |
-|---|---|
-| `engagement.application`, `customer`, `date`, `document_version` | Filenames, title-page identity, wiki path, and versioning. |
-| `engagement.scope` | The application and surfaces the analysis describes. It is not implementation authorization. |
-| `initial_scope.authorized` | Whether implementation may touch `full` scope, named `repositories`, or named `parent_folders`. `unknown` stops implementation and asks engineering to authorize scope. Intake intentionally does not set this. |
-| `initial_scope.repositories` | Repository allowlist when authorization is `repositories`. |
-| `initial_scope.parent_folders` | Repository-qualified `{repository, path}` allowlist when authorization is `parent_folders`. |
-| `initial_scope.branches` | Optional `{repository, branch}` mappings. Missing entries mean each current checkout, including an unmerged branch. |
+Exact `yes` creates one-shot authorization bound to schema version, config digest,
+full artifact manifest/delta and tree digest, originating command, and intended immutable
+version. Analysis atomically claims that authorization. Any input change invalidates the
+claim before API work or finalization; concurrent or repeated claims fail. After all
+analysis output is rendered and validated, `finalize` revalidates those inputs and binds
+the complete staged Git index tree and runtime-computed manifest of explicit contained
+generated-output blobs. The commit must have exactly that tree. `dispatch` records the
+matching HEAD commit/tree and `verify-dispatch` rechecks immutable Git objects before
+push/PR work.
 
-A connected repository host is discovery, not permission. obengineer never interprets
-access to several repositories as authorization to instrument all of them.
+## Access behavior
 
-### Supplied evidence and scan behavior
+Configured Observability Cloud and Splunk Platform blocks mandate direct API attempts in
+analysis and verification. Tokens are sent only in HTTPS request headers to validated
+exact hosts; redirects do not forward them. Platform searches use only validated exact
+indexes. MCP evidence is supplemental.
 
-| Input | Controls |
-|---|---|
-| `artifacts.diagrams` and `narrative` | Backend, bus, account, and ownership mapping. Missing diagrams become open evidence gaps rather than invented architecture. |
-| `artifacts.prior_contract`, `prior_schema`, `prior_scans` | Reuse of accepted names and comparison with earlier scans of the same application. Inputs from another application are invalid. |
-| `artifacts.house_style_docx` | Approved layout to match when rendering. |
-| `artifacts.front_end_scan_notes` | Notes from an earlier production scan. The exact form `no browser: <reason>` is the only opt-out from the required live production scan. |
-| `surfaces.production_urls` | Current production surfaces to inspect. Test and QA URLs do not satisfy this requirement. |
-| `surfaces.non_production_urls` | Context only; these do not replace the production scan. |
-| `surfaces.host_and_remotes`, `edge_cdn` | Micro-frontend ownership and edge boundaries to verify. |
-| `cloud_diagrams.generate` | Attempts a production diagram when a suitable cloud inventory server is already connected. Failure becomes an open item, not a failed analysis. |
-| `cloud_diagrams.environments` | Limits diagram evidence to named production environments. |
+The supported production commands are:
 
-The production scan is read-only: no destructive form submission, load generation, or
-state changes.
+```bash
+python3 skills/engagement-intake/scripts/manage_obconfig.py --project-root . config-projection --command <origin> --intended-version V<N>
+python3 skills/engagement-intake/scripts/manage_obconfig.py --project-root . direct-api --phase analysis --command <origin> --intended-version V<N>
+python3 skills/engagement-intake/scripts/manage_obconfig.py --project-root . safe-active --command <origin> --intended-version V<N>
+python3 skills/engagement-intake/scripts/manage_obconfig.py --project-root . finalize --command <origin> --intended-version V<N> --output docs/observability --output wiki/apps/<app>/versions/V<N>
+python3 skills/engagement-intake/scripts/manage_obconfig.py --project-root . dispatch --command <origin> --intended-version V<N>
+python3 skills/engagement-intake/scripts/manage_obconfig.py --project-root . verify-dispatch --command <origin> --intended-version V<N>
+python3 skills/engagement-intake/scripts/manage_obconfig.py --project-root . direct-api --phase verification
+```
 
-`security_assessment.mode` is `passive`, `safe-active`, or `none`. Passive reviews source
-and normal traffic. Safe-active additionally requires explicit authorized origins,
-excluded paths, and request/rate limits, and remains non-mutating. The analysis records
-credential/API checks and complete OWASP Top 10:2025 and API Security Top 10:2023 coverage.
+The claim-bound projection is the sole supported downstream analysis configuration
+source; it exposes required non-secret targets, constraints, context, artifact metadata,
+and availability without credentials. Analysis must not read raw `obconfig.yaml`.
+The commands securely load ignored mode-0600 config and emit only centralized-redacted JSON.
+Safe-active uses fixed HEAD paths/rates/ceilings with DNS and peer-address defenses;
+passive/none makes no request. Dispatch begins only after staged-tree finalization, exact
+commit, and commit verification succeed. Successful final consume re-verifies the commit
+tree/output blobs and advances the artifact baseline to the finalized input snapshot;
+declined/failed analysis uses `abort`, which releases only the exact claim. Post-finalize
+input edits belong to the next run and do not invalidate consumption of the already
+published finalized snapshot.
+Analysis and verification append its dispositions and parsed aggregate measurements to
+provenance. Missing config emits explicit `not-configured` dispositions; it does not
+read `.env` or process environment.
 
-### Authenticated analysis access
+Analysis measures approved `sf.org` usage and `sf.org.limit.*` enforced system limits.
+An enforced limit is not contractual entitlement. Contract terms remain unavailable
+unless a separate measured API or approved export supports them.
 
-`analysis_access` stores references only:
+## Legacy migration
 
-- `token_ref` normally points to `${SPLUNK_TOKEN}`;
-- `api_key_ref` normally points to `${SPLUNK_ACCESS_TOKEN}`;
-- `login_id` identifies a dummy test account, never a production account;
-- `password_ref` names the secret that holds the dummy password; and
-- `rotate_on_completion` becomes `true` when any temporary access was supplied.
+When no actual config exists, `/ob-start` may migrate retained facts from local `.env`
+and `docs/observability/engagement-inputs.yaml` after the explicit repair gate. Legacy
+files are preserved. Conflicts, unresolved secret references, multiple deployment
+environments, and artifact paths outside the selected directory require manual
+resolution in `obconfig.yaml`.
+Migration revalidates source and destination identities through final commit. If another
+cooperating same-user process replaces a destination during migration, rollback removes
+only files still proven to be migration-owned; replacement bytes are preserved.
 
-Leaving all fields `unknown` keeps the scan unauthenticated and requires the analysis
-to state that limitation. Never put a token, API key, password, private key, or session
-value in this file.
-
-### Architecture and tenancy
-
-| Input | Controls |
-|---|---|
-| `backends.languages` | Which language-specific OpenTelemetry guidance the contract needs. |
-| `backends.deploy_targets` | Runtime and Collector recommendations. |
-| `backends.buses` | Required message inject/extract and trace-context sections. |
-| `backends.cloud_accounts` and `gateway` | Propagation boundaries where headers or identity can be lost. |
-| `tenancy.o11y_realm`, `o11y_org_id`, `environments` | Tenant identity and deployment-environment validation. |
-| `tenancy.splunk_platform_host` | Stated Enterprise host; the secret-bearing endpoint value remains in `SPLUNK_HOST`. |
-| `tenancy.thousandeyes_account_group` | ThousandEyes inventory scope. |
-| `tenancy.tokens_held_by` | Owner who can issue future ingest credentials; this is a role or team, not a credential. |
-
-### Entitlement and consumption behavior
-
-Entitlement normally prices the recommendation; it does not cap it.
-
-- When entitlement values are supplied, the run computes expected consumption and
-  writes `entitlement-exposure-<app>-<date>.md` for the account team.
-- When any meaningful traffic baseline is supplied without entitlement, it still
-  writes the exposure document as an expectation range.
-- When both entitlement and traffic baseline are entirely unsupplied, the run skips
-  the exposure document and recommends what the application needs.
-- `entitlement.fit_to_entitlement: true` is the explicit exception. It constrains the
-  recommendation to available entitlement and requires the exposure document to name
-  each omitted capability and consequence.
-
-An empty list or map and `unknown` are unsupplied. A scalar value or a populated
-collection is supplied.
-
-Important hard controls:
-
-| Input | Behavior |
-|---|---|
-| `entitlement.rum.session_replay_accepted_in_writing: false` | Excludes always-on session replay. |
-| `entitlement.splunk_platform.log_observer_connect_entitled: false` | Excludes Log Observer Connect panels and routes those questions to supported alternatives. |
-| `observability_cloud.custom_mts_*` | Prices promoted metric dimensions against current custom MTS capacity. |
-| `mms_cardinality_entitled`, `mms_cardinality_in_use`, and `tms_cardinality_ceiling` | Informs MetricSet selection and cardinality risk; MMS is cardinality, not object slots, and the TMS value is a measured baseline rather than a design cap. |
-| RUM, Synthetics, platform, and ThousandEyes entitlement fields | Prices the matching recommendations and records unavailable licensed features. |
-
-Traffic values under `traffic_baseline.rum`, `apm`, `logs`, and
-`infra_integrations` tighten consumption ranges. Unknown values widen the range; they
-do not reduce the design.
-
-### Contract standards
-
-| Input | Behavior |
-|---|---|
-| `standards.percentile` | One percentile used consistently in charts, detectors, and objectives. |
-| `standards.workflow_naming` | Naming pattern for newly discovered workflows. Accepted existing names remain stable on repeat runs. |
-| `standards.baggage_header_budget_bytes` | Maximum aggregate W3C Baggage budget used when selecting cross-cutting keys. |
-| `standards.baggage_value_ceiling_bytes` | Per-value limit in the baggage design. |
-| `standards.unknown_dimension_threshold_pct` | Tolerated `UNKNOWN` bucket when validating a grouping key. |
-
-These values shape the generated contract. They do not permit renaming an accepted
-workflow or silently changing an attribute key during a repeat run.
-
-### Constraints and outcomes
-
-`constraints` are vetoes, not suggestions:
-
-- `privacy_regimes`, `pii_deny_list_additions`, and `data_residency` constrain what
-  telemetry may contain and where it may go;
-- `consent_platform` controls when front-end telemetry may initialize;
-- `competing_eum_agents` makes duplicate browser agents an explicit design concern;
-- `change_windows` shapes rollout phases; and
-- `who_deploys_front_end` and `who_deploys_collector` identify required owners.
-
-`outcomes.first_journey` selects the first journey when the customer has decided one.
-When blank, the analysis ranks candidates from evidence. `known_pain` influences
-prioritization, and `audiences` controls which executive, SRE, engineer, or platform
-views the contract and Terraform need.
-
-### Developer tools
-
-`developer_tools.named` records tools the human says they use.
-`developer_tools.matched` records `{tool, via, key}` for an already-connected MCP server
-or environment variable name. It never stores a value. A named but unmatched tool is not installed
-automatically.
-
-Jira is usable only when the human named Jira and `matched` records a Jira MCP. Issue
-creation is opt-in after acceptance: at most one linked issue per mapped Jira project for
-a unified work order. If Jira is unavailable or another tool is used, obengineer does not
-attempt Jira; the app-level wiki work order provides copy/paste-ready issue text.
-
-### Business value and public evidence
-
-`business_context` controls what can be stated quantitatively in the final Business
-Value Realization section. Unknown values are not replaced with industry benchmarks.
-Figures are labeled `stated`, `measured`, `public`, or `derived`.
-
-`public_evidence.allowed` controls open-web research. When true, `window_months`,
-`brand_terms`, `status_page_urls`, and `exclude_domains` bound the search. When false,
-the analysis uses only supplied and measured evidence. `competitors` permits
-field-performance comparison only, not a general competitive assessment.
-
-## Per-command arguments
-
-Installed commands append free-form invocation text to their run contract:
-
-| Command | Useful argument |
-|---|---|
-| `/ob-start` | Optional application context; asks the required question immediately and starts V1 only after explicit `no`. |
-| `/ob-add-inputs` | Optional context for an unanswered suggestion; selected answers return to review, where explicit `no` starts the next version. |
-| `/ob-edit-inputs` | Optional name of a supplied value to change; edits return to review, where explicit `no` starts the next version. |
-| `/ob-analyze` | Direct rerun of current inputs only when run context already records explicit-`no` authorization. |
-| `/ob-implement` | Optional bounded selector: work order, BT, workflow, use case, detector, objective, or config target. It must resolve to one Ready work order in the accepted version. |
-| `/ob-terraform` | Application or environment focus already authorized by the accepted contract. |
-| `/ob-verify` | Optional criterion or cohort focus from the accepted verification plan; never grants mutation or remediation authority. |
-| `/ob-review` | Version path; defaults to the latest linked analysis and matching wiki. |
-| `/ob-render` | Version path; builds the optional Word summary under 20 pages. |
-
-Arguments cannot waive acceptance gates, widen `initial_scope`, introduce attributes
-outside `attribute-schema.json`, authorize Terraform apply, or override credential and
-privacy rules.
+New runs use schema v4 only. Historical accepted analyses and their provenance are never
+rewritten.

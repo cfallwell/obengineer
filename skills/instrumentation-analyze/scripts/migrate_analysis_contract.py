@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Deterministically migrate a schema-v1 analysis contract to schema v2."""
+"""Explicitly migrate a mutable schema-v1/v2 analysis contract copy to schema v3."""
 
 from __future__ import annotations
 
@@ -17,6 +17,12 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args(argv)
 
+    if args.contract.resolve() == args.output.resolve():
+        print(
+            "FAIL — migration output must differ from the source; "
+            "accepted snapshots are immutable"
+        )
+        return 1
     original = load_json(args.contract)
     migrated = migrate_contract(original)
     failures = validate_contract(migrated)

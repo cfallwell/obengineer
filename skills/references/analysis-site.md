@@ -206,8 +206,13 @@ to a transaction to a work order and back without searching.
 
 ## Canonical JSON, orchestration, and deterministic rendering
 
-Every version is rendered from a canonical `analysis-contract.json` that conforms to
-`instrumentation-analyze/schemas/analysis-contract.schema.json`. The contract contains
+Every new version is rendered from a canonical schema-v3 `analysis-contract.json` that
+conforms to `instrumentation-analyze/schemas/analysis-contract-v3.schema.json`.
+Historical accepted schema-v2 contracts continue to validate against the frozen
+`analysis-contract-v2.schema.json` and render through an in-memory compatibility
+projection without rewriting their files. For measured v2 budgets, legacy `inUse`,
+`entitlement`, and `headroomAfter` map losslessly to v3 `usage`,
+`enforcedSystemLimit`, and `systemHeadroomAfter`. The contract contains
 the architecture, technology, current telemetry, findings, strategy, implementation
 phases, work orders, use cases, workflows, business transactions, cross-cutting
 contracts, operations, and reference evidence. The renderer is deterministic: the same

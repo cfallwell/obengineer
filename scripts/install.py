@@ -21,9 +21,8 @@ Every install writes digested ownership records next to what it created. Reinsta
 refuses unowned or modified collisions, and `--uninstall` removes only unchanged
 installer-owned paths.
 
-A memory repository keeps its API keys in `.env`. The guided setup script creates or
-updates that file without printing a credential:
-`scripts/setup-splunk-access.sh`. The installer never writes a credential.
+A project keeps read-only credentials only in ignored mode-0600 `obconfig.yaml`.
+The installer owns the committed template and ignore rules, never the actual config.
 """
 
 from __future__ import annotations
@@ -33,8 +32,10 @@ import hashlib
 import json
 import os
 import shutil
+import stat
 import sys
 import tempfile
+import time
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -54,12 +55,11 @@ except ModuleNotFoundError:  # Direct execution from scripts/.
 ROOT = Path(__file__).resolve().parent.parent
 CANONICAL_SKILLS = ROOT / "skills"
 COMMANDS = ROOT / "commands"
-INPUTS = ROOT / "inputs"
 MANIFEST_NAME = ".obengineer-install.json"
-CODEX_INPUTS_SUBDIR = Path("obengineer/inputs")
+CONFIG_COMPANION = Path("obengineer/obconfig.yaml.template")
 SCAFFOLD_MANIFEST = Path(".obengineer/scaffold-manifest.json")
 SCAFFOLD_FILES = (
-    (Path("templates/memory-repo/.env.template"), Path(".env.template")),
+    (Path("obconfig.yaml.template"), Path("obconfig.yaml.template")),
     (
         Path("templates/memory-repo/artifacts/README.md"),
         Path("artifacts/README.md"),
@@ -252,12 +252,34 @@ class Planner:
         if self.dry_run:
             return
         dst.parent.mkdir(parents=True, exist_ok=True)
-        if dst.is_symlink() or dst.exists():
-            shutil.rmtree(dst) if dst.is_dir() and not dst.is_symlink() else dst.unlink()
         if copy:
-            shutil.copytree(src, dst, ignore=shutil.ignore_patterns("__pycache__", "*.pyc"))
+            try:
+                os.mkdir(dst, 0o755)
+            except FileExistsError:
+                raise IncompleteRollback(
+                    f"installer target appeared before exclusive copy: {dst}"
+                ) from None
+            _mark_installer_mutation(dst)
+            try:
+                shutil.copytree(
+                    src,
+                    dst,
+                    dirs_exist_ok=True,
+                    ignore=shutil.ignore_patterns("__pycache__", "*.pyc"),
+                )
+            finally:
+                _mark_installer_mutation(dst)
         else:
-            dst.symlink_to(os.path.relpath(src, dst.parent), target_is_directory=True)
+            try:
+                dst.symlink_to(
+                    os.path.relpath(src, dst.parent),
+                    target_is_directory=True,
+                )
+            except FileExistsError:
+                raise IncompleteRollback(
+                    f"installer target appeared before exclusive link: {dst}"
+                ) from None
+        _mark_installer_mutation(dst)
 
     def write(self, dst: Path, text: str) -> None:
         self.note(f"write {dst}")
@@ -265,7 +287,27 @@ class Planner:
         if self.dry_run:
             return
         dst.parent.mkdir(parents=True, exist_ok=True)
-        dst.write_text(text)
+        try:
+            descriptor = os.open(
+                dst,
+                os.O_WRONLY
+                | os.O_CREAT
+                | os.O_EXCL
+                | getattr(os, "O_NOFOLLOW", 0),
+                0o644,
+            )
+        except FileExistsError:
+            raise IncompleteRollback(
+                f"installer target appeared before exclusive write: {dst}"
+            ) from None
+        _mark_installer_mutation(dst)
+        try:
+            with os.fdopen(descriptor, "w", encoding="utf-8") as handle:
+                handle.write(text)
+                handle.flush()
+                os.fsync(handle.fileno())
+        finally:
+            _mark_installer_mutation(dst)
 
     def remove(self, dst: Path) -> None:
         self.note(f"remove unchanged legacy path {dst}")
@@ -273,10 +315,141 @@ class Planner:
             return
         if dst.is_symlink() or dst.exists():
             shutil.rmtree(dst) if dst.is_dir() and not dst.is_symlink() else dst.unlink()
+            _mark_installer_mutation(dst)
 
 
 class InstallConflict(RuntimeError):
     """A target exists but cannot be proven to be installer-owned and unchanged."""
+
+
+class IncompleteRollback(RuntimeError):
+    """Rollback preserved a path whose identity no longer matched installer output."""
+
+
+@dataclass(frozen=True)
+class PathIdentity:
+    kind: str
+    device: int
+    inode: int
+    mode: int
+    digest: str
+
+
+@dataclass
+class RollbackEntry:
+    path: Path
+    backup: Path | None
+    before: PathIdentity | None
+    staging_device: int
+    written: PathIdentity | None = None
+    touched: bool = False
+
+
+@dataclass(frozen=True)
+class StagingArea:
+    path: Path
+    device: int
+    inode: int
+
+
+@dataclass
+class InstallTransaction:
+    staging_areas: dict[int, StagingArea]
+    entries: list[RollbackEntry]
+
+    @property
+    def staging(self) -> Path:
+        return next(iter(self.staging_areas.values())).path
+
+    def staging_summary(self) -> str:
+        return ", ".join(
+            str(area.path)
+            for _, area in sorted(self.staging_areas.items())
+        )
+
+    def mark(self, changed: Path) -> None:
+        changed = changed.absolute()
+        for entry in self.entries:
+            candidate = entry.path.absolute()
+            if candidate == changed or candidate in changed.parents:
+                entry.written = path_identity(entry.path)
+                entry.touched = True
+
+
+_ACTIVE_INSTALL_TRANSACTIONS: list[InstallTransaction] = []
+
+
+def _digest_directory(path: Path) -> str:
+    digest = hashlib.sha256()
+    for candidate in sorted(path.rglob("*"), key=lambda item: item.as_posix()):
+        relative = candidate.relative_to(path).as_posix().encode()
+        info = candidate.lstat()
+        digest.update(len(relative).to_bytes(8, "big"))
+        digest.update(relative)
+        digest.update((info.st_mode & 0o177777).to_bytes(4, "big"))
+        if candidate.is_symlink():
+            payload = os.readlink(candidate).encode()
+        elif candidate.is_file():
+            payload = hashlib.sha256(candidate.read_bytes()).digest()
+        elif candidate.is_dir():
+            payload = b"directory"
+        else:
+            payload = b"special"
+        digest.update(len(payload).to_bytes(8, "big"))
+        digest.update(payload)
+    return digest.hexdigest()
+
+
+def path_identity(path: Path) -> PathIdentity | None:
+    try:
+        info = path.lstat()
+    except FileNotFoundError:
+        return None
+    if path.is_symlink():
+        kind = "symlink"
+        digest = hashlib.sha256(os.readlink(path).encode()).hexdigest()
+    elif path.is_file():
+        kind = "file"
+        digest = hashlib.sha256(path.read_bytes()).hexdigest()
+    elif path.is_dir():
+        kind = "directory"
+        digest = _digest_directory(path)
+    else:
+        kind = "special"
+        digest = hashlib.sha256(b"special").hexdigest()
+    return PathIdentity(
+        kind,
+        info.st_dev,
+        info.st_ino,
+        info.st_mode & 0o177777,
+        digest,
+    )
+
+
+def _mark_installer_mutation(path: Path) -> None:
+    for transaction in _ACTIVE_INSTALL_TRANSACTIONS:
+        transaction.mark(path)
+
+
+def _remove_owned_path(path: Path, expected: PathIdentity) -> bool:
+    """Quarantine and remove only the exact installer-written pathname."""
+    parent = path.parent
+    quarantine = parent / (
+        f".{path.name}.obengineer-rollback-{os.getpid()}-"
+        f"{time.time_ns()}"
+    )
+    try:
+        os.rename(path, quarantine)
+    except FileNotFoundError:
+        return False
+    if path_identity(quarantine) != expected:
+        try:
+            os.rename(quarantine, path)
+        except (FileExistsError, OSError):
+            pass
+        return False
+    _remove_path(quarantine)
+    return True
 
 
 def _host_relative(base: Path, path: Path) -> str:
@@ -342,7 +515,7 @@ def ownership_matches(path: Path, ownership: object) -> bool:
         return False
 
 
-def installs_inputs_companion(host: Host, copy: bool) -> bool:
+def installs_config_companion(host: Host, copy: bool) -> bool:
     return host.install_workflows or copy
 
 
@@ -367,8 +540,8 @@ def desired_host_targets(
             else ()
         ),
         *(
-            [host.base(scope_root, project) / CODEX_INPUTS_SUBDIR]
-            if installs_inputs_companion(host, copy)
+            [host.base(scope_root, project) / CONFIG_COMPANION]
+            if installs_config_companion(host, copy)
             else []
         ),
     ]
@@ -738,11 +911,10 @@ def install_host(
                 skills_dir / name,
                 copy or host.install_workflows,
             )
-        if installs_inputs_companion(host, copy):
-            planner.link_or_copy(
-                INPUTS,
-                base / CODEX_INPUTS_SUBDIR,
-                True,
+        if installs_config_companion(host, copy):
+            planner.write(
+                base / CONFIG_COMPANION,
+                (ROOT / "obconfig.yaml.template").read_text(),
             )
         if host.install_commands:
             for command in command_files():
@@ -755,11 +927,11 @@ def install_host(
                 _write_workflow(planner, command, skills_dir / command.stem)
         return
 
-    base.parent.mkdir(parents=True, exist_ok=True)
-    staging = Path(tempfile.mkdtemp(prefix=".obengineer-install-", dir=base.parent))
-    backups: list[tuple[Path, Path]] = []
+    transaction: InstallTransaction | None = None
+    rollback_incomplete = False
     try:
         transaction_paths = [
+            manifest_path,
             *targets,
             *stale_cleanup.paths,
             *external_cleanup.paths,
@@ -774,12 +946,9 @@ def install_host(
                 else []
             ),
         ]
-        for index, path in enumerate(dict.fromkeys(transaction_paths)):
-            if path.exists() or path.is_symlink():
-                backup = staging / str(index)
-                backup.parent.mkdir(parents=True, exist_ok=True)
-                shutil.move(str(path), str(backup))
-                backups.append((path, backup))
+        transaction = _snapshot_install_paths(transaction_paths)
+        _ACTIVE_INSTALL_TRANSACTIONS.append(transaction)
+        _vacate_install_paths(transaction)
 
         for stale_path in [*stale_cleanup.paths, *external_cleanup.paths]:
             planner.remove(stale_path)
@@ -789,11 +958,10 @@ def install_host(
                 skills_dir / name,
                 copy or host.install_workflows,
             )
-        if installs_inputs_companion(host, copy):
-            planner.link_or_copy(
-                INPUTS,
-                base / CODEX_INPUTS_SUBDIR,
-                True,
+        if installs_config_companion(host, copy):
+            planner.write(
+                base / CONFIG_COMPANION,
+                (ROOT / "obconfig.yaml.template").read_text(),
             )
         if host.install_commands:
             for command in command_files():
@@ -806,7 +974,9 @@ def install_host(
                 _write_workflow(planner, command, skills_dir / command.stem)
 
         if external_cleanup.manifest_update is not None:
-            atomic_write(*external_cleanup.manifest_update)
+            atomic_write(
+                *external_cleanup.manifest_update, expect_absent=True
+            )
         owned = {
             _host_relative(base, path): path_ownership(path)
             for path in targets
@@ -825,21 +995,295 @@ def install_host(
                 sort_keys=True,
             )
             + "\n",
+            expect_absent=True,
         )
-    except BaseException:
-        for path in targets:
-            _remove_path(path)
-        for path, backup in reversed(backups):
-            if (
-                external_cleanup.manifest_update is not None
-                and path == external_cleanup.manifest_update[0]
-            ):
-                _remove_path(path)
-            path.parent.mkdir(parents=True, exist_ok=True)
-            shutil.move(str(backup), str(path))
+    except BaseException as original_error:
+        if transaction is not None:
+            preserved = _rollback_install_paths(transaction)
+            rollback_incomplete = bool(preserved) or isinstance(
+                original_error, IncompleteRollback
+            )
+            if preserved:
+                joined = ", ".join(str(path) for path in preserved)
+                raise IncompleteRollback(
+                    "installer rollback was incomplete; concurrent replacements "
+                    f"were preserved at {joined}; backups retained at "
+                    f"{transaction.staging_summary()}"
+                ) from original_error
         raise
     finally:
-        shutil.rmtree(staging, ignore_errors=True)
+        if transaction is not None:
+            if (
+                _ACTIVE_INSTALL_TRANSACTIONS
+                and _ACTIVE_INSTALL_TRANSACTIONS[-1] is transaction
+            ):
+                _ACTIVE_INSTALL_TRANSACTIONS.pop()
+            elif transaction in _ACTIVE_INSTALL_TRANSACTIONS:
+                _ACTIVE_INSTALL_TRANSACTIONS.remove(transaction)
+            if not rollback_incomplete:
+                _cleanup_staging_areas(transaction)
+
+
+def _outer_install_paths(
+    selected: list[Host],
+    scope_root: Path,
+    project: bool,
+    copy: bool,
+) -> list[Path]:
+    paths: list[Path] = []
+    if project:
+        for directory in (scope_root / ".obengineer", scope_root / "artifacts"):
+            if not directory.exists() and not directory.is_symlink():
+                paths.append(directory)
+        paths.extend(
+            [
+                scope_root / ".gitignore",
+                scope_root / SCAFFOLD_MANIFEST,
+                *(scope_root / destination for _, destination in SCAFFOLD_FILES),
+                scope_root / ".env.template",
+            ]
+        )
+    for host in selected:
+        base = host.base(scope_root, project)
+        if not base.exists() and not base.is_symlink():
+            paths.append(base)
+        paths.append(base / MANIFEST_NAME)
+        targets = desired_host_targets(host, scope_root, project, copy)
+        for target in targets:
+            current = target.parent
+            while current != base and current != current.parent:
+                if not current.exists() and not current.is_symlink():
+                    paths.append(current)
+                current = current.parent
+        paths.extend(targets)
+        previous = read_manifest(base / MANIFEST_NAME)
+        owned = host_owned_entries_for_install(previous, host, scope_root, project)
+        if owned:
+            for relative in owned:
+                candidate = base / Path(relative)
+                try:
+                    candidate.relative_to(base)
+                except ValueError:
+                    continue
+                paths.append(candidate)
+    return list(dict.fromkeys(paths))
+
+
+def _secure_staging_anchor(path: Path, transaction_paths: set[Path]) -> Path:
+    anchor = path.parent
+    while not anchor.exists() and not anchor.is_symlink():
+        if anchor == anchor.parent:
+            break
+        anchor = anchor.parent
+    if anchor.is_symlink() or not anchor.is_dir():
+        raise IncompleteRollback(
+            f"no secure staging parent exists for {path}"
+        )
+    while any(
+        candidate == anchor or candidate in anchor.parents
+        for candidate in transaction_paths
+    ):
+        if anchor == anchor.parent:
+            raise IncompleteRollback(
+                f"no contained staging parent exists for {path}"
+            )
+        anchor = anchor.parent
+        if anchor.is_symlink() or not anchor.is_dir():
+            raise IncompleteRollback(
+                f"staging parent is unsafe for {path}"
+            )
+    current = anchor
+    while current != current.parent:
+        info = current.lstat()
+        if current.is_symlink() or not stat.S_ISDIR(info.st_mode):
+            raise IncompleteRollback(
+                f"staging parent is unsafe for {path}"
+            )
+        current = current.parent
+    return anchor
+
+
+def _cleanup_staging_areas(transaction: InstallTransaction) -> None:
+    failures: list[Path] = []
+    for area in transaction.staging_areas.values():
+        try:
+            current = area.path.lstat()
+        except FileNotFoundError:
+            continue
+        if (
+            current.st_dev,
+            current.st_ino,
+        ) != (area.device, area.inode) or not area.path.is_dir() or area.path.is_symlink():
+            failures.append(area.path)
+            continue
+        quarantine = area.path.parent / (
+            f".{area.path.name}.cleanup-{os.getpid()}-{time.time_ns()}"
+        )
+        try:
+            os.rename(area.path, quarantine)
+        except OSError:
+            failures.append(area.path)
+            continue
+        moved = quarantine.lstat()
+        if (moved.st_dev, moved.st_ino) != (area.device, area.inode):
+            try:
+                os.rename(quarantine, area.path)
+            except OSError:
+                pass
+            failures.append(area.path)
+            continue
+        shutil.rmtree(quarantine)
+    if failures:
+        raise IncompleteRollback(
+            "installer staging cleanup was incomplete; preserved "
+            + ", ".join(str(path) for path in failures)
+        )
+
+
+def _snapshot_install_paths(paths: list[Path]) -> InstallTransaction:
+    entries: list[RollbackEntry] = []
+    absent_ancestors: list[Path] = []
+    ordered = sorted(
+        dict.fromkeys(path.absolute() for path in paths),
+        key=lambda path: (len(path.parts), path.as_posix()),
+    )
+    planned: list[tuple[Path, PathIdentity | None, int, Path]] = []
+    transaction_paths = set(ordered)
+    for path in ordered:
+        if any(ancestor == path or ancestor in path.parents for ancestor in absent_ancestors):
+            continue
+        before = path_identity(path)
+        anchor = _secure_staging_anchor(path, transaction_paths)
+        anchor_device = anchor.lstat().st_dev
+        if before is not None and before.device != anchor_device:
+            raise IncompleteRollback(
+                f"same-filesystem staging is unavailable for {path}"
+            )
+        device = before.device if before is not None else anchor_device
+        planned.append((path, before, device, anchor))
+        if before is None:
+            absent_ancestors.append(path)
+
+    staging_areas: dict[int, StagingArea] = {}
+    try:
+        for _, _, device, anchor in planned:
+            if device in staging_areas:
+                continue
+            try:
+                staging = Path(
+                    tempfile.mkdtemp(
+                        prefix=".obengineer-install-", dir=anchor
+                    )
+                )
+            except OSError:
+                raise IncompleteRollback(
+                    f"cannot create same-filesystem staging below {anchor}"
+                ) from None
+            os.chmod(staging, 0o700)
+            info = staging.lstat()
+            if (
+                info.st_dev != device
+                or not stat.S_ISDIR(info.st_mode)
+                or staging.is_symlink()
+            ):
+                shutil.rmtree(staging, ignore_errors=True)
+                raise IncompleteRollback(
+                    f"same-filesystem staging is unavailable below {anchor}"
+                )
+            staging_areas[device] = StagingArea(
+                staging, info.st_dev, info.st_ino
+            )
+
+        for index, (path, before, device, _) in enumerate(planned):
+            backup: Path | None = None
+            if before is not None:
+                backup = (
+                    staging_areas[device].path / f"entry-{index}-backup"
+                )
+                if path.is_symlink():
+                    backup.symlink_to(os.readlink(path))
+                elif path.is_dir():
+                    shutil.copytree(path, backup, symlinks=True)
+                else:
+                    shutil.copy2(path, backup, follow_symlinks=False)
+            entries.append(RollbackEntry(path, backup, before, device))
+    except BaseException:
+        if staging_areas:
+            temporary = InstallTransaction(staging_areas, [])
+            _cleanup_staging_areas(temporary)
+        raise
+    return InstallTransaction(staging_areas, entries)
+
+
+def _vacate_install_paths(transaction: InstallTransaction) -> None:
+    """Move snapshotted targets aside without deleting a raced-in replacement."""
+    for index, entry in enumerate(transaction.entries):
+        if entry.before is None:
+            entry.written = None
+            entry.touched = True
+            continue
+        area = transaction.staging_areas[entry.staging_device]
+        moved = area.path / f"entry-{index}-moved"
+        try:
+            os.rename(entry.path, moved)
+        except FileNotFoundError:
+            raise IncompleteRollback(
+                f"installer target changed before backup move: {entry.path}; "
+                f"backups retained at {transaction.staging_summary()}"
+            ) from None
+        moved_identity = path_identity(moved)
+        if moved_identity != entry.before:
+            try:
+                os.rename(moved, entry.path)
+            except (FileExistsError, OSError):
+                pass
+            raise IncompleteRollback(
+                f"installer target changed during backup move: {entry.path}; "
+                f"backups retained at {transaction.staging_summary()}"
+            )
+        if entry.backup is not None:
+            _remove_path(entry.backup)
+        entry.backup = moved
+        entry.written = None
+        entry.touched = True
+        _mark_installer_mutation(entry.path)
+
+
+def _rollback_install_paths(transaction: InstallTransaction) -> list[Path]:
+    preserved: list[Path] = []
+    for entry in reversed(transaction.entries):
+        if not entry.touched:
+            continue
+        path = entry.path
+        backup = entry.backup
+        if path_identity(path) != entry.written:
+            preserved.append(path)
+            continue
+        if entry.written is not None and not _remove_owned_path(
+            path, entry.written
+        ):
+            preserved.append(path)
+            continue
+        if backup is None:
+            for active in _ACTIVE_INSTALL_TRANSACTIONS:
+                if active is not transaction:
+                    active.mark(path)
+            continue
+        path.parent.mkdir(parents=True, exist_ok=True)
+        try:
+            if backup.is_symlink():
+                path.symlink_to(os.readlink(backup))
+            elif backup.is_dir():
+                shutil.copytree(backup, path, symlinks=True)
+            else:
+                os.link(backup, path, follow_symlinks=False)
+        except FileExistsError:
+            preserved.append(path)
+            continue
+        for active in _ACTIVE_INSTALL_TRANSACTIONS:
+            if active is not transaction:
+                active.mark(path)
+    return preserved
 
 
 def read_manifest(path: Path) -> dict:
@@ -855,7 +1299,7 @@ def file_digest(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
-def atomic_write(path: Path, text: str) -> None:
+def atomic_write(path: Path, text: str, *, expect_absent: bool = False) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     with tempfile.NamedTemporaryFile(
         "w", dir=path.parent, delete=False, encoding="utf-8"
@@ -864,7 +1308,18 @@ def atomic_write(path: Path, text: str) -> None:
         handle.flush()
         os.fsync(handle.fileno())
         temporary = Path(handle.name)
-    os.replace(temporary, path)
+    if expect_absent:
+        try:
+            os.link(temporary, path, follow_symlinks=False)
+        except FileExistsError:
+            raise IncompleteRollback(
+                f"installer target appeared before exclusive write: {path}"
+            ) from None
+        finally:
+            temporary.unlink(missing_ok=True)
+    else:
+        os.replace(temporary, path)
+    _mark_installer_mutation(path)
 
 
 def read_scaffold_manifest(path: Path) -> dict:
@@ -981,6 +1436,26 @@ def install_project_scaffold(scope_root: Path, dry_run: bool) -> list[str]:
             }
     actions = install_project_gitignore(scope_root, dry_run, working_manifest)
 
+    legacy_template = scope_root / ".env.template"
+    legacy_owned = created.get(".env.template")
+    if isinstance(legacy_owned, dict):
+        expected = legacy_owned.get("sha256")
+        if (
+            legacy_template.is_file()
+            and not legacy_template.is_symlink()
+            and isinstance(expected, str)
+            and file_digest(legacy_template) == expected
+        ):
+            actions.append(f"remove unchanged installer-owned {legacy_template}")
+            if not dry_run:
+                legacy_template.unlink()
+                _mark_installer_mutation(legacy_template)
+                created.pop(".env.template", None)
+        else:
+            actions.append(f"preserve modified legacy template {legacy_template}")
+            if not dry_run:
+                created.pop(".env.template", None)
+
     for source_rel, destination_rel in SCAFFOLD_FILES:
         source = ROOT / source_rel
         destination = scope_root / destination_rel
@@ -1000,14 +1475,25 @@ def install_project_scaffold(scope_root: Path, dry_run: bool) -> list[str]:
         except FileExistsError:
             actions[-1] = f"preserve concurrently-created {destination}"
             continue
+        created_info = os.fstat(descriptor)
         try:
             with os.fdopen(descriptor, "wb") as handle:
                 handle.write(source.read_bytes())
                 handle.flush()
                 os.fsync(handle.fileno())
         except BaseException:
-            destination.unlink(missing_ok=True)
+            try:
+                current_info = destination.lstat()
+            except FileNotFoundError:
+                current_info = None
+            if current_info is not None and (
+                current_info.st_dev,
+                current_info.st_ino,
+            ) == (created_info.st_dev, created_info.st_ino):
+                destination.unlink(missing_ok=True)
+                _mark_installer_mutation(destination)
             raise
+        _mark_installer_mutation(destination)
         created[str(destination_rel)] = {"sha256": file_digest(destination)}
 
     if not dry_run and (
@@ -1075,8 +1561,26 @@ def uninstall_project_scaffold(scope_root: Path, dry_run: bool) -> list[str]:
     ] if isinstance(gitignore, dict) else []
     if gitignore_path.is_file() and tracked_lines:
         remaining = gitignore_path.read_text().splitlines()
+        protected_lines = set()
+        if (scope_root / "obconfig.yaml").exists() or (
+            scope_root / "obconfig.yaml"
+        ).is_symlink():
+            protected_lines.add("/obconfig.yaml")
+        local_state = scope_root / ".obengineer"
+        has_user_local_state = (
+            local_state.is_symlink()
+            or (
+                local_state.is_dir()
+                and any(
+                    child.name != SCAFFOLD_MANIFEST.name
+                    for child in local_state.iterdir()
+                )
+            )
+        )
+        if has_user_local_state or "/obconfig.yaml" in protected_lines:
+            protected_lines.add("/.obengineer/")
         for line in tracked_lines:
-            if line in remaining:
+            if line in remaining and line not in protected_lines:
                 remaining.remove(line)
         if remaining:
             actions.append(
@@ -1202,7 +1706,7 @@ def show_status(scope_root: Path, project: bool) -> None:
             print(f"    commands {host.commands_dir(scope_root, project)}")
         else:
             print(f"    workflows {host.skills_dir(scope_root, project) / 'ob-*'}")
-        companion = host.base(scope_root, project) / CODEX_INPUTS_SUBDIR
+        companion = host.base(scope_root, project) / CONFIG_COMPANION
         if unsafe_manifest is None and companion.exists():
             print(
                 f"    companion {companion}"
@@ -1224,7 +1728,7 @@ def main(argv=None) -> int:
                     help="scope to one repository instead of this user")
     ap.add_argument("--copy", action="store_true",
                     help=(
-                        "copy Cursor/Claude skills and inputs "
+                        "copy Cursor/Claude skills and config template "
                         "(Codex skills are always copied)"
                     ))
     ap.add_argument("--uninstall", action="store_true",
@@ -1300,30 +1804,63 @@ def main(argv=None) -> int:
         print("Resolve or back up the reported paths, then rerun the installer.")
         return 1
 
-    if project:
-        print("  Project scaffold")
-        for action in install_project_scaffold(scope_root, args.dry_run):
-            print(f"    {'would ' if args.dry_run else ''}{action}")
+    outer_transaction: InstallTransaction | None = None
+    rollback_incomplete = False
+    if not args.dry_run:
+        outer_transaction = _snapshot_install_paths(
+            _outer_install_paths(selected, scope_root, project, args.copy)
+        )
+        _ACTIVE_INSTALL_TRANSACTIONS.append(outer_transaction)
+    try:
+        if project:
+            print("  Project scaffold")
+            for action in install_project_scaffold(scope_root, args.dry_run):
+                print(f"    {'would ' if args.dry_run else ''}{action}")
 
-    for host in selected:
-        planner = Planner(args.dry_run)
-        install_host(host, scope_root, project, args.copy, planner)
-        print(f"  {host.label}")
-        print(f"    skills   -> {host.skills_dir(scope_root, project)}")
-        if host.install_commands:
-            print(f"    commands -> {host.commands_dir(scope_root, project)}")
-        else:
-            print(f"    workflows -> {host.skills_dir(scope_root, project) / 'ob-*'}")
-        if installs_inputs_companion(host, args.copy):
-            print(
-                f"    companion -> "
-                f"{host.base(scope_root, project) / CODEX_INPUTS_SUBDIR}"
+        for host in selected:
+            planner = Planner(args.dry_run)
+            install_host(host, scope_root, project, args.copy, planner)
+            print(f"  {host.label}")
+            print(f"    skills   -> {host.skills_dir(scope_root, project)}")
+            if host.install_commands:
+                print(f"    commands -> {host.commands_dir(scope_root, project)}")
+            else:
+                print(f"    workflows -> {host.skills_dir(scope_root, project) / 'ob-*'}")
+            if installs_config_companion(host, args.copy):
+                print(
+                    f"    companion -> "
+                    f"{host.base(scope_root, project) / CONFIG_COMPANION}"
+                )
+            if args.dry_run:
+                for line in planner.log:
+                    print(f"      would {line}")
+            for note in host.notes:
+                print(f"    {note}")
+    except BaseException as original_error:
+        if outer_transaction is not None:
+            preserved = _rollback_install_paths(outer_transaction)
+            rollback_incomplete = bool(preserved) or isinstance(
+                original_error, IncompleteRollback
             )
-        if args.dry_run:
-            for line in planner.log:
-                print(f"      would {line}")
-        for note in host.notes:
-            print(f"    {note}")
+            if preserved:
+                joined = ", ".join(str(path) for path in preserved)
+                raise IncompleteRollback(
+                    "outer installer rollback was incomplete; concurrent "
+                    f"replacements were preserved at {joined}; backups retained "
+                    f"at {outer_transaction.staging_summary()}"
+                ) from original_error
+        raise
+    finally:
+        if outer_transaction is not None:
+            if (
+                _ACTIVE_INSTALL_TRANSACTIONS
+                and _ACTIVE_INSTALL_TRANSACTIONS[-1] is outer_transaction
+            ):
+                _ACTIVE_INSTALL_TRANSACTIONS.pop()
+            elif outer_transaction in _ACTIVE_INSTALL_TRANSACTIONS:
+                _ACTIVE_INSTALL_TRANSACTIONS.remove(outer_transaction)
+            if not rollback_incomplete:
+                _cleanup_staging_areas(outer_transaction)
 
     print("\nCursor and Claude Code commands, in order:")
     for command in command_files():
@@ -1333,10 +1870,8 @@ def main(argv=None) -> int:
     print("\nOr name a skill directly: $engagement-intake, $baggage-propagation, "
           "$cardinality-budget, ...")
     if project:
-        print("\nOptional read-only Splunk access setup:")
-        print(f"  {ROOT / 'scripts' / 'setup-splunk-access.sh'}")
-        print("Run it from the memory repository. It writes local .env without "
-              "printing credentials.")
+        print("\nCopy obconfig.yaml.template to obconfig.yaml, chmod 0600, edit it, "
+              "then run /ob-start. The command can create the local copy for you.")
     if args.dry_run:
         print("\n(dry run — nothing was written)")
     return 0

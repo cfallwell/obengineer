@@ -8,11 +8,15 @@ outputs, changes, and verification.
 
 ```text
 /ob-start
-  → guided inputs
+  → local obconfig validation, artifact hash, and proceed gate
+  → atomic config/artifact claim
+  → claim-bound non-secret configuration projection
+  → claim-bound direct-api and safe-active commands
   → parallel evidence collection
   → linked analysis V<N>
   → versioned wiki and all work orders
   → deterministic validation
+  → staged-tree finalize + exact commit dispatch verification
   → one review PR
   → explicit yes: content-bound acceptance and merge
   → Ready work-order implementation / Terraform plan / read-only verification
@@ -33,8 +37,24 @@ Measured evidence wins over stated descriptions. Splunk APIs and MCP integration
 complementary. A missing MCP server does not disable direct API inventory. A missing
 optional answer does not block analysis.
 
+The supported analysis configuration boundary is `manage_obconfig.py
+config-projection`; its claim-revalidated, centralized-redacted JSON is the sole
+downstream configuration input, so analysis never reads raw `obconfig.yaml`.
+The supported evidence boundary is `manage_obconfig.py direct-api` plus the analysis-only
+`safe-active` subcommand. Analysis passes its originating command and intended version
+to all three so each revalidates the claim around its work. They securely load local
+config, emit centralized-redacted JSON, and supply provenance dispositions/aggregates.
+Missing direct configuration is explicit `not-configured`; process environment is never
+a fallback. Passive/none safe-active mode makes zero requests.
+
 Independent sources run with maximum safe sub-agent parallelism. Naming and schema
 reconciliation remain serial so concurrent workers do not create competing taxonomies.
+After all analysis, network, render, and validation work, intended paths are staged.
+`finalize` revalidates inputs and binds the complete index tree plus explicit generated
+output blobs. The commit must have that exact tree. `dispatch` records the matching
+immutable HEAD and `verify-dispatch` gates push/PR work. Failed verification dispatches
+nothing; failed or declined runs abort without moving the baseline. Consume re-verifies
+the committed tree/blobs and records only a successfully published dispatch.
 
 ## Versioned review surface
 
@@ -106,7 +126,8 @@ After acceptance the handoff gives:
 ## Safety
 
 - Production analysis is read-only.
-- Secrets stay in `.env` or a secret store and never enter artifacts.
+- Secrets stay only in ignored mode-0600 `obconfig.yaml`, enter direct request headers
+  only, and never enter generated artifacts.
 - Application changes require a Ready work order and authorized paths.
 - Implementation opens review PRs and does not silently widen the schema.
 - Terraform plans and never applies.

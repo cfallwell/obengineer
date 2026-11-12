@@ -48,13 +48,40 @@ Artifacts record repository-relative path, SHA-256, producing stage, run id, and
 commit. Runs are append-only events. Corrections add a superseding entry; they do not
 rewrite history.
 
+For schema-v4 runs, provenance receives only sanitized configuration metadata:
+`schema_version`, secret fields as `configured`/`not configured`, and the
+`ob-artifact-tree-v1` algorithm, tree hash, file count, total bytes, and redacted
+added/changed/deleted paths. Config digests and the full artifact manifest remain only
+under ignored `.obengineer/`. The complete artifact directory is rehashed every run;
+changed/added files are reread and deleted-file context is removed.
+
+Analysis first atomically claims its config/artifact snapshot, then invokes
+`manage_obconfig.py direct-api --phase analysis --command <origin>
+--intended-version V<N>` and `manage_obconfig.py safe-active` with the same binding.
+Verification invokes `direct-api --phase verification` after acceptance validation.
+For each row in the centralized-redacted JSON,
+provenance records source, attempted flag, disposition, HTTP status/attempt count when
+present, and only parsed aggregate measurements. `not-configured`, denied, unsupported,
+and unavailable rows become limitations or unresolved evidence; they are never promoted
+to measured facts. The command output, not an import-only adapter call, is the evidence
+boundary.
+Safe-active outcomes are also recorded; passive/none yield an empty outcome list. The
+runtime finalize gate revalidates inputs and binds the complete staged Git tree plus its
+own deterministic manifest/digest of explicit generated-output blobs. Dispatch records
+only an exact matching commit and is reverified before external publication. The
+artifact baseline advances only when successful analysis consumes that dispatch after
+re-verifying commit/tree/blob objects; history records the commit, tree, input snapshot,
+and generated-output digest. Declined or failed analysis aborts without changing
+baseline/history.
+
 Analysis seals the IDs it owns when the exact commit is accepted. Generation,
 implementation, Terraform, and verification may append records but may not alter sealed
 entries. Acceptance records the digest of the sorted sealed projection.
 
 ## Stage behavior
 
-- Intake appends stated inputs and read-first entitlement facts.
+- Intake validates local obconfig and records stated non-secret facts plus measured
+  usage/enforced-system-limit facts.
 - Analysis appends sources, measured/public/derived facts, context decisions, checks,
   artifacts, unresolved questions, and the verification plan.
 - Generation consumes sealed analysis entries and appends acceptance/wiki artifacts.

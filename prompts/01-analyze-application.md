@@ -3,7 +3,7 @@
 **Agent:** [`../agents/instrumentation-architect.agent.md`](../agents/instrumentation-architect.agent.md)  
 **Skills:** `instrumentation-analyze`, `instrumentation-wiki`,
 `baggage-propagation`, `cardinality-budget`, `deliverable-review`
-**Input:** `docs/observability/engagement-inputs.yaml`
+**Input:** claim-bound non-secret configuration projection and complete artifact tree
 **Output:** one immutable analysis version and its wiki in one reviewed PR
 
 ## Contract
@@ -16,11 +16,37 @@ legacy monolithic template.
 Use `../templates/analysis-site/index.md` and `detail.md` as the approved layout. Do not
 replace the long linked index with duplicated object detail.
 
-If inputs do not exist, invoke `/ob-start`. Missing optional inputs do not block analysis
-and do not require the human to type `unknown`.
-Do not begin collection unless `.obengineer/run-context.json` records
-`analysis_authorized: true` and `last_event: review-no`. Only the exact `no` response at
-optional review creates that state; a `yes` selection never does.
+If config does not exist, invoke `/ob-start`. Do not begin collection unless the atomic
+`manage_obconfig.py claim --command <origin> --intended-version V<N>` succeeds for the
+schema version, config digest, full artifact manifest/delta and tree digest, originating
+command, and intended version. Use its sanitized delta as the only artifact-change input.
+After that claim and before workers start, invoke exactly:
+
+```text
+python3 <obengineer-root>/skills/engagement-intake/scripts/manage_obconfig.py --project-root . config-projection --command <origin> --intended-version V<N>
+python3 <obengineer-root>/skills/engagement-intake/scripts/manage_obconfig.py --project-root . direct-api --phase analysis --command <origin> --intended-version V<N>
+python3 <obengineer-root>/skills/engagement-intake/scripts/manage_obconfig.py --project-root . safe-active --command <origin> --intended-version V<N>
+```
+
+Use the first command's centralized-redacted JSON as the only downstream configuration
+input. It supplies production targets, constraints, scope, standards, outcomes, context,
+artifact metadata/delta, and availability without exposing credentials. Never read raw
+`obconfig.yaml`, `.env`, process environment, or legacy engagement inputs in analysis.
+Consume the network commands' centralized-redacted JSON only. Append each source disposition and measured
+aggregate to `provenance-ledger.json`; record failed or `not-configured` rows as source
+limitations/unresolved evidence. Never import `direct_api.py` in place of this command,
+or put a credential in command arguments.
+The second command makes zero requests in passive/none and records fixed-policy
+safe-active outcomes otherwise. Both commands revalidate the claim before and after
+network work. After all analysis, network, render, and validation work, invoke
+stage all intended analysis-owned paths, then invoke `manage_obconfig.py finalize
+--command <origin> --intended-version V<N>` with explicit `--output` paths for
+`docs/observability` and the generated versioned wiki. Commit exactly that finalized
+index tree. Run `dispatch` against HEAD, then `verify-dispatch` immediately before push
+and PR creation. Dispatch only after each gate succeeds.
+Consume only after successful analysis and PR dispatch. On failure or decline invoke
+`manage_obconfig.py abort` with the same command/version; it releases the claim while
+leaving artifact baseline/history unchanged.
 
 ## Evidence collection
 
@@ -37,13 +63,17 @@ Reserve one host slot for the coordinator. The host starts workers; the reposito
 only audit worker result intervals and must never claim it spawned them. If two or more
 jobs are runnable, their recorded intervals overlap without exceeding remaining host
 capacity. MCP servers supplement direct APIs. They are not the only tenant source.
-Record source provenance and reconcile facts after parallel collection.
+The supported command above owns every configured direct request and explicit
+source-specific disposition in analysis; MCP is supplemental and cannot suppress or
+relabel it. Record source provenance and reconcile facts after parallel collection.
 Every worker interval fits its manifest `deadlineSeconds`. A `limited` result names
 nonempty limitations plus the exact manifest evidence scopes or required outputs that
 degraded. Record collection, reconciliation, rendering, validation, and total intervals
 in `analysis-run-timing.json`; each interval fits its manifest budget.
 
-Use the host's subagent facility. Launch as many runnable jobs as fit
+Before workers start, hash the full configured artifact directory. Reread every
+added/changed file, remove deleted context, and reuse only unchanged
+path/length/digest context. Use the host's subagent facility. Launch as many runnable jobs as fit
 `min(6, available host slots - 1)` in one parallel tool call before awaiting any result;
 start queued jobs as slots free. Do not perform runnable worker jobs serially in the
 coordinator. If the host cannot run subagents, keep the PR draft and report the analysis
@@ -111,7 +141,10 @@ Run `make qa-analysis`. Validate manifest intervals and coordinator capacity, ca
 object fields, deterministic rendering, placeholders, links, breadcrumbs, schema, map,
 ledger, verification plan schema version 2 with stable `source_ref` values, wiki,
 work-order dependencies, reverse links, performance budgets, and credential scanning.
-Open one analysis PR.
+Stage and finalize the generated output roots as specified above, commit the exact index
+tree, verify/record dispatch, then open one analysis PR. Omitted or changed staged/commit
+blobs yield no dispatch. Working-tree mutation after staging belongs to the next run and
+does not alter consumption of the immutable dispatched snapshot.
 
 When ready for review, ask the human to review the linked PR. Process review comments and
 commit corrections. Ask:

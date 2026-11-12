@@ -1,5 +1,5 @@
-# Docs-only analysis PR. A separate intake run uploads engagement-inputs.yaml as a
-# workflow artifact; intake itself creates no branch, commit, or PR.
+# Docs-only analysis PR. A separate secure intake run uploads local obconfig.yaml as a
+# protected workflow artifact; the file remains ignored and is never included in the PR.
 # Replace each approved-agent-runner command with your organization's runner.
 name: obengineer analysis
 
@@ -13,7 +13,7 @@ on:
         description: "workflow run id that uploaded the validated intake artifact"
         required: true
       intake_artifact:
-        description: "artifact name containing engagement-inputs.yaml"
+        description: "protected artifact name containing obconfig.yaml"
         required: true
         default: obengineer-intake
 
@@ -60,9 +60,7 @@ jobs:
           fi
           test "$(gh pr list --state open --head "$branch" --json number --jq length)" -eq 0
           git checkout -b "$branch"
-          mkdir -p docs/observability
-          cp /tmp/obengineer-intake/engagement-inputs.yaml \
-            docs/observability/engagement-inputs.yaml
+          install -m 0600 /tmp/obengineer-intake/obconfig.yaml obconfig.yaml
           echo "name=$branch" >> "$GITHUB_OUTPUT"
 
       - name: phase 1 — evidence and security findings

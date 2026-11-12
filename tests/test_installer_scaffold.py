@@ -4,8 +4,10 @@ import hashlib
 import importlib.util
 import json
 import os
+import shutil
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
 
 import pytest
@@ -18,6 +20,35 @@ spec = importlib.util.spec_from_file_location("obengineer_installer", INSTALL_SC
 installer = importlib.util.module_from_spec(spec)
 sys.modules[spec.name] = installer
 spec.loader.exec_module(installer)
+
+
+@pytest.fixture
+def distinct_filesystem_project(tmp_path):
+    source_device = Path(tempfile.gettempdir()).stat().st_dev
+    candidates = (Path("/dev/shm"),)
+    root = None
+    for candidate in candidates:
+        try:
+            if (
+                candidate.is_dir()
+                and candidate.stat().st_dev != source_device
+                and os.access(candidate, os.W_OK | os.X_OK)
+            ):
+                root = Path(
+                    tempfile.mkdtemp(
+                        prefix="obengineer-crossfs-", dir=candidate
+                    )
+                )
+                break
+        except OSError:
+            continue
+    if root is None:
+        pytest.skip("no writable filesystem with a distinct device is available")
+    try:
+        assert root.stat().st_dev != source_device
+        yield root
+    finally:
+        shutil.rmtree(root, ignore_errors=True)
 
 
 def run_install(project: Path, *args: str) -> subprocess.CompletedProcess[str]:
@@ -93,7 +124,7 @@ def test_installer_help_explains_codex_always_copies_skills():
     )
 
     assert "Codex skills are always materialized" in result.stdout
-    assert "copy Cursor/Claude skills and inputs" in result.stdout
+    assert "copy Cursor/Claude skills and config template" in result.stdout
 
 
 def convert_host_install_to_legacy_manifest(project: Path) -> Path:
@@ -136,8 +167,13 @@ def install_legacy_codex(scope_root: Path, project: bool) -> Path:
 
 
 def run_installed_start(script: Path, project: Path) -> subprocess.CompletedProcess[str]:
+    subprocess.run(["git", "init", "-q"], cwd=project, check=True)
+    ignore = project / ".gitignore"
+    text = ignore.read_text() if ignore.exists() else ""
+    if "/obconfig.yaml" not in text.splitlines():
+        ignore.write_text(text + ("" if not text or text.endswith("\n") else "\n") + "/obconfig.yaml\n/.obengineer/\n")
     return subprocess.run(
-        [sys.executable, str(script), "--project-root", str(project)],
+        [sys.executable, str(script), "--project-root", str(project), "init"],
         cwd=project,
         check=True,
         capture_output=True,
@@ -153,13 +189,9 @@ def test_project_codex_install_uses_explicit_workflow_skills_and_no_prompts(tmp_
     assert not (tmp_path / ".agents/prompts").exists()
     canonical = skills / "engagement-intake"
     assert canonical.is_dir() and not canonical.is_symlink()
-    companion = tmp_path / ".agents/obengineer/inputs"
-    assert companion.is_dir() and not companion.is_symlink()
-    assert (
-        companion / "engagement-inputs.template.yaml"
-    ).read_bytes() == (
-        ROOT / "inputs/engagement-inputs.template.yaml"
-    ).read_bytes()
+    companion = tmp_path / ".agents/obengineer/obconfig.yaml.template"
+    assert companion.is_file() and not companion.is_symlink()
+    assert companion.read_bytes() == (ROOT / "obconfig.yaml.template").read_bytes()
     for name in installer.WORKFLOW_ORDER:
         wrapper = skills / name
         text = (wrapper / "SKILL.md").read_text()
@@ -179,7 +211,7 @@ def test_project_codex_install_uses_explicit_workflow_skills_and_no_prompts(tmp_
     assert {
         f"skills/{name}" for name in installer.WORKFLOW_ORDER
     } <= set(manifest["owned"])
-    assert "obengineer/inputs" in manifest["owned"]
+    assert "obengineer/obconfig.yaml.template" in manifest["owned"]
 
 
 def test_user_codex_install_uses_agents_skills_not_codex_home(tmp_path):
@@ -190,7 +222,7 @@ def test_user_codex_install_uses_agents_skills_not_codex_home(tmp_path):
     canonical = tmp_path / ".agents/skills/engagement-intake"
     assert canonical.is_dir() and not canonical.is_symlink()
     assert (
-        tmp_path / ".agents/obengineer/inputs/engagement-inputs.template.yaml"
+        tmp_path / ".agents/obengineer/obconfig.yaml.template"
     ).is_file()
     assert not (tmp_path / ".codex").exists()
 
@@ -211,34 +243,32 @@ def test_cursor_and_claude_default_installs_keep_skill_symlinks(tmp_path):
 
     assert (tmp_path / ".cursor/skills/engagement-intake").is_symlink()
     assert (tmp_path / ".claude/skills/engagement-intake").is_symlink()
-    assert not (tmp_path / ".cursor/obengineer/inputs").exists()
-    assert not (tmp_path / ".claude/obengineer/inputs").exists()
+    assert not (tmp_path / ".cursor/obengineer/obconfig.yaml.template").exists()
+    assert not (tmp_path / ".claude/obengineer/obconfig.yaml.template").exists()
 
 
 @pytest.mark.parametrize("host", ("cursor", "claude"))
-def test_project_copy_install_runs_start_turn_with_namespaced_inputs(
+def test_project_copy_install_runs_obconfig_init_with_namespaced_template(
     tmp_path,
     host,
 ):
     run_install(tmp_path, f"--{host}", "--copy")
     host_base = tmp_path / f".{host}"
     skill = host_base / "skills/engagement-intake"
-    companion = host_base / "obengineer/inputs"
+    companion = host_base / "obengineer/obconfig.yaml.template"
 
     assert skill.is_dir() and not skill.is_symlink()
-    assert companion.is_dir() and not companion.is_symlink()
-    result = run_installed_start(skill / "scripts/start_turn.py", tmp_path)
-    assert result.stdout.startswith(
-        "Before I inspect source, the network, or connected tools"
-    )
+    assert companion.is_file() and not companion.is_symlink()
+    result = run_installed_start(skill / "scripts/manage_obconfig.py", tmp_path)
+    assert result.stdout.startswith("Created local obconfig.yaml.")
     manifest = json.loads(
         (host_base / installer.MANIFEST_NAME).read_text()
     )
-    assert "obengineer/inputs" in manifest["owned"]
+    assert "obengineer/obconfig.yaml.template" in manifest["owned"]
 
 
 @pytest.mark.parametrize("host", ("cursor", "claude"))
-def test_user_copy_install_runs_start_turn_with_namespaced_inputs(
+def test_user_copy_install_runs_obconfig_init_with_namespaced_template(
     tmp_path,
     host,
 ):
@@ -250,21 +280,17 @@ def test_user_copy_install_runs_start_turn_with_namespaced_inputs(
     host_base = home / f".{host}"
     skill = host_base / "skills/engagement-intake"
 
-    result = run_installed_start(skill / "scripts/start_turn.py", project)
+    result = run_installed_start(skill / "scripts/manage_obconfig.py", project)
 
-    assert result.stdout.startswith(
-        "Before I inspect source, the network, or connected tools"
-    )
-    assert (host_base / "obengineer/inputs").is_dir()
-    assert (
-        project / "docs/observability/engagement-inputs.yaml"
-    ).is_file()
+    assert result.stdout.startswith("Created local obconfig.yaml.")
+    assert (host_base / "obengineer/obconfig.yaml.template").is_file()
+    assert (project / "obconfig.yaml").is_file()
 
 
-def test_copy_install_preflights_unowned_inputs_companion(tmp_path):
+def test_copy_install_preflights_unowned_config_companion(tmp_path):
     template = (
         tmp_path
-        / ".cursor/obengineer/inputs/engagement-inputs.template.yaml"
+        / ".cursor/obengineer/obconfig.yaml.template"
     )
     template.parent.mkdir(parents=True)
     template.write_text("user template\n")
@@ -279,10 +305,10 @@ def test_copy_install_preflights_unowned_inputs_companion(tmp_path):
 
 def test_copy_companion_reinstalls_and_uninstalls_with_host_manifest(tmp_path):
     run_install(tmp_path, "--cursor", "--copy")
-    companion = tmp_path / ".cursor/obengineer/inputs"
+    companion = tmp_path / ".cursor/obengineer/obconfig.yaml.template"
 
     run_install(tmp_path, "--cursor", "--copy")
-    assert companion.is_dir()
+    assert companion.is_file()
 
     run_install(tmp_path, "--cursor", "--copy", "--uninstall")
     assert not companion.exists()
@@ -290,7 +316,7 @@ def test_copy_companion_reinstalls_and_uninstalls_with_host_manifest(tmp_path):
 
 def test_return_to_default_links_removes_unchanged_copy_companion(tmp_path):
     run_install(tmp_path, "--cursor", "--copy")
-    companion = tmp_path / ".cursor/obengineer/inputs"
+    companion = tmp_path / ".cursor/obengineer/obconfig.yaml.template"
 
     run_install(tmp_path, "--cursor")
 
@@ -299,30 +325,26 @@ def test_return_to_default_links_removes_unchanged_copy_companion(tmp_path):
     manifest = json.loads(
         (tmp_path / ".cursor/.obengineer-install.json").read_text()
     )
-    assert "obengineer/inputs" not in manifest["owned"]
+    assert "obengineer/obconfig.yaml.template" not in manifest["owned"]
 
 
-def test_project_codex_copied_start_turn_uses_installed_inputs(tmp_path):
+def test_project_codex_copied_init_uses_installed_template(tmp_path):
     run_install(tmp_path, "--codex")
     script = (
         tmp_path
-        / ".agents/skills/engagement-intake/scripts/start_turn.py"
+        / ".agents/skills/engagement-intake/scripts/manage_obconfig.py"
     )
 
     result = run_installed_start(script, tmp_path)
 
-    assert result.stdout.startswith(
-        "Before I inspect source, the network, or connected tools"
-    )
-    assert (
-        tmp_path / "docs/observability/engagement-inputs.yaml"
-    ).is_file()
+    assert result.stdout.startswith("Created local obconfig.yaml.")
+    assert (tmp_path / "obconfig.yaml").is_file()
 
 
 def test_python_caches_do_not_block_codex_reinstall_or_uninstall(tmp_path):
     run_install(tmp_path, "--codex")
     skill = tmp_path / ".agents/skills/engagement-intake"
-    script = skill / "scripts/start_turn.py"
+    script = skill / "scripts/manage_obconfig.py"
 
     run_installed_start(script, tmp_path)
     assert list(skill.rglob("__pycache__"))
@@ -334,29 +356,24 @@ def test_python_caches_do_not_block_codex_reinstall_or_uninstall(tmp_path):
     assert not skill.exists()
 
 
-def test_user_codex_copied_start_turn_uses_installed_inputs(tmp_path):
+def test_user_codex_copied_init_uses_installed_template(tmp_path):
     home = tmp_path / "home"
     home.mkdir()
     project = tmp_path / "project"
     project.mkdir()
     run_user_install(home, "--codex")
-    script = home / ".agents/skills/engagement-intake/scripts/start_turn.py"
+    script = home / ".agents/skills/engagement-intake/scripts/manage_obconfig.py"
 
     result = run_installed_start(script, project)
 
-    assert result.stdout.startswith(
-        "Before I inspect source, the network, or connected tools"
-    )
-    assert (
-        project / "docs/observability/engagement-inputs.yaml"
-    ).is_file()
+    assert result.stdout.startswith("Created local obconfig.yaml.")
+    assert (project / "obconfig.yaml").is_file()
 
 
-def test_codex_inputs_companion_is_digest_checked_on_uninstall(tmp_path):
+def test_codex_config_companion_is_digest_checked_on_uninstall(tmp_path):
     run_install(tmp_path, "--codex")
     template = (
-        tmp_path
-        / ".agents/obengineer/inputs/engagement-inputs.template.yaml"
+        tmp_path / ".agents/obengineer/obconfig.yaml.template"
     )
     template.write_text(template.read_text() + "\n# user change\n")
 
@@ -512,26 +529,319 @@ def test_user_codex_migration_rolls_back_legacy_paths_on_failure(
 def test_project_install_creates_missing_scaffold_and_tracks_ownership(tmp_path):
     run_install(tmp_path, "--cursor")
     assert (tmp_path / ".gitignore").is_file()
-    assert (tmp_path / ".env.template").is_file()
+    assert (tmp_path / "obconfig.yaml.template").is_file()
     assert (tmp_path / "artifacts/README.md").is_file()
-    assert "PRODUCTION_URL=" in (tmp_path / ".env.template").read_text()
-    assert "TEST_LOGIN_ID=" in (tmp_path / ".env.template").read_text()
-    assert "PASSWORD_REF=" in (tmp_path / ".env.template").read_text()
-    assert ".obengineer/" in (tmp_path / ".gitignore").read_text()
+    assert "schema_version: 4" in (tmp_path / "obconfig.yaml.template").read_text()
+    assert "/obconfig.yaml" in (tmp_path / ".gitignore").read_text()
+    assert "/.obengineer/" in (tmp_path / ".gitignore").read_text()
 
     manifest = json.loads(
         (tmp_path / ".obengineer/scaffold-manifest.json").read_text()
     )
     assert set(manifest["created"]) == {
-        ".env.template",
+        "obconfig.yaml.template",
         "artifacts/README.md",
     }
     assert manifest["schema_version"] == 2
     assert manifest["gitignore"]["created"] is True
-    assert ".obengineer/" in manifest["gitignore"]["created_lines"]
+    assert "/.obengineer/" in manifest["gitignore"]["created_lines"]
     for relative, ownership in manifest["created"].items():
         digest = hashlib.sha256((tmp_path / relative).read_bytes()).hexdigest()
         assert ownership["sha256"] == digest
+
+
+def test_outer_transaction_rolls_back_scaffold_on_first_host_failure(
+    tmp_path, monkeypatch
+):
+    (tmp_path / ".gitignore").write_bytes(b"customer-rule\n")
+    before = {path.name: path.read_bytes() for path in tmp_path.iterdir()}
+
+    def fail(*args, **kwargs):
+        raise OSError("injected first host failure")
+
+    monkeypatch.setattr(installer, "install_host", fail)
+    with pytest.raises(OSError, match="first host"):
+        installer.main(["--cursor", "--project", str(tmp_path)])
+    assert {path.name: path.read_bytes() for path in tmp_path.iterdir()} == before
+    assert not (tmp_path / ".cursor").exists()
+    assert not (tmp_path / ".obengineer").exists()
+
+
+def test_outer_transaction_rolls_back_all_hosts_on_later_failure(
+    tmp_path, monkeypatch
+):
+    (tmp_path / ".gitignore").write_text("customer-rule\n")
+    (tmp_path / ".cursor").mkdir()
+    (tmp_path / ".cursor/customer.txt").write_bytes(b"customer-owned")
+    before_ignore = (tmp_path / ".gitignore").read_bytes()
+    original = installer.install_host
+    calls = 0
+
+    def install_then_fail(*args, **kwargs):
+        nonlocal calls
+        calls += 1
+        original(*args, **kwargs)
+        if calls == 2:
+            raise OSError("injected later host failure")
+
+    monkeypatch.setattr(installer, "install_host", install_then_fail)
+    with pytest.raises(OSError, match="later host"):
+        installer.main(["--cursor", "--claude", "--project", str(tmp_path)])
+    assert (tmp_path / ".gitignore").read_bytes() == before_ignore
+    assert (tmp_path / ".cursor/customer.txt").read_bytes() == b"customer-owned"
+    assert not (tmp_path / ".cursor/skills").exists()
+    assert not (tmp_path / ".cursor/commands").exists()
+    assert not (tmp_path / ".claude").exists()
+    assert not (tmp_path / ".obengineer").exists()
+    assert not (tmp_path / "obconfig.yaml.template").exists()
+    assert not (tmp_path / "artifacts/README.md").exists()
+
+
+def test_cross_filesystem_reinstall_uses_target_local_staging(
+    distinct_filesystem_project
+):
+    project = distinct_filesystem_project
+    assert project.stat().st_dev != Path(tempfile.gettempdir()).stat().st_dev
+
+    assert installer.main(
+        ["--cursor", "--project", str(project), "--copy"]
+    ) == 0
+    command = project / ".cursor/commands/ob-start.md"
+    before = command.read_bytes()
+    assert installer.main(
+        ["--cursor", "--project", str(project), "--copy"]
+    ) == 0
+
+    assert command.read_bytes() == before
+    assert not list(project.rglob(".obengineer-install-*"))
+
+
+def test_cross_filesystem_reinstall_rolls_back_without_exdev(
+    distinct_filesystem_project, monkeypatch
+):
+    project = distinct_filesystem_project
+    assert installer.main(
+        ["--cursor", "--project", str(project), "--copy"]
+    ) == 0
+    command = project / ".cursor/commands/ob-start.md"
+    before = command.read_bytes()
+    original = installer.Planner.write
+    calls = 0
+
+    def fail_second_write(self, destination, text):
+        nonlocal calls
+        calls += 1
+        if calls == 2:
+            raise OSError("injected cross-filesystem rollback")
+        return original(self, destination, text)
+
+    monkeypatch.setattr(installer.Planner, "write", fail_second_write)
+    with pytest.raises(OSError, match="cross-filesystem rollback"):
+        installer.main(
+            ["--cursor", "--project", str(project), "--copy"]
+        )
+
+    assert command.read_bytes() == before
+    assert not list(project.rglob(".obengineer-install-*"))
+
+
+def test_multi_device_transaction_uses_one_local_staging_area_per_device(
+    tmp_path, distinct_filesystem_project
+):
+    local = tmp_path / "local.txt"
+    remote = distinct_filesystem_project / "remote.txt"
+    local.write_bytes(b"local\n")
+    remote.write_bytes(b"remote\n")
+    devices = {local.stat().st_dev, remote.stat().st_dev}
+    assert len(devices) == 2
+
+    transaction = installer._snapshot_install_paths([local, remote])
+    assert set(transaction.staging_areas) == devices
+    for device, area in transaction.staging_areas.items():
+        assert area.path.stat().st_dev == device
+        assert area.path.parent.stat().st_dev == device
+
+    installer._ACTIVE_INSTALL_TRANSACTIONS.append(transaction)
+    try:
+        installer._vacate_install_paths(transaction)
+        assert not local.exists()
+        assert not remote.exists()
+        assert installer._rollback_install_paths(transaction) == []
+    finally:
+        installer._ACTIVE_INSTALL_TRANSACTIONS.remove(transaction)
+        installer._cleanup_staging_areas(transaction)
+
+    assert local.read_bytes() == b"local\n"
+    assert remote.read_bytes() == b"remote\n"
+
+
+def test_staging_creation_failure_precedes_all_install_mutation(
+    tmp_path, monkeypatch
+):
+    gitignore = tmp_path / ".gitignore"
+    gitignore.write_bytes(b"customer rule\n")
+    before = gitignore.read_bytes()
+
+    def refuse_staging(*args, **kwargs):
+        raise PermissionError("injected staging denial")
+
+    monkeypatch.setattr(installer.tempfile, "mkdtemp", refuse_staging)
+    with pytest.raises(
+        installer.IncompleteRollback,
+        match="cannot create same-filesystem staging",
+    ):
+        installer.main(["--cursor", "--project", str(tmp_path), "--copy"])
+
+    assert gitignore.read_bytes() == before
+    assert set(tmp_path.iterdir()) == {gitignore}
+
+
+def replace_path_for_race(path: Path, replacement_type: str) -> bytes:
+    if path.is_symlink() or path.exists():
+        installer._remove_path(path)
+    marker = b"concurrent replacement\n"
+    if replacement_type == "file":
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(marker)
+    elif replacement_type == "symlink":
+        target = path.parent / "concurrent-target"
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_bytes(marker)
+        path.symlink_to(target.name)
+    else:
+        path.mkdir(parents=True)
+        (path / "marker.txt").write_bytes(marker)
+    return marker
+
+
+def assert_race_replacement(
+    path: Path, replacement_type: str, marker: bytes
+) -> None:
+    if replacement_type == "file":
+        assert path.read_bytes() == marker
+    elif replacement_type == "symlink":
+        assert path.is_symlink()
+        assert path.resolve().read_bytes() == marker
+    else:
+        assert path.is_dir() and not path.is_symlink()
+        assert (path / "marker.txt").read_bytes() == marker
+
+
+@pytest.mark.parametrize("preexisting", (False, True))
+@pytest.mark.parametrize("replacement_type", ("file", "symlink", "directory"))
+def test_inner_rollback_preserves_concurrent_replacement_and_backup(
+    tmp_path, monkeypatch, preexisting, replacement_type
+):
+    if preexisting:
+        run_install(tmp_path, "--cursor", "--copy")
+    original = installer.Planner.link_or_copy
+    first_target: Path | None = None
+    marker = b""
+    calls = 0
+
+    def replace_then_fail(self, source, destination, copy):
+        nonlocal calls, first_target, marker
+        calls += 1
+        if calls == 1:
+            result = original(self, source, destination, copy)
+            first_target = destination
+            return result
+        assert first_target is not None
+        marker = replace_path_for_race(first_target, replacement_type)
+        raise OSError("injected inner failure after replacement")
+
+    monkeypatch.setattr(installer.Planner, "link_or_copy", replace_then_fail)
+    with pytest.raises(installer.IncompleteRollback) as raised:
+        installer.install_host(
+            installer.HOSTS["cursor"],
+            tmp_path,
+            True,
+            True,
+            installer.Planner(False),
+        )
+    assert first_target is not None
+    assert_race_replacement(first_target, replacement_type, marker)
+    staging = Path(str(raised.value).rsplit("backups retained at ", 1)[1])
+    assert staging.is_dir()
+    if preexisting:
+        assert any(staging.iterdir())
+
+
+@pytest.mark.parametrize("preexisting", (False, True))
+@pytest.mark.parametrize("replacement_type", ("file", "symlink", "directory"))
+def test_initial_installer_mutation_never_overwrites_raced_target(
+    tmp_path, monkeypatch, preexisting, replacement_type
+):
+    if preexisting:
+        run_install(tmp_path, "--cursor", "--copy")
+    target = (
+        tmp_path
+        / ".cursor"
+        / "skills"
+        / installer.skill_names()[0]
+    )
+    original_vacate = installer._vacate_install_paths
+    marker = b""
+    injected = False
+
+    def vacate_then_replace(transaction):
+        nonlocal marker, injected
+        original_vacate(transaction)
+        if not injected:
+            injected = True
+            marker = replace_path_for_race(target, replacement_type)
+
+    monkeypatch.setattr(
+        installer, "_vacate_install_paths", vacate_then_replace
+    )
+    with pytest.raises(installer.IncompleteRollback) as raised:
+        installer.install_host(
+            installer.HOSTS["cursor"],
+            tmp_path,
+            True,
+            True,
+            installer.Planner(False),
+        )
+    assert_race_replacement(target, replacement_type, marker)
+    staging = Path(str(raised.value).rsplit("backups retained at ", 1)[1])
+    assert staging.is_dir()
+    if preexisting:
+        assert any(staging.iterdir())
+
+
+@pytest.mark.parametrize("preexisting", (False, True))
+@pytest.mark.parametrize("replacement_type", ("file", "symlink", "directory"))
+def test_outer_rollback_preserves_concurrent_replacement_and_backup(
+    tmp_path, monkeypatch, preexisting, replacement_type
+):
+    target = (
+        tmp_path / ".gitignore"
+        if preexisting
+        else tmp_path / ".cursor/commands/ob-start.md"
+    )
+    if preexisting:
+        target.write_bytes(b"customer rule\n")
+    original = installer.install_host
+    calls = 0
+    marker = b""
+
+    def replace_then_fail(*args, **kwargs):
+        nonlocal calls, marker
+        calls += 1
+        if calls == 1:
+            original(*args, **kwargs)
+            marker = replace_path_for_race(target, replacement_type)
+            raise OSError("injected outer failure after replacement")
+        return original(*args, **kwargs)
+
+    monkeypatch.setattr(installer, "install_host", replace_then_fail)
+    with pytest.raises(installer.IncompleteRollback) as raised:
+        installer.main(["--cursor", "--project", str(tmp_path), "--copy"])
+    assert_race_replacement(target, replacement_type, marker)
+    staging = Path(str(raised.value).rsplit("backups retained at ", 1)[1])
+    assert staging.is_dir()
+    if preexisting:
+        assert any(staging.iterdir())
 
 
 def test_project_install_and_reinstall_never_overwrite_existing_content(tmp_path):
@@ -541,16 +851,16 @@ def test_project_install_and_reinstall_never_overwrite_existing_content(tmp_path
     run_install(tmp_path, "--cursor")
     gitignore = (tmp_path / ".gitignore").read_text()
     assert gitignore.startswith("custom-ignore\n")
-    assert "\n.env\n" in gitignore
-    assert ".obengineer/" in gitignore
+    assert "\n/obconfig.yaml\n" in gitignore
+    assert "/.obengineer/" in gitignore
     assert (
         tmp_path / "artifacts/README.md"
     ).read_text() == "customer artifact instructions\n"
 
-    env_template = tmp_path / ".env.template"
-    env_template.write_text(env_template.read_text() + "\nCUSTOM_USER_VALUE=yes\n")
+    config_template = tmp_path / "obconfig.yaml.template"
+    config_template.write_text(config_template.read_text() + "\n# user change\n")
     run_install(tmp_path, "--cursor")
-    assert "CUSTOM_USER_VALUE=yes" in env_template.read_text()
+    assert "# user change" in config_template.read_text()
     manifest = json.loads(
         (tmp_path / ".obengineer/scaffold-manifest.json").read_text()
     )
@@ -569,15 +879,80 @@ def test_uninstall_preserves_user_artifacts_and_modified_scaffold(tmp_path):
     assert (tmp_path / "artifacts/diagram.txt").read_text() == "customer-owned\n"
     assert (tmp_path / "artifacts").is_dir()
     assert "customer-cache/" in (tmp_path / ".gitignore").read_text()
-    assert not (tmp_path / ".env.template").exists()
+    assert not (tmp_path / "obconfig.yaml.template").exists()
     assert not (tmp_path / "artifacts/README.md").exists()
     assert not (tmp_path / ".obengineer/scaffold-manifest.json").exists()
+
+
+def test_uninstall_preserves_actual_config_state_and_ignore_protection(tmp_path):
+    run_install(tmp_path, "--cursor")
+    actual = tmp_path / "obconfig.yaml"
+    actual.write_text("local-only\n")
+    actual.chmod(0o600)
+    backup = tmp_path / ".obengineer/backups/obconfig-local.yaml"
+    backup.parent.mkdir(parents=True)
+    backup.write_text("local-backup\n")
+    backup.chmod(0o600)
+
+    run_install(tmp_path, "--cursor", "--uninstall")
+
+    assert actual.read_text() == "local-only\n"
+    assert backup.read_text() == "local-backup\n"
+    gitignore = (tmp_path / ".gitignore").read_text().splitlines()
+    assert "/obconfig.yaml" in gitignore
+    assert "/.obengineer/" in gitignore
+    assert not (tmp_path / "obconfig.yaml.template").exists()
+
+
+def test_uninstall_does_not_follow_substituted_actual_config_symlink(tmp_path):
+    run_install(tmp_path, "--cursor")
+    external = tmp_path.parent / f"{tmp_path.name}-external-obconfig"
+    external.write_text("external-local-config\n")
+    actual = tmp_path / "obconfig.yaml"
+    actual.symlink_to(external)
+
+    run_install(tmp_path, "--cursor", "--uninstall")
+
+    assert actual.is_symlink()
+    assert external.read_text() == "external-local-config\n"
+    assert "/obconfig.yaml" in (tmp_path / ".gitignore").read_text().splitlines()
+
+
+def test_reinstall_removes_only_digest_matched_owned_legacy_env_template(tmp_path):
+    run_install(tmp_path, "--cursor")
+    manifest_path = tmp_path / ".obengineer/scaffold-manifest.json"
+    manifest = json.loads(manifest_path.read_text())
+    legacy = tmp_path / ".env.template"
+    legacy.write_text("installer-owned-legacy-template\n")
+    manifest["created"][".env.template"] = {
+        "sha256": hashlib.sha256(legacy.read_bytes()).hexdigest()
+    }
+    manifest_path.write_text(json.dumps(manifest))
+
+    run_install(tmp_path, "--cursor")
+
+    assert not legacy.exists()
+    upgraded = json.loads(manifest_path.read_text())
+    assert ".env.template" not in upgraded["created"]
+
+    legacy.write_text("installer-owned-legacy-template\n")
+    upgraded["created"][".env.template"] = {
+        "sha256": hashlib.sha256(legacy.read_bytes()).hexdigest()
+    }
+    manifest_path.write_text(json.dumps(upgraded))
+    legacy.write_text("user-modified-legacy-template\n")
+
+    run_install(tmp_path, "--cursor")
+
+    assert legacy.read_text() == "user-modified-legacy-template\n"
+    upgraded = json.loads(manifest_path.read_text())
+    assert ".env.template" not in upgraded["created"]
 
 
 def test_partial_host_uninstall_keeps_project_scaffold(tmp_path):
     run_install(tmp_path, "--cursor", "--claude")
     run_install(tmp_path, "--cursor", "--uninstall")
-    assert (tmp_path / ".env.template").exists()
+    assert (tmp_path / "obconfig.yaml.template").exists()
     assert (tmp_path / ".obengineer/scaffold-manifest.json").exists()
 
 
@@ -601,7 +976,7 @@ def test_existing_host_command_or_skill_collision_refuses_without_partial_instal
     assert "not installer-owned" in result.stdout
     assert command.read_text() == "my command\n"
     assert not (tmp_path / ".cursor/skills/engagement-intake").exists()
-    assert not (tmp_path / ".env.template").exists()
+    assert not (tmp_path / "obconfig.yaml.template").exists()
 
     command.unlink()
     skill = tmp_path / ".cursor/skills/engagement-intake"
@@ -622,7 +997,7 @@ def test_symlinked_host_parent_cannot_escape_project(tmp_path):
     assert result.returncode == 1
     assert "symlinked or escaping parent" in result.stdout
     assert list(external.iterdir()) == []
-    assert not (tmp_path / ".env.template").exists()
+    assert not (tmp_path / "obconfig.yaml.template").exists()
 
     # A malicious manifest cannot make uninstall follow the same parent.
     manifest = tmp_path / ".cursor/.obengineer-install.json"
@@ -1014,19 +1389,19 @@ def test_legacy_manifest_removes_verified_retired_command(tmp_path):
 
 def test_gitignore_uninstall_removes_only_tracked_lines(tmp_path):
     gitignore = tmp_path / ".gitignore"
-    gitignore.write_text("user-cache/\n.env\n")
+    gitignore.write_text("user-cache/\n/obconfig.yaml\n")
     run_install(tmp_path, "--cursor")
     manifest = json.loads(
         (tmp_path / ".obengineer/scaffold-manifest.json").read_text()
     )
-    assert ".env" not in manifest["gitignore"]["appended_lines"]
-    assert ".obengineer/" in manifest["gitignore"]["appended_lines"]
+    assert "/obconfig.yaml" not in manifest["gitignore"]["appended_lines"]
+    assert "/.obengineer/" in manifest["gitignore"]["appended_lines"]
 
     run_install(tmp_path, "--cursor")
     assert gitignore.read_text().count(".obengineer/") == 1
     gitignore.write_text(gitignore.read_text() + "later-user-line/\n")
     run_install(tmp_path, "--cursor", "--uninstall")
-    assert gitignore.read_text() == "user-cache/\n.env\nlater-user-line/\n"
+    assert gitignore.read_text() == "user-cache/\n/obconfig.yaml\nlater-user-line/\n"
 
 
 def test_uninstall_preserves_preexisting_empty_gitignore(tmp_path):
@@ -1056,7 +1431,7 @@ def test_failed_reinstall_rolls_back_all_host_paths(tmp_path, monkeypatch):
     manifest_before = (base / installer.MANIFEST_NAME).read_bytes()
     command = base / "commands/ob-start.md"
     command_before = command.read_bytes()
-    companion = base / "obengineer/inputs/engagement-inputs.template.yaml"
+    companion = base / "obengineer/obconfig.yaml.template"
     companion_before = companion.read_bytes()
     original_write = installer.Planner.write
     calls = 0

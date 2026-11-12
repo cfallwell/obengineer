@@ -1,0 +1,171 @@
+# obengineer schema v4 configuration
+#
+# Copy this committed template to project-root obconfig.yaml, keep that file local and
+# mode 0600, edit it, then run /ob-start. This template is the only field-definition
+# authority. obconfig.yaml may contain the three plaintext local secrets explicitly
+# marked below; it must never be committed, printed, or copied into generated output.
+#
+# Every field comment states its type/default and operational effect. Empty optional
+# strings/lists mean "not configured"; measured evidence outranks stated fallback data.
+
+schema_version: 4  # integer; required; fixed schema revision
+
+engagement:
+  application: ""  # string; required; stable application id used in paths and headings
+  customer: ""  # string; optional; default empty; customer-facing display name
+  scope: ""  # string; optional; default empty; narrative boundary, not implementation authorization
+  date: ""  # string; optional YYYY-MM-DD; default empty; deliverable date
+  document_version: 1  # integer >= 1; default 1; document-control version
+  deployment_environment: production  # nonempty scalar; required; this run targets exactly one environment
+
+# Implementation remains blocked until engineering separately authorizes this scope.
+initial_scope:
+  authorized: unknown  # enum unknown|full|repositories|parent_folders; default unknown
+  repositories: []  # list of owner/name; used only with repositories authorization
+  parent_folders: []  # list of {repository, path}; used only with parent_folders authorization
+  branches: []  # list of {repository, branch}; empty means each current checkout
+
+# One contained project-relative directory is the complete supplied-evidence boundary.
+# Every regular file is hashed each analysis; additions/changes are reread and deletions
+# remove cached context. Absolute paths, traversal, symlinks, and special files fail.
+artifacts:
+  directory: artifacts  # string; required; default artifacts; directory only
+
+cloud_diagrams:
+  generate: true  # boolean; default true; try production inventory without blocking when unavailable
+  notes: ""  # string; optional; account/region context, never credentials
+
+surfaces:
+  production_urls: []  # HTTP(S) URL list without userinfo credentials; required unless no_browser_reason is nonempty
+  no_browser_reason: ""  # string; required only when production_urls is empty; explains why no live scan
+  host_and_remotes: ""  # string; optional; bundle ownership and remote composition
+  edge_cdn: ""  # string; optional; edge/TLS boundary to verify
+
+# passive observes source/artifacts and normal application traffic only. safe-active adds
+# fixed-code, non-mutating GET/HEAD/OPTIONS checks solely to exact authorized HTTPS
+# origins, with fixed request/rate ceilings. none records the coverage gap. Never add
+# paths/wildcards here: they are not authorization.
+security_assessment:
+  mode: passive  # enum passive|safe-active|none; default passive
+  authorized_origins: []  # exact HTTPS origins; required/nonempty only for safe-active
+
+# Dummy credentials are for a disposable test account, never a production identity.
+# Both values are required together and must be rotated after analysis. The password is
+# a local plaintext secret in ignored obconfig.yaml; ${VAR} has no special meaning.
+analysis_access:
+  dummy_login:
+    login_id: ""  # string; secret-adjacent identity; never shown or generated
+    password: ""  # SECRET string; local dummy test password; never production
+
+# Read-only tenant access. Realm/token and host/token/index_allowlist are paired.
+# Tokens are plaintext only in ignored obconfig.yaml, sent only in HTTPS request headers,
+# never URLs, redirects, subprocess arguments, logs, provenance, or generated artifacts.
+splunk:
+  observability:
+    realm: ""  # lowercase realm string (for example us1); derives documented exact hosts
+    read_token: ""  # SECRET string; least-privilege Observability Cloud read token
+  platform:
+    host: ""  # exact HTTPS base host; no userinfo/query/fragment/path except optional trailing slash
+    read_token: ""  # SECRET string; least-privilege Splunk Platform read token
+    index_allowlist: []  # unique exact index names; wildcard, _all, and empty names are invalid
+
+backends:
+  languages: []  # string list; optional; selects applicable SDK guidance
+  deploy_targets: []  # string list; optional; shapes runtime/Collector placement
+  buses: []  # string list; optional; requires message inject/extract when evidenced
+  cloud_accounts: []  # string list; optional; account/subscription propagation boundaries
+  gateway: ""  # string; optional; TLS/header boundary
+
+tenancy:
+  o11y_org_id: ""  # string; optional identifier, never a token
+  thousandeyes_account_group: ""  # string; optional read-inventory scope
+  tokens_held_by: ""  # string; optional future ingest-token holder role, never a token
+
+standards:
+  percentile: p90  # scalar; default p90; one percentile for charts/detectors/objectives
+  workflow_naming: "{surface}.{object}.{verb}"  # string; default shown; new workflow naming contract
+  baggage_header_budget_bytes: 512  # integer > 0; default 512; total W3C Baggage budget
+  baggage_value_ceiling_bytes: 64  # integer > 0; default 64; maximum encoded value
+  unknown_dimension_threshold_pct: 1  # number >= 0; default 1; tolerated UNKNOWN grouping bucket
+
+# These values veto otherwise-correct designs. Leave empty only when no constraint was
+# supplied; the analysis must then state the gap, not infer consent or legal permission.
+constraints:
+  privacy_regimes: []  # string list; examples gdpr, ccpa, hipaa, pci; drives minimization/redaction
+  data_residency: ""  # string; regions telemetry may not leave; empty means unconfirmed, not unrestricted
+  consent_platform: ""  # string; browser consent gate; empty means loading permission is unverified
+  pii_deny_list_additions: []  # string list; customer-specific keys added to standard deny list
+  competing_eum_agents: []  # string list; existing RUM/EUM agents that affect duplication/performance
+  change_windows: ""  # string; freeze/deployment windows; empty means rollout timing is unconfirmed
+  who_deploys_front_end: ""  # string; optional role/team needed for front-end work
+  who_deploys_collector: ""  # string; optional role/team needed for Collector work
+
+outcomes:
+  first_journey: ""  # string; optional; leave empty for deterministic evidence-ranked selection
+  audiences: [sre, engineer, executive]  # unique string list; default shown; generated audience views
+
+# Optional stated fallback baselines. Use numbers only when supplied; unknown is accepted.
+# Direct measured facts outrank these values and disagreements remain in provenance.
+traffic_baseline:
+  rum:
+    sessions_per_day_avg: unknown  # number|unknown; stated average; sizes RUM consumption range
+    sessions_per_day_peak: unknown  # number|unknown; stated peak; sizes burst expectations
+    page_views_per_session: unknown  # number|unknown; stated navigation depth; estimates view volume
+  apm:
+    requests_per_minute_avg: unknown  # number|unknown; stated average; estimates trace volume
+    requests_per_minute_peak: unknown  # number|unknown; stated peak; sizes ingest bursts
+    spans_per_trace: unknown  # number|unknown; stated fan-out; estimates span volume
+  logs:
+    gb_per_hour_avg: unknown  # number|unknown; stated average; estimates log ingest
+    gb_per_hour_peak: unknown  # number|unknown; stated peak; sizes log bursts
+  infra_integrations: []  # list of {name, entities, metrics_per_entity}; default empty
+
+# Structured stated business facts only. No free-form issue-ranking commentary exists.
+# Unknown values stay unknown and are never replaced with industry assumptions.
+business_context:
+  incident_experience:
+    mttd_minutes: unknown  # number|unknown; outage-to-detection time; supports baseline comparison
+    mtta_minutes: unknown  # number|unknown; detection-to-acknowledgement time; supports response baseline
+    mttr_minutes: unknown  # number|unknown; acknowledgement-to-restoration time; supports recovery baseline
+    mtti_minutes: unknown  # number|unknown; isolation time when tracked separately
+    incidents_per_month: unknown  # number|unknown; stated incident frequency; sizes annual exposure
+    sev1_per_quarter: unknown  # number|unknown; stated severe-incident frequency
+    responders_per_incident: unknown  # number|unknown; bridge staffing; estimates response effort
+    war_room_hours_per_month: unknown  # number|unknown; stated coordination burden
+    pct_incidents_found_by_customers: unknown  # number|unknown; customer-detection exposure
+  operating_cost:
+    observability_tools_in_use: []  # string list; default empty; records evidenced overlap
+    annual_tooling_spend: unknown  # number|unknown; stated total only; never benchmark-inferred
+    duplicate_agents_on_page: unknown  # number|unknown; stated fallback, scan evidence outranks it
+    engineering_hours_per_month_on_triage: unknown  # number|unknown; stated investigation effort
+    fully_loaded_hourly_cost: unknown  # number|unknown; stated cost basis for effort arithmetic
+    opex_challenges: ""  # string; optional structured cost context, not issue-ranking pain input
+  revenue_context:
+    revenue_per_hour_online: unknown  # number|unknown; stated exposure basis, never inferred
+    orders_per_day: unknown  # number|unknown; stated order volume
+    average_order_value: unknown  # number|unknown; stated order value
+    conversion_rate_pct: unknown  # number|unknown; stated conversion baseline
+    cart_abandonment_pct: unknown  # number|unknown; stated abandonment baseline
+    peak_events: []  # string/object list; default empty; named seasonal demand events
+    revenue_challenges: ""  # string; optional structured revenue context, not journey ranking
+  business_information:
+    business_model: ""  # string; optional; explains how service outcomes connect to value
+    seasonality: ""  # string; optional; shapes baselines and rollout windows
+    growth_or_margin_pressure: ""  # string; optional; contextualizes efficiency objectives
+    regulatory_exposure: ""  # string; optional; supplements, never replaces, constraints
+    strategic_initiatives: []  # string list; default empty; links recommendations to stated programs
+
+public_evidence:
+  allowed: true  # boolean; default true; permits bounded public-record research
+  window_months: 12  # integer > 0; default 12; evidence lookback
+  brand_terms: []  # string list; exact brands/sub-brands to search
+  status_page_urls: []  # URL list; customer status/incident history sources
+  exclude_domains: []  # domain list; sources considered noise
+  competitors: []  # string list; field-performance comparison only
+
+developer_tools:
+  named: []  # string list; tools the human says are used
+  matched: []  # list of {tool, via, key}; names only, never credentials
+
+# Namespaced vendor/customer additions preserved verbatim but ignored by runtime logic.
+extensions: {}  # mapping; required namespace, default empty; never place credentials here

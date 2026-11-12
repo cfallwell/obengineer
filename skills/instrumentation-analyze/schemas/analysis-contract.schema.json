@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://obengineer.dev/schemas/analysis-contract.schema.json",
+  "$id": "https://obengineer.dev/schemas/analysis-contract-v3.schema.json",
   "title": "Canonical observability analysis contract",
   "type": "object",
   "additionalProperties": false,
@@ -23,7 +23,7 @@
     "reference"
   ],
   "properties": {
-    "schemaVersion": { "const": 2 },
+    "schemaVersion": { "const": 3 },
     "application": {
       "type": "object",
       "additionalProperties": false,
@@ -711,15 +711,16 @@
         "cardinality": {
           "type": "object",
           "additionalProperties": false,
-          "required": ["budgetStatus", "basis", "entitlement", "inUse", "reserved", "proposedCost", "headroomAfter", "dimensionEligible", "attributeOnly"],
+          "required": ["budgetStatus", "basis", "contractualEntitlement", "usage", "enforcedSystemLimit", "reserved", "proposedCost", "systemHeadroomAfter", "dimensionEligible", "attributeOnly"],
           "properties": {
-            "budgetStatus": { "enum": ["measured", "supplied", "unavailable"] },
+            "budgetStatus": { "enum": ["measured", "unavailable"] },
             "basis": { "$ref": "#/$defs/substantive" },
-            "entitlement": { "type": ["integer", "null"], "minimum": 1 },
-            "inUse": { "type": ["integer", "null"], "minimum": 0 },
+            "contractualEntitlement": { "type": "null" },
+            "usage": { "type": ["integer", "null"], "minimum": 0 },
+            "enforcedSystemLimit": { "type": ["integer", "null"], "minimum": 1 },
             "reserved": { "type": ["integer", "null"], "minimum": 0 },
             "proposedCost": { "type": "integer", "minimum": 0 },
-            "headroomAfter": { "type": ["integer", "null"] },
+            "systemHeadroomAfter": { "type": ["integer", "null"] },
             "dimensionEligible": { "$ref": "#/$defs/idList" },
             "attributeOnly": { "$ref": "#/$defs/idList" }
           },
@@ -731,18 +732,20 @@
               },
               "then": {
                 "properties": {
-                  "entitlement": { "type": "null" },
-                  "inUse": { "type": "null" },
+                  "contractualEntitlement": { "type": "null" },
+                  "usage": { "type": "null" },
+                  "enforcedSystemLimit": { "type": "null" },
                   "reserved": { "type": "null" },
-                  "headroomAfter": { "type": "null" }
+                  "systemHeadroomAfter": { "type": "null" }
                 }
               },
               "else": {
                 "properties": {
-                  "entitlement": { "type": "integer", "minimum": 1 },
-                  "inUse": { "type": "integer", "minimum": 0 },
+                  "contractualEntitlement": { "type": "null" },
+                  "usage": { "type": "integer", "minimum": 0 },
+                  "enforcedSystemLimit": { "type": "integer", "minimum": 1 },
                   "reserved": { "type": "integer", "minimum": 0 },
-                  "headroomAfter": { "type": "integer" }
+                  "systemHeadroomAfter": { "type": "integer" }
                 }
               }
             }

@@ -77,9 +77,10 @@ Six subsections, in this order.
 
 ### `### The problem in the customer's words`
 
-The `commentary` input, quoted, attributed to the role that said it. Where there is no
-commentary, the `known_pain` list serves; where there is neither, this subsection is one
-sentence saying so, and the section leads with measured and public evidence instead.
+Use only structured incident, operating-cost, revenue, and business-information facts
+from obconfig, each attributed as stated. There is no free-form pain commentary input.
+When structured facts are absent, lead with measured and public evidence and state the
+specific unavailable facts without inventing a narrative.
 
 Quote, do not paraphrase. A paraphrase reads as our characterisation of their problem, and
 the executive reading it stops recognising themselves in the document.

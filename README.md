@@ -14,7 +14,7 @@ repository remains the toolkit.
 - Git
 - Python 3.10+
 - `python-docx` and `markdown-it-py==4.2.0` only when rendering the optional Word summary
-- `PyYAML==6.0.3` for input validation
+- `PyYAML==6.0.3` for schema-v4 config validation
 - Terraform CLI for `/ob-terraform`
 
 ```bash
@@ -32,19 +32,16 @@ git -C /path/to/memory-repo init
 ```
 
 Use `--claude`, `--codex`, or `--all` for other hosts. Restart the host after
-installation. A project install creates only missing `.gitignore`, `.env.template`, and
-`artifacts/README.md`; it never overwrites existing root content.
-
-Optional read-only Splunk API access is configured interactively without printing
-credentials:
-
-```bash
-cd /path/to/memory-repo
-/path/to/obengineer/scripts/setup-splunk-access.sh
-```
+installation. A project install creates only missing `.gitignore`,
+`obconfig.yaml.template`, and `artifacts/README.md`; it never overwrites existing root
+content or owns an actual `obconfig.yaml`.
 
 obengineer also uses relevant MCP tools already connected to the host. MCP supplements
 direct APIs; it is not the only tenant data source.
+Analysis atomically claims its authorized snapshot, loads the supported non-secret
+`config-projection`, and invokes supported `direct-api` and `safe-active` subcommands;
+verification invokes `direct-api --phase verification`.
+Only centralized-redacted dispositions and aggregate measurements feed provenance.
 
 ## Use
 
@@ -59,11 +56,14 @@ ChatGPT Desktop:     @ob-start
 ChatGPT Desktop requires its local executor for these Python-backed workflows. ChatGPT
 web/cloud and Work surfaces without local execution are not supported.
 
-Before any discovery, the guided start immediately asks for the application, an explicit
-production URL or no-browser reason, and what hurts. It then offers numbered optional
-inputs. Reply with, for example, `yes 1 3 4`; after those answers it shows `[x]`, `[ ]`,
-and `[-]` status and asks again. Only explicit `no` authorizes analysis. Missing optional
-answers do not block analysis.
+`/ob-start` creates ignored mode-0600 `obconfig.yaml` from the canonical root template
+when missing, then stops for editing. On rerun it validates, hashes the complete artifact
+directory, displays a redacted summary, and asks whether to proceed. Only exact `yes`
+creates digest-bound one-shot analysis authorization. Analysis then atomically claims
+that snapshot, finalizes validated generated outputs immediately before dispatch, and
+binds them to the staged Git tree. Push/PR work requires an exact matching committed
+tree and verified dispatch. Consumption rechecks immutable Git objects and advances the
+artifact baseline; decline/failure aborts only the claim.
 
 At any time:
 
@@ -73,9 +73,9 @@ Codex CLI:           $ob-add-inputs, $ob-edit-inputs
 ChatGPT Desktop:     @ob-add-inputs, @ob-edit-inputs
 ```
 
-Each addition or edit automatically creates the next immutable `[V<N>]` analysis and one
-review PR. The PR contains the linked Markdown site, schema, ledger, verification plan,
-versioned wiki, and every proposed work order.
+Edit local `obconfig.yaml`, then use either compatibility command. A changed config uses
+the common summary/proceed gate and creates the next immutable `[V<N>]` analysis and one
+review PR. An unchanged config stops with an edit/rerun instruction.
 
 When review is complete, reply `yes` to accept the version and merge the PR. The agent
 resolves commits and content digests internally; no SHA or named accepter is required.

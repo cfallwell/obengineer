@@ -2,7 +2,8 @@
 
 Traceable requirements for the linked analysis site. The authoring authorities are
 `skills/references/analysis-site.md` and the canonical
-`skills/instrumentation-analyze/schemas/analysis-contract.schema.json`.
+`skills/instrumentation-analyze/schemas/analysis-contract-v3.schema.json`; frozen
+schema-v2 accepted contracts remain supported by the version-selecting validator.
 
 ## Artifacts
 

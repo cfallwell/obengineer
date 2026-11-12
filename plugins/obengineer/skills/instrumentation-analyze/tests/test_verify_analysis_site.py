@@ -39,6 +39,42 @@ def test_conforming_site_passes(site):
     assert verify.check(version, root, FIXTURE / "analysis-contract.json") == []
 
 
+def test_exact_parent_schema_v2_fixture_renders_and_verifies_without_mutation(
+    tmp_path,
+):
+    fixture = (
+        Path(__file__).resolve().parent
+        / "fixtures"
+        / "representative-v2"
+        / "analysis-contract.json"
+    )
+    before = fixture.read_bytes()
+    contract = json.loads(before)
+    app = contract["application"]["id"]
+    version = (
+        tmp_path / "docs" / "observability" / "analysis" / app / "V1"
+    )
+    renderer.Renderer(contract, version).render()
+    work_orders = (
+        tmp_path / "wiki" / "apps" / app / "versions" / "V1"
+        / "implementation" / "work-orders"
+    )
+    work_orders.mkdir(parents=True)
+    for order in contract["workOrders"]:
+        (work_orders / f"{order['id']}.md").write_text(
+            f"# {order['id']}\n\n{order['outcome']}\n"
+        )
+
+    assert verify.check(version, tmp_path, fixture) == []
+    assert fixture.read_bytes() == before
+    cardinality = (version / "contracts" / "cardinality.md").read_text()
+    assert "maps legacy `entitlement`, `inUse`, and `headroomAfter` losslessly" in cardinality
+    assert "Enforced system limit" in cardinality
+    assert "50000" in cardinality
+    assert "30000" in cardinality
+    assert "12600" in cardinality
+
+
 def test_broken_link_fails(site):
     version, root = site
     (version / "index.md").write_text(

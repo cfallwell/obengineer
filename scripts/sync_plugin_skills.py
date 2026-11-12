@@ -52,10 +52,15 @@ CURSOR_LINKS = ROOT / ".cursor" / "skills"
 CODEX_LINKS = ROOT / ".agents" / "skills"
 IGNORE_NAMES = ["__pycache__", ".pytest_cache", ".DS_Store"]
 IGNORE = shutil.ignore_patterns(*IGNORE_NAMES, "*.pyc")
-# Skills and prompts link to agents, prompts, and the engagement input template, so the bundle carries them too;
+# Skills and prompts link to agents and prompts, so the bundle carries them too;
 # an installed plugin cannot reach back into this repository.
-COMPANION_DIRS = ("agents", "prompts", "inputs", "templates")
-COMPANION_SCRIPTS = ("setup-splunk-access.sh",)
+COMPANION_DIRS = ("agents", "prompts", "templates")
+COMPANION_FILES = ("obconfig.yaml.template",)
+RETIRED_COMPANIONS = (
+    "inputs",
+    "scripts/setup-splunk-access.sh",
+    "templates/memory-repo/.env.template",
+)
 
 
 def skill_names() -> list[str]:
@@ -175,6 +180,9 @@ def codex_skill_problems(names: list[str]) -> list[str]:
 
 def companion_problems() -> list[str]:
     problems: list[str] = []
+    for name in RETIRED_COMPANIONS:
+        if (PLUGIN / name).exists() or (PLUGIN / name).is_symlink():
+            problems.append(f"stale plugin companion: {name}")
     for name in COMPANION_DIRS:
         src, dst = ROOT / name, PLUGIN / name
         if not dst.exists():
@@ -194,12 +202,12 @@ def companion_problems() -> list[str]:
                 continue
             if f.is_file() and not (src / f.relative_to(dst)).exists():
                 problems.append(f"only in plugin: {name}/{f.relative_to(dst)}")
-    for name in COMPANION_SCRIPTS:
-        src, dst = ROOT / "scripts" / name, PLUGIN / "scripts" / name
+    for name in COMPANION_FILES:
+        src, dst = ROOT / name, PLUGIN / name
         if not dst.is_file():
-            problems.append(f"missing from plugin: scripts/{name}")
+            problems.append(f"missing from plugin: {name}")
         elif not filecmp.cmp(src, dst, shallow=False):
-            problems.append(f"differs: scripts/{name}")
+            problems.append(f"differs: {name}")
     return problems
 
 
@@ -240,10 +248,15 @@ def sync(names: list[str]) -> None:
             shutil.rmtree(dst)
         shutil.copytree(ROOT / name, dst, ignore=IGNORE)
         print(f"  synced {name}/ (companion)")
-    (PLUGIN / "scripts").mkdir(parents=True, exist_ok=True)
-    for name in COMPANION_SCRIPTS:
-        shutil.copy2(ROOT / "scripts" / name, PLUGIN / "scripts" / name)
-        print(f"  synced scripts/{name} (companion)")
+    for name in COMPANION_FILES:
+        shutil.copy2(ROOT / name, PLUGIN / name)
+        print(f"  synced {name} (companion)")
+    for name in RETIRED_COMPANIONS:
+        stale = PLUGIN / name
+        if stale.is_dir() and not stale.is_symlink():
+            shutil.rmtree(stale)
+        elif stale.exists() or stale.is_symlink():
+            stale.unlink()
     if PLUGIN_COMMANDS.exists():
         shutil.rmtree(PLUGIN_COMMANDS)
     PLUGIN_COMMANDS.mkdir(parents=True)

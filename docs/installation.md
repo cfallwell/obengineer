@@ -2,7 +2,7 @@
 
 obengineer installs Markdown command entry points and skill directories into an agent
 host. The installer does not install Python, create a Git repository, or write a
-credential. The guided setup script creates local `.env` without displaying values.
+credential. Credentials remain only in ignored local `obconfig.yaml`.
 
 ## 1. Choose where generated artifacts will live
 
@@ -74,15 +74,16 @@ Project-scoped installation also creates only missing root scaffold files:
 
 ```text
 .gitignore
-.env.template
+obconfig.yaml.template
 artifacts/README.md
 ```
 
 It never overwrites an existing file. `.obengineer/scaffold-manifest.json` records
 digests for files the installer created and the exact `.gitignore` lines it added.
 Reinstall preserves edits. After the final installed host is removed, uninstall removes
-only unchanged owned scaffold files and only its tracked ignore lines; it never removes
-preexisting/user ignore lines, the `artifacts/` directory, or files the user added.
+only unchanged owned scaffold files and safe tracked ignore lines; it never removes
+actual `obconfig.yaml`, its ignore protection while it exists, the `artifacts/`
+directory, or files the user added.
 
 ### Install locations
 
@@ -97,8 +98,8 @@ skills. It receives no prompt files. Each wrapper delegates to the matching comm
 contract, preserves invocation arguments as `$ARGUMENTS`, and disables implicit
 invocation. Canonical Codex skill directories are always copied because Codex does not
 discover skill-directory symlinks that resolve outside the opened repository. The
-authoritative input template is copied to the installer-owned namespaced companion
-directory `<Codex base>/obengineer/inputs`.
+canonical config template is copied byte-identically to the installer-owned companion
+`<Codex base>/obengineer/obconfig.yaml.template`.
 
 Each host directory receives `.obengineer-install.json`. That manifest records the
 source checkout, scope, and a digest or symlink target for every installer-owned path.
@@ -116,7 +117,7 @@ and ignored.
 | `--codex` | Select Codex. |
 | `--all` | Select all supported hosts. It can be combined with individual host flags without changing the result. |
 | `--project PATH` | Resolve `PATH` to an absolute path and install into host-specific directories beneath it. Without this option, installation is under the current user's home directory. |
-| `--copy` | Copy Cursor and Claude skill trees instead of creating relative directory symlinks, and install their namespaced `obengineer/inputs` companion. Codex canonical skills and companion are always copied; its workflow wrappers are always rendered. |
+| `--copy` | Copy Cursor and Claude skill trees instead of creating relative directory symlinks, and install their namespaced config-template companion. Codex canonical skills and companion are always copied; its workflow wrappers are always rendered. |
 | `--list` | Display all host paths and whether each host has an obengineer manifest, then exit without changing files. |
 | `--dry-run` | Print every planned link, copy, write, or removal without changing files or writing a manifest. |
 | `--uninstall` | Remove paths listed in the selected host's manifest. Combine it with a host selector and the same `--project` scope used for installation. |
@@ -128,7 +129,7 @@ At least one host selector is required except with `--list`.
 
 Symlinks are the Cursor and Claude default. A canonical skill edit in the toolkit is then
 visible to those hosts immediately, although the host may need a restart or new session.
-Codex always receives materialized canonical skill directories plus the namespaced input
+Codex always receives materialized canonical skill directories plus the namespaced config
 companion so `/skills` discovery and direct `$engagement-intake` execution do not depend
 on links outside the opened repository. `--copy` selects materialized skills for Cursor
 and Claude as well and installs the same companion beneath their host base. Default
@@ -163,33 +164,30 @@ The installer never replaces an untracked destination with the same skill or com
 name. It reports `REFUSE` and leaves the host and project scaffold unchanged. Move or
 back up the reported user file explicitly before retrying. A reinstall replaces only
 paths whose manifest ownership record still matches; an operational failure rolls those
-changes back.
+changes back. Inner host and outer scaffold transactions journal the exact inode, type,
+mode, and content digest they write. Rollback removes or restores only a current exact
+match. A concurrent file, symlink, or directory replacement is preserved, the backup
+staging directory is retained for manual recovery, and installation exits nonzero with
+an incomplete-rollback error. After a backup move, every host target is created
+exclusively; the installer never removes or overwrites a pathname that appears before
+the initial link, copy, or write. Transaction staging is a unique mode-0700 hidden
+directory on the target's own filesystem, never the system temporary directory.
+Multi-device transactions use one contained staging directory per device. If any
+required same-filesystem staging directory cannot be created, installation fails before
+changing a target.
 
 Root scaffold files follow a stricter rule: existing files are never replaced, including
 files created by an earlier install. An owned file changed after installation is treated
 as user content and preserved during uninstall.
 
-## 4. Configure optional read-only Splunk access
+## 4. Configure the engagement
 
-The project scaffold begins `.env.template` with `PRODUCTION_URL`, `TEST_LOGIN_ID`, and
-`PASSWORD_REF`, then maps optional start inputs to engagement-input fields.
-`ARTIFACTS_DIR=artifacts` is prefilled; `ARTIFACT_DIAGRAMS`, `ARTIFACT_NARRATIVE`,
-`PRIOR_CONTRACT`, `PRIOR_SCHEMA`, `PRIOR_SCANS`, and `HOUSE_STYLE_DOCX` persist supplied
-artifact paths. Artifact paths are project-relative and cannot traverse outside the
-project; host-uploaded files use their project artifact reference rather than a machine
-absolute path. `PASSWORD_REF` must be a `${VAR}` reference; there is no raw-password
-variable.
-
-For interactive read-only Splunk credentials, from the memory repository run:
-
-```bash
-/path/to/obengineer/scripts/setup-splunk-access.sh
-```
-
-The script explains where to create least-privilege credentials, prompts in the terminal,
-writes `.env` with restrictive permissions, and ensures `.env` is ignored. It never prints
-tokens. Existing relevant MCP integrations are discovered by `/ob-start`; direct APIs
-remain available when an MCP server is absent or incomplete.
+Copy root `obconfig.yaml.template` to `obconfig.yaml`, set mode `0600`, and edit it.
+`/ob-start` performs the copy safely when missing and then stops. The template owns all
+field definitions and consequences. Plaintext least-privilege read tokens and a
+disposable dummy password are accepted only in ignored local config; `${VAR}` references
+are neither required nor interpreted. Relevant MCP integrations supplement mandatory
+configured direct API attempts.
 
 ## Claude Code plugin installation
 

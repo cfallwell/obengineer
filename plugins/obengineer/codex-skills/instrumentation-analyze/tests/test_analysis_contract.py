@@ -16,6 +16,7 @@ sys.path.insert(0, str(SCRIPTS))
 from analysis_contract import (  # noqa: E402
     load_json,
     migrate_contract,
+    normalize_contract,
     validate_contract,
     validate_implementation_mapping,
     validate_manifest,
@@ -23,6 +24,7 @@ from analysis_contract import (  # noqa: E402
     validate_worker_results,
 )
 from render_analysis_site import Renderer  # noqa: E402
+from migrate_analysis_contract import main as migrate_contract_main  # noqa: E402
 from validate_analysis import main as validate_analysis_main  # noqa: E402
 
 
@@ -43,6 +45,11 @@ def schema_v1_contract():
         order.pop("repositoryMapping")
     value["contracts"]["cardinality"].pop("budgetStatus")
     value["contracts"]["cardinality"].pop("basis")
+    cardinality = value["contracts"]["cardinality"]
+    cardinality["entitlement"] = cardinality.pop("enforcedSystemLimit")
+    cardinality["inUse"] = cardinality.pop("usage")
+    cardinality["headroomAfter"] = cardinality.pop("systemHeadroomAfter")
+    cardinality.pop("contractualEntitlement")
     return value
 
 
@@ -86,6 +93,7 @@ def digest_tree(root: Path) -> str:
 
 
 def test_representative_contract_and_job_audit_pass():
+    assert contract()["schemaVersion"] == 3
     assert validate_contract(contract()) == []
     assert validate_manifest(manifest()) == []
     assert validate_worker_results(manifest(), results()) == []
@@ -193,16 +201,83 @@ def test_schema_v1_contract_migrates_deterministically_before_validation():
     migrated = migrate_contract(old)
 
     assert old["schemaVersion"] == 1
-    assert migrated["schemaVersion"] == 2
+    assert migrated["schemaVersion"] == 3
     assert migrated["workflows"][0]["codeMapping"]["status"] == "mapped"
     assert migrated["businessTransactions"][0]["workflowCatalog"] == [
         "checkout.payment.authorize",
         "checkout.order.submit",
     ]
     assert migrated["workOrders"][0]["repositoryMapping"]["status"] == "mapped"
-    assert migrated["contracts"]["cardinality"]["budgetStatus"] == "supplied"
+    cardinality = migrated["contracts"]["cardinality"]
+    assert cardinality["budgetStatus"] == "unavailable"
+    assert cardinality["usage"] is None
+    assert cardinality["enforcedSystemLimit"] is None
+    assert cardinality["systemHeadroomAfter"] is None
     assert validate_contract(old) == []
     assert migrate_contract(migrated) == migrated
+
+
+def test_frozen_parent_schema_v2_validates_and_normalizes_without_mutation():
+    fixture = (
+        Path(__file__).resolve().parent
+        / "fixtures"
+        / "representative-v2"
+        / "analysis-contract.json"
+    )
+    frozen_schema = SKILL / "schemas" / "analysis-contract-v2.schema.json"
+    fixture_bytes = fixture.read_bytes()
+    schema_bytes = frozen_schema.read_bytes()
+    # Pin the exact parent/main bytes without requiring a remote ref in shallow CI.
+    assert hashlib.sha256(fixture_bytes).hexdigest() == (
+        "fda17b65c6b5a2cd026aeb42e891356bd93c069c5edac515756b8ad1ced36ab8"
+    )
+    assert hashlib.sha256(schema_bytes).hexdigest() == (
+        "aca0c133553ef27cc140bdc71fb65807b783e69c0bfeecfadf8b4a026705c969"
+    )
+    original_bytes = fixture.read_bytes()
+    value = load_json(fixture)
+    original_value = copy.deepcopy(value)
+
+    assert validate_contract(value) == []
+    normalized = normalize_contract(value)
+    assert normalized["schemaVersion"] == 3
+    cardinality = normalized["contracts"]["cardinality"]
+    assert cardinality["budgetStatus"] == "measured"
+    assert cardinality["usage"] == 30000
+    assert cardinality["enforcedSystemLimit"] == 50000
+    assert cardinality["reserved"] == 5000
+    assert cardinality["proposedCost"] == 2400
+    assert cardinality["systemHeadroomAfter"] == 12600
+    assert cardinality["contractualEntitlement"] is None
+    assert "entitlement" not in cardinality
+    assert "inUse" not in cardinality
+    assert "headroomAfter" not in cardinality
+    assert value == original_value
+    assert fixture.read_bytes() == original_bytes
+
+
+def test_explicit_schema_v2_working_copy_migration_writes_schema_v3(tmp_path):
+    source = (
+        Path(__file__).resolve().parent
+        / "fixtures"
+        / "representative-v2"
+        / "analysis-contract.json"
+    )
+    before = source.read_bytes()
+    output = tmp_path / "analysis-contract-v3.json"
+
+    assert migrate_contract_main([str(source), "--output", str(output)]) == 0
+    migrated = load_json(output)
+    assert migrated["schemaVersion"] == 3
+    assert migrated["contracts"]["cardinality"]["usage"] == 30000
+    assert migrated["contracts"]["cardinality"]["enforcedSystemLimit"] == 50000
+    assert migrated["contracts"]["cardinality"]["systemHeadroomAfter"] == 12600
+    assert validate_contract(migrated) == []
+    assert source.read_bytes() == before
+    assert migrate_contract_main(
+        [str(source), "--output", str(source)]
+    ) == 1
+    assert source.read_bytes() == before
 
 
 def test_schema_v1_empty_transaction_catalog_migrates_as_unresolved():
@@ -256,20 +331,21 @@ def test_unavailable_cardinality_budget_preserves_cost_without_invented_headroom
     cardinality.update({
         "budgetStatus": "unavailable",
         "basis": (
-            "The proposed MTS cost uses bounded dimension products, while entitlement "
-            "and current usage were neither supplied nor measurable in this run."
+            "The proposed MTS cost uses bounded dimension products, while current usage "
+            "and an enforced system limit were not measurable in this run."
         ),
-        "entitlement": None,
-        "inUse": None,
+        "contractualEntitlement": None,
+        "usage": None,
+        "enforcedSystemLimit": None,
         "reserved": None,
-        "headroomAfter": None,
+        "systemHeadroomAfter": None,
     })
     assert validate_contract(value) == []
 
-    cardinality["entitlement"] = 50000
+    cardinality["enforcedSystemLimit"] = 50000
     failures = validate_contract(value)
     assert any(
-        "unavailable budget cannot claim entitlement" in failure
+        "unavailable budget cannot claim usage" in failure
         or "expected null" in failure
         for failure in failures
     )
@@ -475,9 +551,9 @@ def test_telemetry_workflow_and_lexical_quality_mutations_fail():
 
 def test_cardinality_arithmetic_is_checked():
     value = contract()
-    value["contracts"]["cardinality"]["headroomAfter"] += 1
+    value["contracts"]["cardinality"]["systemHeadroomAfter"] += 1
     assert any(
-        "entitlement - inUse - reserved - proposedCost" in failure
+        "enforcedSystemLimit - usage - reserved - proposedCost" in failure
         for failure in validate_contract(value)
     )
 
@@ -555,7 +631,13 @@ def test_published_json_schemas_capture_bounded_jobs_and_required_objects():
         "contracts",
         "operations",
     }
-    assert contract_schema["properties"]["schemaVersion"]["const"] == 2
+    assert contract_schema["properties"]["schemaVersion"]["const"] == 3
+    assert contract_schema == json.loads(
+        (SKILL / "schemas" / "analysis-contract-v3.schema.json").read_text()
+    )
+    assert json.loads(
+        (SKILL / "schemas" / "analysis-contract-v2.schema.json").read_text()
+    )["properties"]["schemaVersion"]["const"] == 2
     definitions = contract_schema["$defs"]
     assert {"applicationScope", "observedFrom", "observedTo", "readAt", "source",
             "provenance", "portfolioEvidence"} <= set(

@@ -15,7 +15,7 @@ wiki/
         V<N>/
           index.md                     # version map and analysis breadcrumb
           meta/
-            engagement-inputs.yaml
+            obconfig-provenance.json       # sanitized statuses/tree metadata; never actual config
             versions.md
             run-log.md
             decisions.md

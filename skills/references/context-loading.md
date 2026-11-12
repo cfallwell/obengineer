@@ -16,8 +16,8 @@ Record every decision in `provenance-ledger.json` under
 | Deploy target or production inventory identifies a cloud/runtime | exactly that cloud/runtime reference |
 | An off-box DNS/CDN/SaaS path exists | ThousandEyes reference |
 | ITSI or Enterprise Security is found in tenant evidence | that product reference |
-| Logs require trace correlation and LOC entitlement is not false | Log Observer Connect reference |
-| Session replay is entitled and accepted in writing | session-replay detail |
+| Logs require trace correlation and direct tenant evidence confirms LOC availability | Log Observer Connect reference |
+| Direct tenant evidence confirms replay and separate written acceptance exists | session-replay detail |
 | A user-facing canary question exists | Synthetics detail |
 
 Unknown language, bus, runtime, or ownership creates an unresolved ledger entry and a

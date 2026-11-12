@@ -10,7 +10,7 @@ import sys
 from pathlib import Path
 from typing import Any, Iterable
 
-from analysis_contract import load_json, migrate_contract, validate_contract
+from analysis_contract import load_json, normalize_contract, validate_contract
 
 SECTIONS = (
     ("Architecture", "architecture", "overview/index.md"),
@@ -79,7 +79,9 @@ def finish(related: Iterable[tuple[str, str]], next_link: tuple[str, str]) -> st
 
 class Renderer:
     def __init__(self, contract: dict[str, Any], output: Path) -> None:
-        self.c = migrate_contract(contract)
+        self.source_contract = contract
+        self.source_schema_version = contract.get("schemaVersion")
+        self.c = normalize_contract(contract)
         self.output = output.resolve()
         self.written: set[Path] = set()
 
@@ -119,7 +121,7 @@ class Renderer:
         )
 
     def render(self) -> None:
-        failures = validate_contract(self.c)
+        failures = validate_contract(self.source_contract)
         if failures:
             raise ValueError(
                 "refusing to render an invalid contract: " + "; ".join(failures)
@@ -715,7 +717,7 @@ class Renderer:
                 ),
             ),
             ("Parent-child, span links, and pivots", "joins.md", "An explicit join type for every evidenced causal or identity boundary."),
-            ("Cardinality and MPM", "cardinality.md", "Entitlement arithmetic and explicit dimension-eligible versus attribute-only lists."),
+            ("Cardinality and MPM", "cardinality.md", "Measured usage/system-limit arithmetic and explicit dimension-eligible versus attribute-only lists."),
         ]
         if c["spaRoutes"]["applicable"]:
             pages.insert(0, ("Single initialization and SPA routes", "single-init-spa-routes.md", "One provider owner, bounded route classification, and client-navigation spans."))
@@ -826,11 +828,68 @@ class Renderer:
                 + finish((("Contracts", "index.md"), ("Cardinality", "cardinality.md")), ("Return to Contracts", "index.md")),
             )
         card = c["cardinality"]
-        if card["budgetStatus"] == "unavailable":
+        if self.source_schema_version == 2:
+            historical = self.source_contract["contracts"]["cardinality"]
+            if historical["budgetStatus"] == "unavailable":
+                budget = (
+                    "This accepted schema-v2 snapshot recorded no available budget "
+                    "inputs. Its historical semantics are preserved unchanged.\n\n"
+                    + table(
+                        ("Budget status", "Proposed cost", "Basis"),
+                        ((
+                            historical["budgetStatus"],
+                            historical["proposedCost"],
+                            historical["basis"],
+                        ),),
+                    )
+                )
+            elif historical["budgetStatus"] == "measured":
+                budget = (
+                    "This immutable schema-v2 snapshot recorded measured usage. The "
+                    "in-memory compatibility view maps legacy `entitlement`, `inUse`, "
+                    "and `headroomAfter` losslessly to `enforcedSystemLimit`, `usage`, "
+                    "and `systemHeadroomAfter`; the source file remains unchanged.\n\n"
+                    + table(
+                        (
+                            "Status", "Enforced system limit", "Usage", "Reserved",
+                            "Proposed cost", "System headroom after",
+                        ),
+                        ((
+                            card["budgetStatus"],
+                            card["enforcedSystemLimit"],
+                            card["usage"],
+                            card["reserved"],
+                            card["proposedCost"],
+                            card["systemHeadroomAfter"],
+                        ),),
+                    )
+                )
+            else:
+                budget = (
+                    "This accepted schema-v2 snapshot used the historical entitlement "
+                    "budget model. Values and labels below are preserved for review and "
+                    "are not reclassified as schema-v3 enforced system limits.\n\n"
+                    + table(
+                        (
+                            "Status", "Entitlement", "In use", "Reserved",
+                            "Proposed cost", "Headroom after",
+                        ),
+                        ((
+                            historical["budgetStatus"],
+                            historical["entitlement"],
+                            historical["inUse"],
+                            historical["reserved"],
+                            historical["proposedCost"],
+                            historical["headroomAfter"],
+                        ),),
+                    )
+                )
+        elif card["budgetStatus"] == "unavailable":
             budget = (
-                "No entitlement or current-usage budget was supplied or measured. "
+                "No current usage or enforced system limit was measured. "
                 "The design therefore reports its proposed MTS cost without inventing "
-                "headroom or silently trimming required dimensions.\n\n"
+                "system headroom or silently trimming required dimensions. Contractual "
+                "entitlement is unavailable without a separate measured source.\n\n"
                 + table(
                     ("Budget status", "Proposed cost", "Basis"),
                     ((card["budgetStatus"], card["proposedCost"], card["basis"]),),
@@ -838,14 +897,14 @@ class Renderer:
             )
         else:
             budget = (
-                "The budget is arithmetic against the supplied or measured entitlement. "
-                "The proposed promotion must fit after current use and the operational "
-                "reserve.\n\n"
+                "The budget is arithmetic against directly measured usage and an enforced "
+                "system limit, which is not contractual entitlement. The proposed promotion "
+                "is shown after current use and the operational reserve.\n\n"
                 + table(
-                    ("Status", "Entitlement", "In use", "Reserved", "Proposed cost", "Headroom after"),
+                    ("Status", "System limit", "Usage", "Reserved", "Proposed cost", "System headroom after"),
                     ((
-                        card["budgetStatus"], card["entitlement"], card["inUse"],
-                        card["reserved"], card["proposedCost"], card["headroomAfter"],
+                        card["budgetStatus"], card["enforcedSystemLimit"], card["usage"],
+                        card["reserved"], card["proposedCost"], card["systemHeadroomAfter"],
                     ),),
                 )
             )

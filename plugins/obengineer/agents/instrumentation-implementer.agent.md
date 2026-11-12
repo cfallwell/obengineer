@@ -20,7 +20,9 @@ full SHA. Stop if it fails.
 
 Do not load, cite, or mirror any document that is not attached or pathed in this session. Do not search the workspace for unrelated specs.
 
-Never read, log, commit, or embed RUM tokens, API tokens, private keys, identity-provider secrets, PAN, CVV, passwords, or `.env` values. Use existing secret injection. If you find a secret in the repo, **stop and report**.
+Never read, log, commit, or embed RUM tokens, API tokens, private keys,
+identity-provider secrets, PAN, CVV, passwords, or local obconfig secret values. Use
+existing secret injection. If you find a secret in a tracked file, **stop and report**.
 
 You do **not** deploy. You do **not** rotate credentials. You do **not** disable security controls.
 

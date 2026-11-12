@@ -1,0 +1,1202 @@
+{
+  "type": "object",
+  "required": [
+    "schema_version",
+    "engagement",
+    "initial_scope",
+    "artifacts",
+    "cloud_diagrams",
+    "surfaces",
+    "security_assessment",
+    "analysis_access",
+    "splunk",
+    "backends",
+    "tenancy",
+    "standards",
+    "constraints",
+    "outcomes",
+    "traffic_baseline",
+    "business_context",
+    "public_evidence",
+    "developer_tools",
+    "extensions"
+  ],
+  "properties": {
+    "schema_version": {
+      "type": "integer",
+      "const": 4,
+      "x-obengineer-source-line": 11
+    },
+    "engagement": {
+      "type": "object",
+      "required": [
+        "application",
+        "customer",
+        "scope",
+        "date",
+        "document_version",
+        "deployment_environment"
+      ],
+      "properties": {
+        "application": {
+          "type": "string",
+          "x-obengineer-source-line": 14,
+          "minLength": 1
+        },
+        "customer": {
+          "type": "string",
+          "x-obengineer-source-line": 15
+        },
+        "scope": {
+          "type": "string",
+          "x-obengineer-source-line": 16
+        },
+        "date": {
+          "type": "string",
+          "x-obengineer-source-line": 17
+        },
+        "document_version": {
+          "type": "integer",
+          "minimum": 1,
+          "x-obengineer-source-line": 18
+        },
+        "deployment_environment": {
+          "type": "string",
+          "x-obengineer-source-line": 19,
+          "minLength": 1
+        }
+      },
+      "additionalProperties": false,
+      "x-obengineer-source-line": 14
+    },
+    "initial_scope": {
+      "type": "object",
+      "required": [
+        "authorized",
+        "repositories",
+        "parent_folders",
+        "branches"
+      ],
+      "properties": {
+        "authorized": {
+          "type": "string",
+          "enum": [
+            "unknown",
+            "full",
+            "repositories",
+            "parent_folders"
+          ],
+          "x-obengineer-source-line": 23
+        },
+        "repositories": {
+          "type": "array",
+          "x-obengineer-source-line": 24,
+          "items": {
+            "type": "string"
+          },
+          "uniqueItems": false
+        },
+        "parent_folders": {
+          "type": "array",
+          "x-obengineer-source-line": 25,
+          "items": {
+            "type": "object",
+            "required": [
+              "repository",
+              "path"
+            ],
+            "properties": {
+              "repository": {
+                "type": "string"
+              },
+              "path": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "branches": {
+          "type": "array",
+          "x-obengineer-source-line": 26,
+          "items": {
+            "type": "object",
+            "required": [
+              "repository",
+              "branch"
+            ],
+            "properties": {
+              "repository": {
+                "type": "string"
+              },
+              "branch": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": false
+          }
+        }
+      },
+      "additionalProperties": false,
+      "x-obengineer-source-line": 23
+    },
+    "artifacts": {
+      "type": "object",
+      "required": [
+        "directory"
+      ],
+      "properties": {
+        "directory": {
+          "type": "string",
+          "x-obengineer-source-line": 32,
+          "minLength": 1
+        }
+      },
+      "additionalProperties": false,
+      "x-obengineer-source-line": 32
+    },
+    "cloud_diagrams": {
+      "type": "object",
+      "required": [
+        "generate",
+        "notes"
+      ],
+      "properties": {
+        "generate": {
+          "type": "boolean",
+          "x-obengineer-source-line": 35
+        },
+        "notes": {
+          "type": "string",
+          "x-obengineer-source-line": 36
+        }
+      },
+      "additionalProperties": false,
+      "x-obengineer-source-line": 35
+    },
+    "surfaces": {
+      "type": "object",
+      "required": [
+        "production_urls",
+        "no_browser_reason",
+        "host_and_remotes",
+        "edge_cdn"
+      ],
+      "properties": {
+        "production_urls": {
+          "type": "array",
+          "x-obengineer-source-line": 39,
+          "items": {
+            "type": "string"
+          },
+          "uniqueItems": false
+        },
+        "no_browser_reason": {
+          "type": "string",
+          "x-obengineer-source-line": 40
+        },
+        "host_and_remotes": {
+          "type": "string",
+          "x-obengineer-source-line": 41
+        },
+        "edge_cdn": {
+          "type": "string",
+          "x-obengineer-source-line": 42
+        }
+      },
+      "additionalProperties": false,
+      "x-obengineer-source-line": 39
+    },
+    "security_assessment": {
+      "type": "object",
+      "required": [
+        "mode",
+        "authorized_origins"
+      ],
+      "properties": {
+        "mode": {
+          "type": "string",
+          "enum": [
+            "passive",
+            "safe-active",
+            "none"
+          ],
+          "x-obengineer-source-line": 49
+        },
+        "authorized_origins": {
+          "type": "array",
+          "x-obengineer-source-line": 50,
+          "items": {
+            "type": "string"
+          },
+          "uniqueItems": true
+        }
+      },
+      "additionalProperties": false,
+      "x-obengineer-source-line": 49
+    },
+    "analysis_access": {
+      "type": "object",
+      "required": [
+        "dummy_login"
+      ],
+      "properties": {
+        "dummy_login": {
+          "type": "object",
+          "required": [
+            "login_id",
+            "password"
+          ],
+          "properties": {
+            "login_id": {
+              "type": "string",
+              "x-obengineer-source-line": 57,
+              "x-obengineer-sensitive": true
+            },
+            "password": {
+              "type": "string",
+              "x-obengineer-source-line": 58,
+              "x-obengineer-secret": true
+            }
+          },
+          "additionalProperties": false,
+          "x-obengineer-source-line": 57
+        }
+      },
+      "additionalProperties": false,
+      "x-obengineer-source-line": 56
+    },
+    "splunk": {
+      "type": "object",
+      "required": [
+        "observability",
+        "platform"
+      ],
+      "properties": {
+        "observability": {
+          "type": "object",
+          "required": [
+            "realm",
+            "read_token"
+          ],
+          "properties": {
+            "realm": {
+              "type": "string",
+              "x-obengineer-source-line": 65
+            },
+            "read_token": {
+              "type": "string",
+              "x-obengineer-source-line": 66,
+              "x-obengineer-secret": true
+            }
+          },
+          "additionalProperties": false,
+          "x-obengineer-source-line": 65
+        },
+        "platform": {
+          "type": "object",
+          "required": [
+            "host",
+            "read_token",
+            "index_allowlist"
+          ],
+          "properties": {
+            "host": {
+              "type": "string",
+              "x-obengineer-source-line": 68
+            },
+            "read_token": {
+              "type": "string",
+              "x-obengineer-source-line": 69,
+              "x-obengineer-secret": true
+            },
+            "index_allowlist": {
+              "type": "array",
+              "x-obengineer-source-line": 70,
+              "items": {
+                "type": "string"
+              },
+              "uniqueItems": true
+            }
+          },
+          "additionalProperties": false,
+          "x-obengineer-source-line": 68
+        }
+      },
+      "additionalProperties": false,
+      "x-obengineer-source-line": 64
+    },
+    "backends": {
+      "type": "object",
+      "required": [
+        "languages",
+        "deploy_targets",
+        "buses",
+        "cloud_accounts",
+        "gateway"
+      ],
+      "properties": {
+        "languages": {
+          "type": "array",
+          "x-obengineer-source-line": 73,
+          "items": {
+            "type": "string"
+          },
+          "uniqueItems": false
+        },
+        "deploy_targets": {
+          "type": "array",
+          "x-obengineer-source-line": 74,
+          "items": {
+            "type": "string"
+          },
+          "uniqueItems": false
+        },
+        "buses": {
+          "type": "array",
+          "x-obengineer-source-line": 75,
+          "items": {
+            "type": "string"
+          },
+          "uniqueItems": false
+        },
+        "cloud_accounts": {
+          "type": "array",
+          "x-obengineer-source-line": 76,
+          "items": {
+            "type": "string"
+          },
+          "uniqueItems": false
+        },
+        "gateway": {
+          "type": "string",
+          "x-obengineer-source-line": 77
+        }
+      },
+      "additionalProperties": false,
+      "x-obengineer-source-line": 73
+    },
+    "tenancy": {
+      "type": "object",
+      "required": [
+        "o11y_org_id",
+        "thousandeyes_account_group",
+        "tokens_held_by"
+      ],
+      "properties": {
+        "o11y_org_id": {
+          "type": "string",
+          "x-obengineer-source-line": 80
+        },
+        "thousandeyes_account_group": {
+          "type": "string",
+          "x-obengineer-source-line": 81
+        },
+        "tokens_held_by": {
+          "type": "string",
+          "x-obengineer-source-line": 82
+        }
+      },
+      "additionalProperties": false,
+      "x-obengineer-source-line": 80
+    },
+    "standards": {
+      "type": "object",
+      "required": [
+        "percentile",
+        "workflow_naming",
+        "baggage_header_budget_bytes",
+        "baggage_value_ceiling_bytes",
+        "unknown_dimension_threshold_pct"
+      ],
+      "properties": {
+        "percentile": {
+          "oneOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "number",
+              "x-obengineer-finite": true
+            }
+          ],
+          "x-obengineer-source-line": 85
+        },
+        "workflow_naming": {
+          "type": "string",
+          "x-obengineer-source-line": 86
+        },
+        "baggage_header_budget_bytes": {
+          "type": "integer",
+          "minimum": 1,
+          "x-obengineer-source-line": 87
+        },
+        "baggage_value_ceiling_bytes": {
+          "type": "integer",
+          "minimum": 1,
+          "x-obengineer-source-line": 88
+        },
+        "unknown_dimension_threshold_pct": {
+          "type": "number",
+          "minimum": 0,
+          "x-obengineer-finite": true,
+          "x-obengineer-source-line": 89
+        }
+      },
+      "additionalProperties": false,
+      "x-obengineer-source-line": 85
+    },
+    "constraints": {
+      "type": "object",
+      "required": [
+        "privacy_regimes",
+        "data_residency",
+        "consent_platform",
+        "pii_deny_list_additions",
+        "competing_eum_agents",
+        "change_windows",
+        "who_deploys_front_end",
+        "who_deploys_collector"
+      ],
+      "properties": {
+        "privacy_regimes": {
+          "type": "array",
+          "x-obengineer-source-line": 94,
+          "items": {
+            "type": "string"
+          },
+          "uniqueItems": false
+        },
+        "data_residency": {
+          "type": "string",
+          "x-obengineer-source-line": 95
+        },
+        "consent_platform": {
+          "type": "string",
+          "x-obengineer-source-line": 96
+        },
+        "pii_deny_list_additions": {
+          "type": "array",
+          "x-obengineer-source-line": 97,
+          "items": {
+            "type": "string"
+          },
+          "uniqueItems": false
+        },
+        "competing_eum_agents": {
+          "type": "array",
+          "x-obengineer-source-line": 98,
+          "items": {
+            "type": "string"
+          },
+          "uniqueItems": false
+        },
+        "change_windows": {
+          "type": "string",
+          "x-obengineer-source-line": 99
+        },
+        "who_deploys_front_end": {
+          "type": "string",
+          "x-obengineer-source-line": 100
+        },
+        "who_deploys_collector": {
+          "type": "string",
+          "x-obengineer-source-line": 101
+        }
+      },
+      "additionalProperties": false,
+      "x-obengineer-source-line": 94
+    },
+    "outcomes": {
+      "type": "object",
+      "required": [
+        "first_journey",
+        "audiences"
+      ],
+      "properties": {
+        "first_journey": {
+          "type": "string",
+          "x-obengineer-source-line": 104
+        },
+        "audiences": {
+          "type": "array",
+          "x-obengineer-source-line": 105,
+          "items": {
+            "type": "string"
+          },
+          "uniqueItems": true
+        }
+      },
+      "additionalProperties": false,
+      "x-obengineer-source-line": 104
+    },
+    "traffic_baseline": {
+      "type": "object",
+      "required": [
+        "rum",
+        "apm",
+        "logs",
+        "infra_integrations"
+      ],
+      "properties": {
+        "rum": {
+          "type": "object",
+          "required": [
+            "sessions_per_day_avg",
+            "sessions_per_day_peak",
+            "page_views_per_session"
+          ],
+          "properties": {
+            "sessions_per_day_avg": {
+              "oneOf": [
+                {
+                  "type": "number",
+                  "minimum": 0,
+                  "x-obengineer-finite": true
+                },
+                {
+                  "const": "unknown"
+                }
+              ],
+              "x-obengineer-source-line": 111
+            },
+            "sessions_per_day_peak": {
+              "oneOf": [
+                {
+                  "type": "number",
+                  "minimum": 0,
+                  "x-obengineer-finite": true
+                },
+                {
+                  "const": "unknown"
+                }
+              ],
+              "x-obengineer-source-line": 112
+            },
+            "page_views_per_session": {
+              "oneOf": [
+                {
+                  "type": "number",
+                  "minimum": 0,
+                  "x-obengineer-finite": true
+                },
+                {
+                  "const": "unknown"
+                }
+              ],
+              "x-obengineer-source-line": 113
+            }
+          },
+          "additionalProperties": false,
+          "x-obengineer-source-line": 111
+        },
+        "apm": {
+          "type": "object",
+          "required": [
+            "requests_per_minute_avg",
+            "requests_per_minute_peak",
+            "spans_per_trace"
+          ],
+          "properties": {
+            "requests_per_minute_avg": {
+              "oneOf": [
+                {
+                  "type": "number",
+                  "minimum": 0,
+                  "x-obengineer-finite": true
+                },
+                {
+                  "const": "unknown"
+                }
+              ],
+              "x-obengineer-source-line": 115
+            },
+            "requests_per_minute_peak": {
+              "oneOf": [
+                {
+                  "type": "number",
+                  "minimum": 0,
+                  "x-obengineer-finite": true
+                },
+                {
+                  "const": "unknown"
+                }
+              ],
+              "x-obengineer-source-line": 116
+            },
+            "spans_per_trace": {
+              "oneOf": [
+                {
+                  "type": "number",
+                  "minimum": 0,
+                  "x-obengineer-finite": true
+                },
+                {
+                  "const": "unknown"
+                }
+              ],
+              "x-obengineer-source-line": 117
+            }
+          },
+          "additionalProperties": false,
+          "x-obengineer-source-line": 115
+        },
+        "logs": {
+          "type": "object",
+          "required": [
+            "gb_per_hour_avg",
+            "gb_per_hour_peak"
+          ],
+          "properties": {
+            "gb_per_hour_avg": {
+              "oneOf": [
+                {
+                  "type": "number",
+                  "minimum": 0,
+                  "x-obengineer-finite": true
+                },
+                {
+                  "const": "unknown"
+                }
+              ],
+              "x-obengineer-source-line": 119
+            },
+            "gb_per_hour_peak": {
+              "oneOf": [
+                {
+                  "type": "number",
+                  "minimum": 0,
+                  "x-obengineer-finite": true
+                },
+                {
+                  "const": "unknown"
+                }
+              ],
+              "x-obengineer-source-line": 120
+            }
+          },
+          "additionalProperties": false,
+          "x-obengineer-source-line": 119
+        },
+        "infra_integrations": {
+          "type": "array",
+          "x-obengineer-source-line": 121,
+          "items": {
+            "type": "object",
+            "required": [
+              "name",
+              "entities",
+              "metrics_per_entity"
+            ],
+            "properties": {
+              "name": {
+                "type": "string"
+              },
+              "entities": {
+                "type": "number",
+                "minimum": 0
+              },
+              "metrics_per_entity": {
+                "type": "number",
+                "minimum": 0
+              }
+            },
+            "additionalProperties": false
+          }
+        }
+      },
+      "additionalProperties": false,
+      "x-obengineer-source-line": 110
+    },
+    "business_context": {
+      "type": "object",
+      "required": [
+        "incident_experience",
+        "operating_cost",
+        "revenue_context",
+        "business_information"
+      ],
+      "properties": {
+        "incident_experience": {
+          "type": "object",
+          "required": [
+            "mttd_minutes",
+            "mtta_minutes",
+            "mttr_minutes",
+            "mtti_minutes",
+            "incidents_per_month",
+            "sev1_per_quarter",
+            "responders_per_incident",
+            "war_room_hours_per_month",
+            "pct_incidents_found_by_customers"
+          ],
+          "properties": {
+            "mttd_minutes": {
+              "oneOf": [
+                {
+                  "type": "number",
+                  "minimum": 0,
+                  "x-obengineer-finite": true
+                },
+                {
+                  "const": "unknown"
+                }
+              ],
+              "x-obengineer-source-line": 127
+            },
+            "mtta_minutes": {
+              "oneOf": [
+                {
+                  "type": "number",
+                  "minimum": 0,
+                  "x-obengineer-finite": true
+                },
+                {
+                  "const": "unknown"
+                }
+              ],
+              "x-obengineer-source-line": 128
+            },
+            "mttr_minutes": {
+              "oneOf": [
+                {
+                  "type": "number",
+                  "minimum": 0,
+                  "x-obengineer-finite": true
+                },
+                {
+                  "const": "unknown"
+                }
+              ],
+              "x-obengineer-source-line": 129
+            },
+            "mtti_minutes": {
+              "oneOf": [
+                {
+                  "type": "number",
+                  "minimum": 0,
+                  "x-obengineer-finite": true
+                },
+                {
+                  "const": "unknown"
+                }
+              ],
+              "x-obengineer-source-line": 130
+            },
+            "incidents_per_month": {
+              "oneOf": [
+                {
+                  "type": "number",
+                  "minimum": 0,
+                  "x-obengineer-finite": true
+                },
+                {
+                  "const": "unknown"
+                }
+              ],
+              "x-obengineer-source-line": 131
+            },
+            "sev1_per_quarter": {
+              "oneOf": [
+                {
+                  "type": "number",
+                  "minimum": 0,
+                  "x-obengineer-finite": true
+                },
+                {
+                  "const": "unknown"
+                }
+              ],
+              "x-obengineer-source-line": 132
+            },
+            "responders_per_incident": {
+              "oneOf": [
+                {
+                  "type": "number",
+                  "minimum": 0,
+                  "x-obengineer-finite": true
+                },
+                {
+                  "const": "unknown"
+                }
+              ],
+              "x-obengineer-source-line": 133
+            },
+            "war_room_hours_per_month": {
+              "oneOf": [
+                {
+                  "type": "number",
+                  "minimum": 0,
+                  "x-obengineer-finite": true
+                },
+                {
+                  "const": "unknown"
+                }
+              ],
+              "x-obengineer-source-line": 134
+            },
+            "pct_incidents_found_by_customers": {
+              "oneOf": [
+                {
+                  "type": "number",
+                  "minimum": 0,
+                  "x-obengineer-finite": true
+                },
+                {
+                  "const": "unknown"
+                }
+              ],
+              "x-obengineer-source-line": 135
+            }
+          },
+          "additionalProperties": false,
+          "x-obengineer-source-line": 127
+        },
+        "operating_cost": {
+          "type": "object",
+          "required": [
+            "observability_tools_in_use",
+            "annual_tooling_spend",
+            "duplicate_agents_on_page",
+            "engineering_hours_per_month_on_triage",
+            "fully_loaded_hourly_cost",
+            "opex_challenges"
+          ],
+          "properties": {
+            "observability_tools_in_use": {
+              "type": "array",
+              "x-obengineer-source-line": 137,
+              "items": {
+                "type": "string"
+              },
+              "uniqueItems": false
+            },
+            "annual_tooling_spend": {
+              "oneOf": [
+                {
+                  "type": "number",
+                  "minimum": 0,
+                  "x-obengineer-finite": true
+                },
+                {
+                  "const": "unknown"
+                }
+              ],
+              "x-obengineer-source-line": 138
+            },
+            "duplicate_agents_on_page": {
+              "oneOf": [
+                {
+                  "type": "number",
+                  "minimum": 0,
+                  "x-obengineer-finite": true
+                },
+                {
+                  "const": "unknown"
+                }
+              ],
+              "x-obengineer-source-line": 139
+            },
+            "engineering_hours_per_month_on_triage": {
+              "oneOf": [
+                {
+                  "type": "number",
+                  "minimum": 0,
+                  "x-obengineer-finite": true
+                },
+                {
+                  "const": "unknown"
+                }
+              ],
+              "x-obengineer-source-line": 140
+            },
+            "fully_loaded_hourly_cost": {
+              "oneOf": [
+                {
+                  "type": "number",
+                  "minimum": 0,
+                  "x-obengineer-finite": true
+                },
+                {
+                  "const": "unknown"
+                }
+              ],
+              "x-obengineer-source-line": 141
+            },
+            "opex_challenges": {
+              "type": "string",
+              "x-obengineer-source-line": 142
+            }
+          },
+          "additionalProperties": false,
+          "x-obengineer-source-line": 137
+        },
+        "revenue_context": {
+          "type": "object",
+          "required": [
+            "revenue_per_hour_online",
+            "orders_per_day",
+            "average_order_value",
+            "conversion_rate_pct",
+            "cart_abandonment_pct",
+            "peak_events",
+            "revenue_challenges"
+          ],
+          "properties": {
+            "revenue_per_hour_online": {
+              "oneOf": [
+                {
+                  "type": "number",
+                  "minimum": 0,
+                  "x-obengineer-finite": true
+                },
+                {
+                  "const": "unknown"
+                }
+              ],
+              "x-obengineer-source-line": 144
+            },
+            "orders_per_day": {
+              "oneOf": [
+                {
+                  "type": "number",
+                  "minimum": 0,
+                  "x-obengineer-finite": true
+                },
+                {
+                  "const": "unknown"
+                }
+              ],
+              "x-obengineer-source-line": 145
+            },
+            "average_order_value": {
+              "oneOf": [
+                {
+                  "type": "number",
+                  "minimum": 0,
+                  "x-obengineer-finite": true
+                },
+                {
+                  "const": "unknown"
+                }
+              ],
+              "x-obengineer-source-line": 146
+            },
+            "conversion_rate_pct": {
+              "oneOf": [
+                {
+                  "type": "number",
+                  "minimum": 0,
+                  "x-obengineer-finite": true
+                },
+                {
+                  "const": "unknown"
+                }
+              ],
+              "x-obengineer-source-line": 147
+            },
+            "cart_abandonment_pct": {
+              "oneOf": [
+                {
+                  "type": "number",
+                  "minimum": 0,
+                  "x-obengineer-finite": true
+                },
+                {
+                  "const": "unknown"
+                }
+              ],
+              "x-obengineer-source-line": 148
+            },
+            "peak_events": {
+              "type": "array",
+              "x-obengineer-source-line": 149,
+              "items": {
+                "oneOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "object"
+                  }
+                ]
+              }
+            },
+            "revenue_challenges": {
+              "type": "string",
+              "x-obengineer-source-line": 150
+            }
+          },
+          "additionalProperties": false,
+          "x-obengineer-source-line": 144
+        },
+        "business_information": {
+          "type": "object",
+          "required": [
+            "business_model",
+            "seasonality",
+            "growth_or_margin_pressure",
+            "regulatory_exposure",
+            "strategic_initiatives"
+          ],
+          "properties": {
+            "business_model": {
+              "type": "string",
+              "x-obengineer-source-line": 152
+            },
+            "seasonality": {
+              "type": "string",
+              "x-obengineer-source-line": 153
+            },
+            "growth_or_margin_pressure": {
+              "type": "string",
+              "x-obengineer-source-line": 154
+            },
+            "regulatory_exposure": {
+              "type": "string",
+              "x-obengineer-source-line": 155
+            },
+            "strategic_initiatives": {
+              "type": "array",
+              "x-obengineer-source-line": 156,
+              "items": {
+                "type": "string"
+              },
+              "uniqueItems": false
+            }
+          },
+          "additionalProperties": false,
+          "x-obengineer-source-line": 152
+        }
+      },
+      "additionalProperties": false,
+      "x-obengineer-source-line": 126
+    },
+    "public_evidence": {
+      "type": "object",
+      "required": [
+        "allowed",
+        "window_months",
+        "brand_terms",
+        "status_page_urls",
+        "exclude_domains",
+        "competitors"
+      ],
+      "properties": {
+        "allowed": {
+          "type": "boolean",
+          "x-obengineer-source-line": 159
+        },
+        "window_months": {
+          "type": "integer",
+          "minimum": 1,
+          "x-obengineer-source-line": 160
+        },
+        "brand_terms": {
+          "type": "array",
+          "x-obengineer-source-line": 161,
+          "items": {
+            "type": "string"
+          },
+          "uniqueItems": false
+        },
+        "status_page_urls": {
+          "type": "array",
+          "x-obengineer-source-line": 162,
+          "items": {
+            "type": "string"
+          },
+          "uniqueItems": false
+        },
+        "exclude_domains": {
+          "type": "array",
+          "x-obengineer-source-line": 163,
+          "items": {
+            "type": "string"
+          },
+          "uniqueItems": false
+        },
+        "competitors": {
+          "type": "array",
+          "x-obengineer-source-line": 164,
+          "items": {
+            "type": "string"
+          },
+          "uniqueItems": false
+        }
+      },
+      "additionalProperties": false,
+      "x-obengineer-source-line": 159
+    },
+    "developer_tools": {
+      "type": "object",
+      "required": [
+        "named",
+        "matched"
+      ],
+      "properties": {
+        "named": {
+          "type": "array",
+          "x-obengineer-source-line": 167,
+          "items": {
+            "type": "string"
+          },
+          "uniqueItems": false
+        },
+        "matched": {
+          "type": "array",
+          "x-obengineer-source-line": 168,
+          "items": {
+            "type": "object",
+            "required": [
+              "tool",
+              "via",
+              "key"
+            ],
+            "properties": {
+              "tool": {
+                "type": "string"
+              },
+              "via": {
+                "type": "string"
+              },
+              "key": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": false
+          }
+        }
+      },
+      "additionalProperties": false,
+      "x-obengineer-source-line": 167
+    },
+    "extensions": {
+      "type": "object",
+      "required": [],
+      "properties": {},
+      "additionalProperties": true,
+      "x-obengineer-source-line": 171
+    }
+  },
+  "additionalProperties": false,
+  "x-obengineer-source-line": 11,
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://obengineer.dev/schemas/obconfig.schema.json",
+  "title": "obengineer local configuration v4",
+  "x-obengineer-secret-paths": [
+    "analysis_access.dummy_login.password",
+    "splunk.observability.read_token",
+    "splunk.platform.read_token"
+  ],
+  "x-obengineer-retired-keys": {
+    "entitlement": "remove entitlement input; analysis measures sf.org usage and enforced system limits",
+    "tenancy.environments": "replace with singular engagement.deployment_environment scalar",
+    "outcomes.known_pain": "remove retired pain commentary",
+    "business_context.commentary": "remove retired what-hurts commentary",
+    "analysis_access.token_ref": "replace with splunk.platform.read_token",
+    "analysis_access.api_key_ref": "replace with splunk.observability.read_token",
+    "analysis_access.password_ref": "replace with analysis_access.dummy_login.password"
+  },
+  "x-obengineer-runtime-semantics": "The bundled validator enforces paired credentials, exact HTTPS origins, URL/index/realm restrictions, and conditional fields after this schema."
+}

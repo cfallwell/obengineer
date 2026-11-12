@@ -7,9 +7,8 @@ root [README](../README.md) is intentionally limited to a quick start.
 
 1. [Installation and upgrades](installation.md) — choose a host and artifact
    repository, install or remove the toolkit, and configure renderer dependencies.
-2. [Configuration and behavior controls](configuration.md) — configure credentials by
-   guided script, direct APIs, connected MCP integrations, engagement inputs, scope,
-   licensing behavior, and output constraints.
+2. [Configuration and behavior controls](configuration.md) — configure local obconfig,
+   direct APIs, connected MCP integrations, scope, artifact hashing, and output gates.
 3. [End-to-end usage and command reference](usage.md) — start, add or edit inputs,
    review and accept a version, implement work orders, generate Terraform, and verify.
 4. [How obengineer operates](how-it-works.md) — understand dispatch, sources of truth,
@@ -20,8 +19,8 @@ root [README](../README.md) is intentionally limited to a quick start.
 The files below are executable contracts used by the agents. They take precedence
 over explanatory documentation if behavior changes:
 
-- [`inputs/engagement-inputs.template.yaml`](../inputs/engagement-inputs.template.yaml)
-  defines every accepted engagement input.
+- [`obconfig.yaml.template`](../obconfig.yaml.template) defines every accepted input,
+  default, consequence, and secret annotation.
 - [`skills/references/analysis-site.md`](../skills/references/analysis-site.md)
   defines the linked analysis layout, versioning, breadcrumbs, side-panel handoff,
   and optional short Word summary.

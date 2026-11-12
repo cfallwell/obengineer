@@ -55,17 +55,14 @@ jobs:
         if: steps.gate.outputs.skip != 'true'
         run: |
           python3 - <<'PY'
-          import pathlib, re, sys
-          path = pathlib.Path("docs/observability/engagement-inputs.yaml")
-          text = path.read_text() if path.exists() else ""
-          match = re.search(r"(?m)^initial_scope:\n(?:  .*\n)*?  authorized:\s*(\S+)", text)
-          authorized = match.group(1) if match else ""
-          if authorized not in ("full", "repositories", "parent_folders"):
-              print("Engineering must authorize initial_scope before this job writes code.")
-              print("authorized: full, repositories, or parent_folders.")
-              print("unknown is not permission to scan every project a host can see.")
+          import json, pathlib, sys
+          path = pathlib.Path("docs/observability/implementation-map.json")
+          data = json.loads(path.read_text()) if path.exists() else {}
+          repositories = data.get("repositories", [])
+          if not repositories:
+              print("Accepted implementation-map authorization is required before this job writes code.")
               sys.exit(1)
-          print("scope authorized:", authorized)
+          print("mapped repositories:", len(repositories))
           PY
 
       - name: layer-1 checks against this branch
@@ -84,5 +81,5 @@ jobs:
           echo "Push to ${{ github.head_ref }}. Do not merge. Do not open a second pull request."
           # your-agent-cli run \
           #   --branch "${{ github.head_ref }}" \
-          #   --scope docs/observability/engagement-inputs.yaml \
+          #   --scope docs/observability/implementation-map.json \
           #   --prompt-file .obengineer/prompts/03-implement-instrumentation.md

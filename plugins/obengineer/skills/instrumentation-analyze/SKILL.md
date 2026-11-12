@@ -29,7 +29,7 @@ The target is read-only. Application changes happen only through accepted work o
 | [`../references/analysis-site.md`](../references/analysis-site.md) | Versioned layout, landing page, links, breadcrumbs, side panel handoff, optional Word summary |
 | [`../references/critical-findings.md`](../references/critical-findings.md) | Finding evidence, severity, exposure, remediation, and credential handling |
 | [`../references/security-assessment.md`](../references/security-assessment.md) | Authorized credential/API checks and OWASP coverage |
-| [`../references/analysis-run-lifecycle.md`](../references/analysis-run-lifecycle.md) | Version branch, phase commits, review loop, acceptance, merge, and handoff |
+| [`../references/analysis-run-lifecycle.md`](../references/analysis-run-lifecycle.md) | Version branch, staged-tree dispatch gate, review loop, acceptance, merge, and handoff |
 | [`../references/agent-wiki.md`](../references/agent-wiki.md) | Versioned subject notes and work orders |
 | [`../references/implementation-work-orders.md`](../references/implementation-work-orders.md) | Bounded targets, repository legs, dependencies, and PR coordination |
 | [`../references/provenance-ledger.md`](../references/provenance-ledger.md) | Evidence and run state |
@@ -37,10 +37,11 @@ The target is read-only. Application changes happen only through accepted work o
 | [`../references/existing-telemetry.md`](../references/existing-telemetry.md) | Direct APIs, connected integrations, MetricSets, usage, and SignalFlow cross-check |
 | [`../references/cross-cutting-attributes.md`](../references/cross-cutting-attributes.md) | Cross-Cutting Attributes and Baggage Propagation |
 | [`../references/business-value.md`](../references/business-value.md) | Value from stated, measured, public, and derived evidence |
-| [`../references/entitlement-exposure.md`](../references/entitlement-exposure.md) | Separate account-team pricing |
+| [`../references/entitlement-exposure.md`](../references/entitlement-exposure.md) | Measured usage and enforced-system-limit appendix |
 | [`schemas/analysis-job-manifest.schema.json`](schemas/analysis-job-manifest.schema.json) | Six bounded host-run evidence workstreams and coordinator reservation |
 | [`schemas/analysis-worker-result.schema.json`](schemas/analysis-worker-result.schema.json) | Auditable worker evidence and execution intervals |
-| [`schemas/analysis-contract.schema.json`](schemas/analysis-contract.schema.json) | Canonical content rendered into the linked analysis site |
+| [`schemas/analysis-contract-v3.schema.json`](schemas/analysis-contract-v3.schema.json) | Current canonical content rendered into the linked analysis site |
+| [`schemas/analysis-contract-v2.schema.json`](schemas/analysis-contract-v2.schema.json) | Frozen historical accepted-contract compatibility |
 
 ## Output
 
@@ -66,8 +67,8 @@ directory contains the landing page and all linked detail pages. The wiki
 contains one note per substantive object and every work order. The version landing page
 links the matching wiki snapshot.
 
-Create entitlement exposure only when entitlement or a meaningful traffic baseline was
-supplied. Create a short `.docx` only when the human asks for it; it is under 20 pages and
+Create the usage/system-limit appendix only when direct measurement or meaningful
+bounded recommendation arithmetic supports it. Create a short `.docx` only when the human asks for it; it is under 20 pages and
 contains the summary, architecture, findings, path, work-order summary, and use cases.
 
 ## Rules
@@ -76,8 +77,33 @@ contains the summary, architecture, findings, path, work-order summary, and use 
 - Derive the number of business transactions and workflows from current evidence. A
   same-customer prior guide is a quality and continuity input, not a fixed taxonomy or
   required count; retain, revise, add, or retire names with provenance.
-- Use direct Observability Cloud and Splunk Platform APIs when configured. Use connected
-  MCP tools as additional sources; do not treat MCP as the only tenant interface.
+- Load analysis configuration only through the claim-bound redacted projection. Rehash the complete artifact
+  directory, reread added/changed files, remove deleted context, and preserve accepted
+  historical versions.
+- Atomically run `manage_obconfig.py claim --command <origin> --intended-version
+  V<N>` and use its sanitized full artifact delta. Then run exactly
+  `python3 <obengineer-root>/skills/engagement-intake/scripts/manage_obconfig.py
+  --project-root . config-projection --command <origin> --intended-version V<N>`.
+  Its centralized-redacted output is the sole supported downstream configuration source;
+  it supplies production targets, constraints, scope, standards, outcomes, context,
+  artifact metadata/delta, and availability. Never read raw `obconfig.yaml`, `.env`,
+  process environment, or legacy engagement inputs during analysis. Then run exactly
+  `python3 <obengineer-root>/skills/engagement-intake/scripts/manage_obconfig.py
+  --project-root . direct-api --phase analysis --command <origin>
+  --intended-version V<N>`. This supported path securely loads the
+  ignored mode-0600 config and emits centralized-redacted JSON only. Append each direct
+  disposition and measured aggregate to provenance; map `not-configured` and failed
+  dispositions to source limitations/unresolved evidence. Use connected MCP tools only
+  as supplemental evidence; MCP cannot satisfy or relabel the direct attempt.
+- Run `manage_obconfig.py safe-active --command <origin> --intended-version V<N>`
+  and append its redacted outcomes to provenance. Passive/none must produce no requests.
+  The claim is revalidated around every supported network path. After all analysis,
+  network, render, and validation work, stage intended analysis paths and run
+  `manage_obconfig.py finalize` with the same binding and explicit generated-output
+  roots. Commit exactly the bound index tree. Run `dispatch`, then `verify-dispatch`
+  immediately before push/PR work. Consume only the successfully published immutable
+  dispatch. Decline/failure invokes `manage_obconfig.py abort` with the same binding,
+  releasing the claim without changing baseline/history.
 - Never print or store a secret. Record shape, location, and exposure only.
 - Missing optional inputs do not block analysis and do not create empty chapters.
 - Findings link affected use cases, workflows, business transactions, contracts, and
@@ -86,9 +112,10 @@ contains the summary, architecture, findings, path, work-order summary, and use 
 - Keep Cross-Cutting Attributes and Baggage Propagation complete in the wiki: provider
   bootstrap, allowlisted `SpanProcessor.onStart`, identity write, backend composite
   propagator, and message inject/extract where applicable.
-- Entitlement prices the strategy; it does not silently trim it.
-- When entitlement or current usage is unavailable, preserve proposed MTS arithmetic but
-  leave entitlement, usage, reserve, and headroom explicitly unavailable.
+- Directly measured usage and `sf.org.limit.*` enforced limits price system headroom;
+  they are never contractual entitlement and never silently trim the strategy.
+- When usage or an enforced limit is unavailable, preserve proposed MTS arithmetic but
+  leave usage, reserve, and system headroom explicitly unavailable.
 - Every detector has a threshold; every objective has an error budget.
 - No named engineer, named owner, or accepter is required.
 - Never start a web server, open a browser, or return localhost.
@@ -195,10 +222,11 @@ Validate:
 
 - job manifest, worker intervals, host capacity, and coordinator reservation;
 - canonical analysis contract and deterministic repeated rendering;
-- schema-v1 analysis contracts migrate deterministically with
-  `scripts/migrate_analysis_contract.py`; newly generated contracts use schema v2;
+- schema-v1/v2 mutable working contracts migrate explicitly with
+  `scripts/migrate_analysis_contract.py`; newly generated contracts use schema v3,
+  while accepted schema-v2 snapshots validate and render without mutation;
 - provenance ledger and analysis seal;
-- schema version 2 analysis contract and content-bound acceptance inputs;
+- schema version 3 analysis contract and content-bound acceptance inputs;
 - schema and implementation map;
 - verification plan schema version 2 with stable `source_ref` values and actionable
   `VC-*` criteria;
@@ -211,6 +239,10 @@ Run `make qa-analysis` against the generic representative fixture and enforce it
 validation-time, render-time, output-file, and output-byte budgets.
 
 Run `$deliverable-review` against the linked site and wiki. Fix every blocking defect.
+Then stage and finalize `docs/observability` and the generated versioned wiki with the
+runtime gate. Commit the exact finalized tree and verify dispatch before external work.
+Index or commit mutation blocks dispatch. Working-tree changes after staging belong to
+the next run and cannot alter successful consume of the published commit.
 
 ### 8. Review, accept, and hand off
 

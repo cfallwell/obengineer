@@ -41,7 +41,7 @@ PII deny list is enforced. If you see tokens in the repo, stop and report. Do no
 - Schema: `docs/observability/attribute-schema.json`
 - Map: `docs/observability/implementation-map.json`
 - Acceptance: `docs/observability/analysis/<app>/V<N>/acceptance.yaml`
-- Engagement inputs: `docs/observability/engagement-inputs.yaml` — `backends.languages` and
+- Secure non-secret obconfig projection — `backends.languages` and
   `.deploy_targets` for which SDK, `constraints.who_deploys_front_end` and
   `.who_deploys_collector` for whether this slice is deployable at all, and
   `constraints.change_windows` for when. `initial_scope.authorized` must be
