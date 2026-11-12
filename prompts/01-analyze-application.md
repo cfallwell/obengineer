@@ -33,8 +33,9 @@ limitations/unresolved evidence. Never import `direct_api.py` in place of this c
 read process environment, or put a credential in command arguments.
 The second command makes zero requests in passive/none and records fixed-policy
 safe-active outcomes otherwise. Both commands revalidate the claim before and after
-network work. Consume the claim only after successful analysis and PR dispatch; failure
-or decline leaves the artifact baseline unchanged for retry.
+network work. Consume only after successful analysis and PR dispatch. On failure or
+decline invoke `manage_obconfig.py abort` with the same command/version; it releases the
+claim while leaving artifact baseline/history unchanged.
 
 ## Evidence collection
 

@@ -91,7 +91,8 @@ contains the summary, architecture, findings, path, work-order summary, and use 
 - Run `manage_obconfig.py safe-active --command <origin> --intended-version V<N>`
   and append its redacted outcomes to provenance. Passive/none must produce no requests.
   The claim is revalidated around every supported network path and consumed only after
-  successful analysis/PR dispatch; decline/failure leaves the baseline unchanged.
+  successful analysis/PR dispatch. Decline/failure invokes `manage_obconfig.py abort`
+  with the same binding, releasing the claim without changing baseline/history.
 - Never print or store a secret. Record shape, location, and exposure only.
 - Missing optional inputs do not block analysis and do not create empty chapters.
 - Findings link affected use cases, workflows, business transactions, contracts, and

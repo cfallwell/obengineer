@@ -66,7 +66,8 @@ and unavailable rows become limitations or unresolved evidence; they are never p
 to measured facts. The command output, not an import-only adapter call, is the evidence
 boundary.
 Safe-active outcomes are also recorded; passive/none yield an empty outcome list. The
-artifact baseline advances only when the successful analysis consumes its claim.
+artifact baseline advances only when successful analysis consumes its claim. Declined or
+failed analysis aborts the claim without changing baseline/history.
 
 Analysis seals the IDs it owns when the exact commit is accepted. Generation,
 implementation, Terraform, and verification may append records but may not alter sealed

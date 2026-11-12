@@ -47,7 +47,10 @@ Run one obengineer analysis version. Direct invocation never bypasses the one-sh
 8. Use the skills routed by Prompt 01; render Word only when requested.
 9. Follow `skills/references/analysis-run-lifecycle.md` for the one PR and review.
 10. Validate all Prompt 01 outputs. After successful PR dispatch, run `consume` with the
-   same command/version. Never consume on decline/failure; the baseline remains retryable.
+   same command/version. On decline or failure, run
+   `python3 "{{OBENGINEER_ROOT}}/skills/engagement-intake/scripts/manage_obconfig.py"
+   --project-root . abort --command <origin> --intended-version V<N>` instead. Abort
+   releases the claim without changing artifact baseline/history.
 
 The review surface is owned by
 `{{OBENGINEER_ROOT}}/skills/references/analysis-site.md`: linked Markdown opened in

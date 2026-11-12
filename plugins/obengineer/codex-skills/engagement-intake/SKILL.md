@@ -23,7 +23,8 @@ The deterministic implementation is:
 - `scripts/obconfig.py` — secure loading, marked validation, centralized redaction,
   bounded repair, artifact tree hashing, summary, and authorization binding;
 - `scripts/manage_obconfig.py` — `init`, `validate`, `repair`, `summary`, `changed`,
-  `authorize`, atomic `claim`, `consume`, claim-bound `direct-api`, fixed-policy
+  `authorize`, atomic `claim`, baseline-neutral `abort`, journaled `consume`,
+  claim-bound `direct-api`, fixed-policy
   `safe-active`, and `migrate-legacy` commands;
 - `scripts/direct_api.py` — fixed read-only Observability Cloud and Platform request
   adapters; and
@@ -45,7 +46,7 @@ Follow [`../../prompts/00-load-obconfig.md`](../../prompts/00-load-obconfig.md).
 5. Exact `yes` writes one-shot authorization bound to config, full artifact
    manifest/delta and tree digest, schema, command, and intended version. Analysis must
    atomically claim it; each network/dispatch consumer revalidates it. Advance the
-   artifact baseline only on successful final consume.
+   artifact baseline only on successful final consume; abort every declined/failed run.
 
 `/ob-add-inputs` and `/ob-edit-inputs` are compatibility entry points. They never edit
 YAML or ask field questions. Unchanged config prints

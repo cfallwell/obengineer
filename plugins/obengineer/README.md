@@ -37,6 +37,8 @@ tools already connected to the host. MCP is not the only source.
 Analysis atomically claims its snapshot and uses claim-bound `direct-api` and
 `safe-active` commands. Verification uses `direct-api --phase verification`. Only their
 centralized-redacted JSON dispositions/aggregates feed provenance.
+Successful analysis consumes its claim; decline/failure aborts it without changing the
+artifact baseline or history.
 
 Read-only API credentials remain only in local `obconfig.yaml` and are sent only in
 validated HTTPS request headers. The committed `obconfig.yaml.template` is the sole

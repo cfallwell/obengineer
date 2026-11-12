@@ -56,7 +56,8 @@ python3 skills/engagement-intake/scripts/manage_obconfig.py --project-root . dir
 
 They securely load ignored mode-0600 config and emit only centralized-redacted JSON.
 Safe-active uses fixed HEAD paths/rates/ceilings with DNS and peer-address defenses;
-passive/none makes no request. Successful final consume advances the artifact baseline.
+passive/none makes no request. Successful final consume advances the artifact baseline;
+declined/failed analysis uses `abort`, which releases only the claim.
 Analysis and verification append its dispositions and parsed aggregate measurements to
 provenance. Missing config emits explicit `not-configured` dispositions; it does not
 read `.env` or process environment.

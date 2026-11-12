@@ -39,8 +39,8 @@ Its centralized-redacted JSON feeds provenance. `/ob-verify` runs the same suppo
 path with `--phase verification` after acceptance/plan validation and feeds those rows
 to verification evidence and provenance. Neither workflow imports the adapter directly
 or puts credentials in command arguments. Passive/none makes zero safe-active requests.
-Only successful final claim consumption advances the artifact baseline; failure/decline
-leaves it unchanged for retry.
+Only successful final `consume` advances the artifact baseline. Failure/decline invokes
+`abort` with the same binding, releasing the claim while baseline/history stay unchanged.
 
 The result is one reviewed PR containing linked Markdown analysis, canonical contract,
 sanitized provenance, verification plan, versioned wiki, and all work orders. Review in
