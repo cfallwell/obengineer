@@ -1,115 +1,154 @@
 # obengineer
 
-obengineer analyzes a production application and publishes a versioned, linked
-instrumentation strategy for Splunk Observability Cloud and OpenTelemetry. The result
-opens in the agent host's native side panel: architecture, findings, recommended path,
-use cases, workflows, business transactions, shared signal contracts, operations, and the
-complete proposed work-order queue.
+obengineer is an agent toolkit that helps you plan and deliver OpenTelemetry
+instrumentation for an application monitored in Splunk Observability Cloud. You point it
+at an application, its source code, and your Splunk tenant. It studies what is already
+there and writes a reviewable observability strategy. Once you accept that strategy, it
+helps you carry it out.
 
-Generated artifacts belong in a separate memory or application repository. This
-repository remains the toolkit.
+The strategy covers the application's architecture, the gaps found in its current
+telemetry, the user journeys and business transactions worth measuring, and the signals
+each service should emit. It also includes a queue of small, ordered work orders. Each
+work order describes one change, such as adding a shared tracing library, propagating
+context across a message bus, or defining a detector. Your coding agent can then
+implement those work orders as ordinary pull requests.
+
+obengineer runs inside Cursor, Claude Code, Codex CLI, and ChatGPT Desktop.
+
+## How it works
+
+obengineer keeps the toolkit and your engagement separate. You install it into a
+dedicated Git repository, called the memory repository, and everything it produces is
+committed there. This repository contains only the toolkit itself.
+
+A typical engagement has four stages:
+
+1. **Configure.** You describe the application and how to reach it in a local
+   `obconfig.yaml` file. This includes the application's name and environment, where its
+   source lives, read-only Splunk tokens, and any supporting documents you want
+   considered. obengineer checks the file and shows you a short summary before it does
+   anything else.
+2. **Analyze.** obengineer gathers evidence from the source code, the running
+   application, the Splunk APIs, and any connected tools. It then writes the analysis as
+   linked Markdown pages that open in your editor's side panel, along with a wiki and the
+   full work-order queue. All of it arrives in a single pull request for you to review.
+   Each run is saved as a new numbered version (V1, V2, and so on), so earlier analyses
+   are never overwritten.
+3. **Accept.** When you are satisfied with the analysis, reply `yes`. obengineer records
+   your acceptance, merges the pull request, and marks the first work orders as ready to
+   start.
+4. **Deliver and verify.** You implement work orders one at a time. Each one becomes a
+   pull request in the application's repository. obengineer can also generate Terraform
+   for dashboards, detectors, and related Splunk resources. After the changes are
+   deployed, it checks your tenant to confirm that the expected telemetry and resources
+   are actually there.
+
+obengineer only reads from production. It never changes your Splunk tenant directly:
+generated Terraform is planned for you to apply yourself, and verification makes no
+changes. Tokens and passwords stay in `obconfig.yaml`, which Git ignores, and they are
+never copied into reports.
 
 ## Requirements
 
 - Git
-- Python 3.10+
-- `python-docx` and `markdown-it-py==4.2.0` only when rendering the optional Word summary
-- `PyYAML==6.0.3` for schema-v4 config validation
-- Terraform CLI for `/ob-terraform`
+- Python 3.10 or later, with `PyYAML==6.0.3`
+- `python-docx` and `markdown-it-py==4.2.0`, only if you want the optional Word summary
+- Terraform CLI, only if you use `/ob-terraform`
 
 ```bash
-python3 -m pip install python-docx markdown-it-py==4.2.0 PyYAML==6.0.3
+python3 -m pip install PyYAML==6.0.3 python-docx markdown-it-py==4.2.0
 ```
 
-## Install
+## Installation
+
+Clone the toolkit:
 
 ```bash
 git clone https://github.com/cfallwell/obengineer.git
 cd obengineer
+```
+
+Create the memory repository and install obengineer into it:
+
+```bash
 mkdir -p /path/to/memory-repo
 git -C /path/to/memory-repo init
 ./install.sh --cursor --project /path/to/memory-repo
 ```
 
-Use `--claude`, `--codex`, or `--all` for other hosts. Restart the host after
-installation. A project install creates only missing `.gitignore`,
-`obconfig.yaml.template`, and `artifacts/README.md`; it never overwrites existing root
-content or owns an actual `obconfig.yaml`.
+Replace `--cursor` with `--claude` or `--codex` to install for another host, or use
+`--all` to install for every host. Restart the host when the installer finishes.
 
-obengineer gathers evidence from connected integrations and configured read-only Splunk
-APIs. Secrets remain in local `obconfig.yaml` and are never copied into reports. Each
-analysis uses a fixed snapshot of the approved configuration and artifacts, and
-verification uses the same read-only access to confirm expected telemetry and resources.
-The [security assessment](docs/configuration.md#security-assessment-modes) defaults to
-passive review; optional `safe-active` mode adds two limited, non-destructive HTTPS checks
-against each explicitly authorized origin and does not run penetration-testing tools.
+The installer adds three starter files to the memory repository if they are not already
+present: a `.gitignore`, an `obconfig.yaml.template`, and an `artifacts/README.md`. It
+never overwrites files that already exist. See [Installation](docs/installation.md) for
+upgrades and uninstalling.
 
-## Use
+## Usage
 
-Open the artifact repository and run:
+Open the memory repository in your host. Commands use a different prefix in each host:
 
-```text
-Cursor / Claude Code: /ob-start
-Codex CLI:           $ob-start
-ChatGPT Desktop:     @ob-start
-```
+| Host                 | Prefix | Example     |
+| -------------------- | ------ | ----------- |
+| Cursor, Claude Code  | `/`    | `/ob-start` |
+| Codex CLI            | `$`    | `$ob-start` |
+| ChatGPT Desktop      | `@`    | `@ob-start` |
 
-ChatGPT Desktop requires its local executor for these Python-backed workflows. ChatGPT
-web/cloud and Work surfaces without local execution are not supported.
+ChatGPT Desktop needs its local executor enabled, because these workflows run Python on
+your machine. ChatGPT on the web and other cloud-only surfaces are not supported.
 
-`/ob-start` creates ignored mode-0600 `obconfig.yaml` from the canonical root template
-when missing, then stops for editing. On rerun it validates, hashes the complete artifact
-directory, displays a redacted summary, and asks whether to proceed. Only exact `yes`
-creates digest-bound one-shot analysis authorization. Analysis then atomically claims
-that snapshot, finalizes validated generated outputs immediately before dispatch, and
-binds them to the staged Git tree. Push/PR work requires an exact matching committed
-tree and verified dispatch. Consumption rechecks immutable Git objects and advances the
-artifact baseline; decline/failure aborts only the claim.
+### Start an analysis
 
-At any time:
+Run `/ob-start`. The first time, obengineer creates `obconfig.yaml` from the template
+and asks you to fill it in. Place any supporting documents, such as architecture
+diagrams or runbooks, in the `artifacts/` directory.
 
-```text
-Cursor / Claude Code: /ob-add-inputs, /ob-edit-inputs
-Codex CLI:           $ob-add-inputs, $ob-edit-inputs
-ChatGPT Desktop:     @ob-add-inputs, @ob-edit-inputs
-```
+Run `/ob-start` again when the file is ready. obengineer validates the configuration,
+reports any problems with the line number and the reason, and then shows a summary with
+secrets hidden. Reply `yes` to begin the analysis. When it finishes, you receive one link
+to the analysis and one pull request to review.
 
-Edit local `obconfig.yaml`, then use either compatibility command. A changed config uses
-the common summary/proceed gate and creates the next immutable `[V<N>]` analysis and one
-review PR. An unchanged config stops with an edit/rerun instruction.
+### Review and accept
 
-When review is complete, reply `yes` to accept the version and merge the PR. The agent
-resolves commits and content digests internally; no SHA or named accepter is required.
-Eligible work orders become Ready.
+Read the analysis in the side panel and comment on the pull request as you would on any
+other change. When the analysis is ready, reply `yes` in chat. obengineer accepts that
+version, merges the pull request, and tells you which work order to start with.
 
-Continue with:
+### Update the analysis
 
-```text
-Cursor / Claude Code: /ob-implement work-order:<id>, /ob-terraform, /ob-verify
-Codex CLI:           $ob-implement work-order:<id>, $ob-terraform, $ob-verify
-ChatGPT Desktop:     @ob-implement work-order:<id>, @ob-terraform, @ob-verify
-```
+If you learn something new, edit `obconfig.yaml` or add files to `artifacts/`, then run
+`/ob-add-inputs` or `/ob-edit-inputs`. obengineer shows the same summary and asks for
+confirmation. It then produces the next version of the analysis in a new pull request.
+If nothing has changed, it tells you so and stops.
 
-Terraform is plan-only and a human applies it. Verification is read-only.
+### Implement and verify
 
-## Analysis experience
+| Command                          | What it does                                                         |
+| -------------------------------- | -------------------------------------------------------------------- |
+| `/ob-implement work-order:<id>`  | Implements one ready work order as a pull request for review.        |
+| `/ob-terraform`                  | Generates Terraform for Splunk resources and stops at a plan.        |
+| `/ob-verify`                     | Checks the tenant against the accepted strategy and reports any gaps. |
 
-- No browser or localhost server.
-- One host-native documentation link in chat; detail stays in the side panel.
-- `[V1] [V2] [V3]` selects immutable versions.
-- Breadcrumbs return every detail page to the analysis index.
-- The landing page represents the full strategy and links all detail.
-- Use cases lead to workflows, business transactions, signal contracts, and work orders.
-- Topics absent from evidence have no empty pages; suggestions share one reference page.
-- Word is optional and, when requested, is a summary under 20 pages.
+Run `/ob-verify` after your changes are deployed and the Terraform has been applied.
+
+## Security assessment
+
+As part of the analysis, obengineer reviews the application's security posture within
+the boundary you authorize. By default this review is passive. It examines source code,
+configuration, dependencies, and the artifacts you supply, and it sends no
+security-specific requests of its own. You can opt into `safe-active` mode. In that mode,
+obengineer also sends two read-only `HEAD` requests to each HTTPS origin you explicitly
+list, one for `robots.txt` and one for `security.txt`. It never runs penetration-testing
+tools. [Security assessment modes](docs/configuration.md#security-assessment-modes)
+describes exactly what each mode does.
 
 ## Documentation
 
 - [Documentation index](docs/README.md)
-- [Installation](docs/installation.md)
-- [Configuration](docs/configuration.md)
-- [End-to-end usage](docs/usage.md)
-- [How it works](docs/how-it-works.md)
+- [Installation and upgrades](docs/installation.md)
+- [Configuration and behavior controls](docs/configuration.md)
+- [End-to-end usage and command reference](docs/usage.md)
+- [How obengineer operates](docs/how-it-works.md)
 - [Design rationale](docs/design.md)
 
 ## Development
@@ -120,7 +159,8 @@ make test
 make check
 ```
 
-Canonical skills live in `skills/`. Run `make sync-plugin-skills` after changing them.
+The canonical skills live in `skills/`. After you change a skill, run
+`make sync-plugin-skills` to update the copies bundled with the plugin.
 
 ## License
 
