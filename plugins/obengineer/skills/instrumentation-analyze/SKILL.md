@@ -90,9 +90,12 @@ contains the summary, architecture, findings, path, work-order summary, and use 
   as supplemental evidence; MCP cannot satisfy or relabel the direct attempt.
 - Run `manage_obconfig.py safe-active --command <origin> --intended-version V<N>`
   and append its redacted outcomes to provenance. Passive/none must produce no requests.
-  The claim is revalidated around every supported network path and consumed only after
-  successful analysis/PR dispatch. Decline/failure invokes `manage_obconfig.py abort`
-  with the same binding, releasing the claim without changing baseline/history.
+  The claim is revalidated around every supported network path. After all analysis,
+  network, render, and validation work, run `manage_obconfig.py finalize` with the same
+  binding and explicit generated-output roots immediately before commit/push/PR
+  dispatch. Dispatch only when finalize succeeds. Consume only the successfully
+  published finalized claim. Decline/failure invokes `manage_obconfig.py abort` with the
+  same binding, releasing the claim without changing baseline/history.
 - Never print or store a secret. Record shape, location, and exposure only.
 - Missing optional inputs do not block analysis and do not create empty chapters.
 - Findings link affected use cases, workflows, business transactions, contracts, and
@@ -227,6 +230,10 @@ Run `make qa-analysis` against the generic representative fixture and enforce it
 validation-time, render-time, output-file, and output-byte budgets.
 
 Run `$deliverable-review` against the linked site and wiki. Fix every blocking defect.
+Then finalize `docs/observability` and the generated versioned wiki with the runtime gate.
+Do no analysis, network, render, or output mutation between finalize and dispatch.
+Input changes after finalize belong to the next run and do not invalidate successful
+consume of the already published finalized snapshot.
 
 ### 8. Review, accept, and hand off
 

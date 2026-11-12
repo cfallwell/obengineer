@@ -59,8 +59,9 @@ web/cloud and Work surfaces without local execution are not supported.
 when missing, then stops for editing. On rerun it validates, hashes the complete artifact
 directory, displays a redacted summary, and asks whether to proceed. Only exact `yes`
 creates digest-bound one-shot analysis authorization. Analysis then atomically claims
-that snapshot; successful final consumption advances the artifact baseline, while
-decline/failure aborts only the claim.
+that snapshot, finalizes validated generated outputs immediately before dispatch, and
+consumes only a successfully published finalized claim. Consumption advances the
+artifact baseline to the finalized snapshot; decline/failure aborts only the claim.
 
 At any time:
 

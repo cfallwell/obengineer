@@ -46,8 +46,17 @@ Run one obengineer analysis version. Direct invocation never bypasses the one-sh
    versioned wiki and every proposed work order.
 8. Use the skills routed by Prompt 01; render Word only when requested.
 9. Follow `skills/references/analysis-run-lifecycle.md` for the one PR and review.
-10. Validate all Prompt 01 outputs. After successful PR dispatch, run `consume` with the
-   same command/version. On decline or failure, run
+10. Validate all Prompt 01 outputs. Immediately before the first commit, push, or PR
+   dispatch, run
+   `python3 "{{OBENGINEER_ROOT}}/skills/engagement-intake/scripts/manage_obconfig.py"
+   --project-root . finalize --command <origin> --intended-version V<N>
+   --output docs/observability --output wiki/apps/<app>/versions/V<N>`.
+   Supply every generated output root explicitly. Dispatch nothing unless this command
+   succeeds; do no analysis, network, or render work between finalize and dispatch.
+11. After successful analysis and PR dispatch, run `consume` with the same
+   command/version. Input changes after finalize belong to the next run and do not
+   invalidate consumption of the already finalized and published snapshot. On decline
+   or any pre-dispatch/dispatch failure, run
    `python3 "{{OBENGINEER_ROOT}}/skills/engagement-intake/scripts/manage_obconfig.py"
    --project-root . abort --command <origin> --intended-version V<N>` instead. Abort
    releases the claim without changing artifact baseline/history.

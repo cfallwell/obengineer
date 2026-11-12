@@ -33,14 +33,20 @@ After claiming with the originating command and intended version, analysis runs:
 ```text
 python3 <obengineer-root>/skills/engagement-intake/scripts/manage_obconfig.py --project-root . direct-api --phase analysis --command <origin> --intended-version V<N>
 python3 <obengineer-root>/skills/engagement-intake/scripts/manage_obconfig.py --project-root . safe-active --command <origin> --intended-version V<N>
+python3 <obengineer-root>/skills/engagement-intake/scripts/manage_obconfig.py --project-root . finalize --command <origin> --intended-version V<N> --output docs/observability --output wiki/apps/<app>/versions/V<N>
 ```
 
 Its centralized-redacted JSON feeds provenance. `/ob-verify` runs the same supported
 path with `--phase verification` after acceptance/plan validation and feeds those rows
 to verification evidence and provenance. Neither workflow imports the adapter directly
 or puts credentials in command arguments. Passive/none makes zero safe-active requests.
-Only successful final `consume` advances the artifact baseline. Failure/decline invokes
+Run finalize only after all analysis, network, render, and validation work and immediately
+before commit/push/PR dispatch. It revalidates the claimed inputs and computes the
+generated-output digest itself. Only successful dispatch followed by final `consume`
+advances the artifact baseline to the finalized snapshot. Failure/decline invokes
 `abort` with the same binding, releasing the claim while baseline/history stay unchanged.
+Input edits after finalize belong to the next run and do not invalidate consumption of
+the already published snapshot.
 
 The result is one reviewed PR containing linked Markdown analysis, canonical contract,
 sanitized provenance, verification plan, versioned wiki, and all work orders. Review in

@@ -41,10 +41,14 @@ Only exact `yes` writes one-shot local authorization bound to schema version, co
 digest, full artifact manifest/delta and tree digest, command, and intended version.
 Exact `no` performs no network/API/analysis action. Analysis atomically claims the
 authorization before dispatch; concurrent/repeated claims fail. Revalidate the claim
-around every consumer and advance the artifact baseline only on successful final
-`consume`. Declined/failed analysis must invoke `abort` with the same command/version;
-abort changes neither baseline nor history. Changed config/artifacts invalidates work
-but never prevents an explicit abort.
+around every network consumer. After analysis, rendering, and validation, `finalize`
+rehashes the claimed inputs and computes the generated-output digest from explicit
+contained output paths immediately before commit/push/PR dispatch. Changed
+config/artifacts before finalize prevents dispatch. Advance the artifact baseline only
+when `consume` records the successfully published finalized snapshot. Input changes
+after finalize belong to the next run and do not invalidate that consume.
+Declined/failed analysis must invoke `abort` with the same command/version; abort changes
+neither baseline nor history. Changed config/artifacts never prevent an explicit abort.
 
 All output goes through the schema-derived redactor. Never show tokens, password, login
 ID, full index names, config digest, unknown-extension values, or source lines.

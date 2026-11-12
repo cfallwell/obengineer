@@ -70,9 +70,11 @@ Agent files and commands route to these authorities; they do not restate them.
 - MCP is one data source; direct APIs remain first-class.
 - Analysis claims the gate before invoking
   `manage_obconfig.py direct-api --phase analysis --command <command> --intended-version <Vn>`
-  or `manage_obconfig.py safe-active`, consumes only after success, and aborts on every
-  decline/failure. Verification invokes `direct-api --phase verification`. Only their
-  redacted JSON feeds provenance.
+  or `manage_obconfig.py safe-active`. After analysis/render/validation it invokes
+  `manage_obconfig.py finalize` with explicit output paths immediately before
+  commit/push/PR dispatch, consumes only after successful dispatch, and aborts on every
+  decline/failure. Verification invokes `direct-api --phase verification`. Only
+  centralized-redacted network output feeds provenance.
 - Do not require humans to type `unknown`, copy a SHA, or provide names of engineers,
   owners, or accepters. Engagement inputs are edited only in local `obconfig.yaml`.
 

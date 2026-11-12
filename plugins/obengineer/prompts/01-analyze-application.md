@@ -33,9 +33,13 @@ limitations/unresolved evidence. Never import `direct_api.py` in place of this c
 read process environment, or put a credential in command arguments.
 The second command makes zero requests in passive/none and records fixed-policy
 safe-active outcomes otherwise. Both commands revalidate the claim before and after
-network work. Consume only after successful analysis and PR dispatch. On failure or
-decline invoke `manage_obconfig.py abort` with the same command/version; it releases the
-claim while leaving artifact baseline/history unchanged.
+network work. After all analysis, network, render, and validation work, invoke
+`manage_obconfig.py finalize --command <origin> --intended-version V<N>` with explicit
+`--output` paths for `docs/observability` and the generated versioned wiki. Run it
+immediately before the first commit/push/PR action and dispatch only after it succeeds.
+Consume only after successful analysis and PR dispatch. On failure or decline invoke
+`manage_obconfig.py abort` with the same command/version; it releases the claim while
+leaving artifact baseline/history unchanged.
 
 ## Evidence collection
 
@@ -130,7 +134,10 @@ Run `make qa-analysis`. Validate manifest intervals and coordinator capacity, ca
 object fields, deterministic rendering, placeholders, links, breadcrumbs, schema, map,
 ledger, verification plan schema version 2 with stable `source_ref` values, wiki,
 work-order dependencies, reverse links, performance budgets, and credential scanning.
-Open one analysis PR.
+Finalize the generated output roots as specified above, then open one analysis PR without
+performing intervening analysis, network, or rendering. Mutation before finalize yields
+no dispatch. Input mutation after finalize belongs to the next run and does not
+invalidate consumption of the finalized snapshot after successful dispatch.
 
 When ready for review, ask the human to review the linked PR. Process review comments and
 commit corrections. Ask:

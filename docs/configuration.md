@@ -37,7 +37,10 @@ Proceed with analysis using this configuration? (yes/no)
 Exact `yes` creates one-shot authorization bound to schema version, config digest,
 full artifact manifest/delta and tree digest, originating command, and intended immutable
 version. Analysis atomically claims that authorization. Any input change invalidates the
-claim before API/PR work; concurrent or repeated claims fail.
+claim before API work or finalization; concurrent or repeated claims fail. After all
+analysis output is rendered and validated, `finalize` revalidates those inputs and binds
+a runtime-computed digest of explicit contained generated-output paths immediately before
+commit/push/PR dispatch.
 
 ## Access behavior
 
@@ -51,13 +54,17 @@ The supported production commands are:
 ```bash
 python3 skills/engagement-intake/scripts/manage_obconfig.py --project-root . direct-api --phase analysis --command <origin> --intended-version V<N>
 python3 skills/engagement-intake/scripts/manage_obconfig.py --project-root . safe-active --command <origin> --intended-version V<N>
+python3 skills/engagement-intake/scripts/manage_obconfig.py --project-root . finalize --command <origin> --intended-version V<N> --output docs/observability --output wiki/apps/<app>/versions/V<N>
 python3 skills/engagement-intake/scripts/manage_obconfig.py --project-root . direct-api --phase verification
 ```
 
 They securely load ignored mode-0600 config and emit only centralized-redacted JSON.
 Safe-active uses fixed HEAD paths/rates/ceilings with DNS and peer-address defenses;
-passive/none makes no request. Successful final consume advances the artifact baseline;
-declined/failed analysis uses `abort`, which releases only the claim.
+passive/none makes no request. Dispatch begins only after finalize succeeds. Successful
+final consume advances the artifact baseline to the finalized input snapshot;
+declined/failed analysis uses `abort`, which releases only the exact claim. Post-finalize
+input edits belong to the next run and do not invalidate consumption of the already
+published finalized snapshot.
 Analysis and verification append its dispositions and parsed aggregate measurements to
 provenance. Missing config emits explicit `not-configured` dispositions; it does not
 read `.env` or process environment.
@@ -73,6 +80,9 @@ and `docs/observability/engagement-inputs.yaml` after the explicit repair gate. 
 files are preserved. Conflicts, unresolved secret references, multiple deployment
 environments, and artifact paths outside the selected directory require manual
 resolution in `obconfig.yaml`.
+Migration revalidates source and destination identities through final commit. If another
+cooperating same-user process replaces a destination during migration, rollback removes
+only files still proven to be migration-owned; replacement bytes are preserved.
 
 New runs use schema v4 only. Historical accepted analyses and their provenance are never
 rewritten.
