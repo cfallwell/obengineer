@@ -36,12 +36,13 @@ installation. A project install creates only missing `.gitignore`,
 `obconfig.yaml.template`, and `artifacts/README.md`; it never overwrites existing root
 content or owns an actual `obconfig.yaml`.
 
-obengineer also uses relevant MCP tools already connected to the host. MCP supplements
-direct APIs; it is not the only tenant data source.
-Analysis atomically claims its authorized snapshot, loads the supported non-secret
-`config-projection`, and invokes supported `direct-api` and `safe-active` subcommands;
-verification invokes `direct-api --phase verification`.
-Only centralized-redacted dispositions and aggregate measurements feed provenance.
+obengineer gathers evidence from connected integrations and configured read-only Splunk
+APIs. Secrets remain in local `obconfig.yaml` and are never copied into reports. Each
+analysis uses a fixed snapshot of the approved configuration and artifacts, and
+verification uses the same read-only access to confirm expected telemetry and resources.
+The [security assessment](docs/configuration.md#security-assessment-modes) defaults to
+passive review; optional `safe-active` mode adds two limited, non-destructive HTTPS checks
+against each explicitly authorized origin and does not run penetration-testing tools.
 
 ## Use
 

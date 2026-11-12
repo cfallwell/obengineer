@@ -85,6 +85,31 @@ Analysis measures approved `sf.org` usage and `sf.org.limit.*` enforced system l
 An enforced limit is not contractual entitlement. Contract terms remain unavailable
 unless a separate measured API or approved export supports them.
 
+## Security assessment modes
+
+`security_assessment.mode` controls how obengineer gathers security evidence. The
+default, `passive`, reviews source, configuration, dependencies, supplied artifacts,
+browser/runtime observations, and requests made by the application's normal flow. It
+makes no additional security-specific requests. `none` opts out of this screening and
+records the resulting evidence gap.
+
+Optional `safe-active` performs the passive review plus two fixed checks against every
+exact HTTPS origin listed in `security_assessment.authorized_origins`:
+
+- `HEAD /robots.txt`
+- `HEAD /.well-known/security.txt`
+
+These checks use obengineer's built-in Python HTTPS executor, not ZAP, Burp, Nmap,
+Nuclei, or another penetration-testing tool. The executor verifies TLS, rejects private
+or mismatched DNS and peer addresses, does not follow redirects, sends no credentials,
+and permits at most one request per second and 100 requests in total. It does not crawl,
+log in, brute force, fuzz, submit forms, generate load, exploit findings, or make
+state-changing requests.
+
+The generated agent wiki applies the complete
+[security assessment contract](../skills/references/security-assessment.md), including
+OWASP coverage and evidence rules.
+
 ## Legacy migration
 
 When no actual config exists, `/ob-start` may migrate retained facts from local `.env`
