@@ -32,6 +32,7 @@ import hashlib
 import json
 import os
 import shutil
+import stat
 import sys
 import tempfile
 import time
@@ -339,14 +340,32 @@ class RollbackEntry:
     path: Path
     backup: Path | None
     before: PathIdentity | None
+    staging_device: int
     written: PathIdentity | None = None
     touched: bool = False
 
 
+@dataclass(frozen=True)
+class StagingArea:
+    path: Path
+    device: int
+    inode: int
+
+
 @dataclass
 class InstallTransaction:
-    staging: Path
+    staging_areas: dict[int, StagingArea]
     entries: list[RollbackEntry]
+
+    @property
+    def staging(self) -> Path:
+        return next(iter(self.staging_areas.values())).path
+
+    def staging_summary(self) -> str:
+        return ", ".join(
+            str(area.path)
+            for _, area in sorted(self.staging_areas.items())
+        )
 
     def mark(self, changed: Path) -> None:
         changed = changed.absolute()
@@ -908,7 +927,6 @@ def install_host(
                 _write_workflow(planner, command, skills_dir / command.stem)
         return
 
-    base.parent.mkdir(parents=True, exist_ok=True)
     transaction: InstallTransaction | None = None
     rollback_incomplete = False
     try:
@@ -990,7 +1008,7 @@ def install_host(
                 raise IncompleteRollback(
                     "installer rollback was incomplete; concurrent replacements "
                     f"were preserved at {joined}; backups retained at "
-                    f"{transaction.staging}"
+                    f"{transaction.staging_summary()}"
                 ) from original_error
         raise
     finally:
@@ -1003,7 +1021,7 @@ def install_host(
             elif transaction in _ACTIVE_INSTALL_TRANSACTIONS:
                 _ACTIVE_INSTALL_TRANSACTIONS.remove(transaction)
             if not rollback_incomplete:
-                shutil.rmtree(transaction.staging, ignore_errors=True)
+                _cleanup_staging_areas(transaction)
 
 
 def _outer_install_paths(
@@ -1051,32 +1069,150 @@ def _outer_install_paths(
     return list(dict.fromkeys(paths))
 
 
+def _secure_staging_anchor(path: Path, transaction_paths: set[Path]) -> Path:
+    anchor = path.parent
+    while not anchor.exists() and not anchor.is_symlink():
+        if anchor == anchor.parent:
+            break
+        anchor = anchor.parent
+    if anchor.is_symlink() or not anchor.is_dir():
+        raise IncompleteRollback(
+            f"no secure staging parent exists for {path}"
+        )
+    while any(
+        candidate == anchor or candidate in anchor.parents
+        for candidate in transaction_paths
+    ):
+        if anchor == anchor.parent:
+            raise IncompleteRollback(
+                f"no contained staging parent exists for {path}"
+            )
+        anchor = anchor.parent
+        if anchor.is_symlink() or not anchor.is_dir():
+            raise IncompleteRollback(
+                f"staging parent is unsafe for {path}"
+            )
+    current = anchor
+    while current != current.parent:
+        info = current.lstat()
+        if current.is_symlink() or not stat.S_ISDIR(info.st_mode):
+            raise IncompleteRollback(
+                f"staging parent is unsafe for {path}"
+            )
+        current = current.parent
+    return anchor
+
+
+def _cleanup_staging_areas(transaction: InstallTransaction) -> None:
+    failures: list[Path] = []
+    for area in transaction.staging_areas.values():
+        try:
+            current = area.path.lstat()
+        except FileNotFoundError:
+            continue
+        if (
+            current.st_dev,
+            current.st_ino,
+        ) != (area.device, area.inode) or not area.path.is_dir() or area.path.is_symlink():
+            failures.append(area.path)
+            continue
+        quarantine = area.path.parent / (
+            f".{area.path.name}.cleanup-{os.getpid()}-{time.time_ns()}"
+        )
+        try:
+            os.rename(area.path, quarantine)
+        except OSError:
+            failures.append(area.path)
+            continue
+        moved = quarantine.lstat()
+        if (moved.st_dev, moved.st_ino) != (area.device, area.inode):
+            try:
+                os.rename(quarantine, area.path)
+            except OSError:
+                pass
+            failures.append(area.path)
+            continue
+        shutil.rmtree(quarantine)
+    if failures:
+        raise IncompleteRollback(
+            "installer staging cleanup was incomplete; preserved "
+            + ", ".join(str(path) for path in failures)
+        )
+
+
 def _snapshot_install_paths(paths: list[Path]) -> InstallTransaction:
-    staging = Path(tempfile.mkdtemp(prefix="obengineer-outer-install-"))
     entries: list[RollbackEntry] = []
     absent_ancestors: list[Path] = []
     ordered = sorted(
         dict.fromkeys(path.absolute() for path in paths),
         key=lambda path: (len(path.parts), path.as_posix()),
     )
-    for index, path in enumerate(ordered):
+    planned: list[tuple[Path, PathIdentity | None, int, Path]] = []
+    transaction_paths = set(ordered)
+    for path in ordered:
         if any(ancestor == path or ancestor in path.parents for ancestor in absent_ancestors):
             continue
         before = path_identity(path)
+        anchor = _secure_staging_anchor(path, transaction_paths)
+        anchor_device = anchor.lstat().st_dev
+        if before is not None and before.device != anchor_device:
+            raise IncompleteRollback(
+                f"same-filesystem staging is unavailable for {path}"
+            )
+        device = before.device if before is not None else anchor_device
+        planned.append((path, before, device, anchor))
         if before is None:
-            entries.append(RollbackEntry(path, None, None))
             absent_ancestors.append(path)
-            continue
-        backup = staging / str(index)
-        if path.is_symlink():
-            backup.symlink_to(os.readlink(path))
-        elif path.is_dir():
-            shutil.copytree(path, backup, symlinks=True)
-        else:
-            backup.parent.mkdir(parents=True, exist_ok=True)
-            shutil.copy2(path, backup, follow_symlinks=False)
-        entries.append(RollbackEntry(path, backup, before))
-    return InstallTransaction(staging, entries)
+
+    staging_areas: dict[int, StagingArea] = {}
+    try:
+        for _, _, device, anchor in planned:
+            if device in staging_areas:
+                continue
+            try:
+                staging = Path(
+                    tempfile.mkdtemp(
+                        prefix=".obengineer-install-", dir=anchor
+                    )
+                )
+            except OSError:
+                raise IncompleteRollback(
+                    f"cannot create same-filesystem staging below {anchor}"
+                ) from None
+            os.chmod(staging, 0o700)
+            info = staging.lstat()
+            if (
+                info.st_dev != device
+                or not stat.S_ISDIR(info.st_mode)
+                or staging.is_symlink()
+            ):
+                shutil.rmtree(staging, ignore_errors=True)
+                raise IncompleteRollback(
+                    f"same-filesystem staging is unavailable below {anchor}"
+                )
+            staging_areas[device] = StagingArea(
+                staging, info.st_dev, info.st_ino
+            )
+
+        for index, (path, before, device, _) in enumerate(planned):
+            backup: Path | None = None
+            if before is not None:
+                backup = (
+                    staging_areas[device].path / f"entry-{index}-backup"
+                )
+                if path.is_symlink():
+                    backup.symlink_to(os.readlink(path))
+                elif path.is_dir():
+                    shutil.copytree(path, backup, symlinks=True)
+                else:
+                    shutil.copy2(path, backup, follow_symlinks=False)
+            entries.append(RollbackEntry(path, backup, before, device))
+    except BaseException:
+        if staging_areas:
+            temporary = InstallTransaction(staging_areas, [])
+            _cleanup_staging_areas(temporary)
+        raise
+    return InstallTransaction(staging_areas, entries)
 
 
 def _vacate_install_paths(transaction: InstallTransaction) -> None:
@@ -1086,13 +1222,14 @@ def _vacate_install_paths(transaction: InstallTransaction) -> None:
             entry.written = None
             entry.touched = True
             continue
-        moved = transaction.staging / f"moved-{index}"
+        area = transaction.staging_areas[entry.staging_device]
+        moved = area.path / f"entry-{index}-moved"
         try:
             os.rename(entry.path, moved)
         except FileNotFoundError:
             raise IncompleteRollback(
                 f"installer target changed before backup move: {entry.path}; "
-                f"backups retained at {transaction.staging}"
+                f"backups retained at {transaction.staging_summary()}"
             ) from None
         moved_identity = path_identity(moved)
         if moved_identity != entry.before:
@@ -1102,7 +1239,7 @@ def _vacate_install_paths(transaction: InstallTransaction) -> None:
                 pass
             raise IncompleteRollback(
                 f"installer target changed during backup move: {entry.path}; "
-                f"backups retained at {transaction.staging}"
+                f"backups retained at {transaction.staging_summary()}"
             )
         if entry.backup is not None:
             _remove_path(entry.backup)
@@ -1133,12 +1270,16 @@ def _rollback_install_paths(transaction: InstallTransaction) -> list[Path]:
                     active.mark(path)
             continue
         path.parent.mkdir(parents=True, exist_ok=True)
-        if backup.is_symlink():
-            path.symlink_to(os.readlink(backup))
-        elif backup.is_dir():
-            shutil.copytree(backup, path, symlinks=True)
-        else:
-            shutil.copy2(backup, path, follow_symlinks=False)
+        try:
+            if backup.is_symlink():
+                path.symlink_to(os.readlink(backup))
+            elif backup.is_dir():
+                shutil.copytree(backup, path, symlinks=True)
+            else:
+                os.link(backup, path, follow_symlinks=False)
+        except FileExistsError:
+            preserved.append(path)
+            continue
         for active in _ACTIVE_INSTALL_TRANSACTIONS:
             if active is not transaction:
                 active.mark(path)
@@ -1706,7 +1847,7 @@ def main(argv=None) -> int:
                 raise IncompleteRollback(
                     "outer installer rollback was incomplete; concurrent "
                     f"replacements were preserved at {joined}; backups retained "
-                    f"at {outer_transaction.staging}"
+                    f"at {outer_transaction.staging_summary()}"
                 ) from original_error
         raise
     finally:
@@ -1719,9 +1860,7 @@ def main(argv=None) -> int:
             elif outer_transaction in _ACTIVE_INSTALL_TRANSACTIONS:
                 _ACTIVE_INSTALL_TRANSACTIONS.remove(outer_transaction)
             if not rollback_incomplete:
-                shutil.rmtree(
-                    outer_transaction.staging, ignore_errors=True
-                )
+                _cleanup_staging_areas(outer_transaction)
 
     print("\nCursor and Claude Code commands, in order:")
     for command in command_files():

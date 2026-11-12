@@ -4,8 +4,10 @@ import hashlib
 import importlib.util
 import json
 import os
+import shutil
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
 
 import pytest
@@ -18,6 +20,35 @@ spec = importlib.util.spec_from_file_location("obengineer_installer", INSTALL_SC
 installer = importlib.util.module_from_spec(spec)
 sys.modules[spec.name] = installer
 spec.loader.exec_module(installer)
+
+
+@pytest.fixture
+def distinct_filesystem_project(tmp_path):
+    source_device = Path(tempfile.gettempdir()).stat().st_dev
+    candidates = (Path("/dev/shm"),)
+    root = None
+    for candidate in candidates:
+        try:
+            if (
+                candidate.is_dir()
+                and candidate.stat().st_dev != source_device
+                and os.access(candidate, os.W_OK | os.X_OK)
+            ):
+                root = Path(
+                    tempfile.mkdtemp(
+                        prefix="obengineer-crossfs-", dir=candidate
+                    )
+                )
+                break
+        except OSError:
+            continue
+    if root is None:
+        pytest.skip("no writable filesystem with a distinct device is available")
+    try:
+        assert root.stat().st_dev != source_device
+        yield root
+    finally:
+        shutil.rmtree(root, ignore_errors=True)
 
 
 def run_install(project: Path, *args: str) -> subprocess.CompletedProcess[str]:
@@ -564,6 +595,105 @@ def test_outer_transaction_rolls_back_all_hosts_on_later_failure(
     assert not (tmp_path / ".obengineer").exists()
     assert not (tmp_path / "obconfig.yaml.template").exists()
     assert not (tmp_path / "artifacts/README.md").exists()
+
+
+def test_cross_filesystem_reinstall_uses_target_local_staging(
+    distinct_filesystem_project
+):
+    project = distinct_filesystem_project
+    assert project.stat().st_dev != Path(tempfile.gettempdir()).stat().st_dev
+
+    assert installer.main(
+        ["--cursor", "--project", str(project), "--copy"]
+    ) == 0
+    command = project / ".cursor/commands/ob-start.md"
+    before = command.read_bytes()
+    assert installer.main(
+        ["--cursor", "--project", str(project), "--copy"]
+    ) == 0
+
+    assert command.read_bytes() == before
+    assert not list(project.rglob(".obengineer-install-*"))
+
+
+def test_cross_filesystem_reinstall_rolls_back_without_exdev(
+    distinct_filesystem_project, monkeypatch
+):
+    project = distinct_filesystem_project
+    assert installer.main(
+        ["--cursor", "--project", str(project), "--copy"]
+    ) == 0
+    command = project / ".cursor/commands/ob-start.md"
+    before = command.read_bytes()
+    original = installer.Planner.write
+    calls = 0
+
+    def fail_second_write(self, destination, text):
+        nonlocal calls
+        calls += 1
+        if calls == 2:
+            raise OSError("injected cross-filesystem rollback")
+        return original(self, destination, text)
+
+    monkeypatch.setattr(installer.Planner, "write", fail_second_write)
+    with pytest.raises(OSError, match="cross-filesystem rollback"):
+        installer.main(
+            ["--cursor", "--project", str(project), "--copy"]
+        )
+
+    assert command.read_bytes() == before
+    assert not list(project.rglob(".obengineer-install-*"))
+
+
+def test_multi_device_transaction_uses_one_local_staging_area_per_device(
+    tmp_path, distinct_filesystem_project
+):
+    local = tmp_path / "local.txt"
+    remote = distinct_filesystem_project / "remote.txt"
+    local.write_bytes(b"local\n")
+    remote.write_bytes(b"remote\n")
+    devices = {local.stat().st_dev, remote.stat().st_dev}
+    assert len(devices) == 2
+
+    transaction = installer._snapshot_install_paths([local, remote])
+    assert set(transaction.staging_areas) == devices
+    for device, area in transaction.staging_areas.items():
+        assert area.path.stat().st_dev == device
+        assert area.path.parent.stat().st_dev == device
+
+    installer._ACTIVE_INSTALL_TRANSACTIONS.append(transaction)
+    try:
+        installer._vacate_install_paths(transaction)
+        assert not local.exists()
+        assert not remote.exists()
+        assert installer._rollback_install_paths(transaction) == []
+    finally:
+        installer._ACTIVE_INSTALL_TRANSACTIONS.remove(transaction)
+        installer._cleanup_staging_areas(transaction)
+
+    assert local.read_bytes() == b"local\n"
+    assert remote.read_bytes() == b"remote\n"
+
+
+def test_staging_creation_failure_precedes_all_install_mutation(
+    tmp_path, monkeypatch
+):
+    gitignore = tmp_path / ".gitignore"
+    gitignore.write_bytes(b"customer rule\n")
+    before = gitignore.read_bytes()
+
+    def refuse_staging(*args, **kwargs):
+        raise PermissionError("injected staging denial")
+
+    monkeypatch.setattr(installer.tempfile, "mkdtemp", refuse_staging)
+    with pytest.raises(
+        installer.IncompleteRollback,
+        match="cannot create same-filesystem staging",
+    ):
+        installer.main(["--cursor", "--project", str(tmp_path), "--copy"])
+
+    assert gitignore.read_bytes() == before
+    assert set(tmp_path.iterdir()) == {gitignore}
 
 
 def replace_path_for_race(path: Path, replacement_type: str) -> bytes:

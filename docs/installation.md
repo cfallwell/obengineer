@@ -170,7 +170,11 @@ match. A concurrent file, symlink, or directory replacement is preserved, the ba
 staging directory is retained for manual recovery, and installation exits nonzero with
 an incomplete-rollback error. After a backup move, every host target is created
 exclusively; the installer never removes or overwrites a pathname that appears before
-the initial link, copy, or write.
+the initial link, copy, or write. Transaction staging is a unique mode-0700 hidden
+directory on the target's own filesystem, never the system temporary directory.
+Multi-device transactions use one contained staging directory per device. If any
+required same-filesystem staging directory cannot be created, installation fails before
+changing a target.
 
 Root scaffold files follow a stricter rule: existing files are never replaced, including
 files created by an earlier install. An owned file changed after installation is treated
