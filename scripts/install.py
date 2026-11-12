@@ -838,6 +838,84 @@ def install_host(
         shutil.rmtree(staging, ignore_errors=True)
 
 
+def _outer_install_paths(
+    selected: list[Host],
+    scope_root: Path,
+    project: bool,
+    copy: bool,
+) -> list[Path]:
+    paths: list[Path] = []
+    if project:
+        for directory in (scope_root / ".obengineer", scope_root / "artifacts"):
+            if not directory.exists() and not directory.is_symlink():
+                paths.append(directory)
+        paths.extend(
+            [
+                scope_root / ".gitignore",
+                scope_root / SCAFFOLD_MANIFEST,
+                *(scope_root / destination for _, destination in SCAFFOLD_FILES),
+                scope_root / ".env.template",
+            ]
+        )
+    for host in selected:
+        base = host.base(scope_root, project)
+        if not base.exists() and not base.is_symlink():
+            paths.append(base)
+        paths.append(base / MANIFEST_NAME)
+        targets = desired_host_targets(host, scope_root, project, copy)
+        for target in targets:
+            current = target.parent
+            while current != base and current != current.parent:
+                if not current.exists() and not current.is_symlink():
+                    paths.append(current)
+                current = current.parent
+        paths.extend(targets)
+        previous = read_manifest(base / MANIFEST_NAME)
+        owned = host_owned_entries_for_install(previous, host, scope_root, project)
+        if owned:
+            for relative in owned:
+                candidate = base / Path(relative)
+                try:
+                    candidate.relative_to(base)
+                except ValueError:
+                    continue
+                paths.append(candidate)
+    return list(dict.fromkeys(paths))
+
+
+def _snapshot_install_paths(paths: list[Path]) -> tuple[Path, list[tuple[Path, Path | None]]]:
+    staging = Path(tempfile.mkdtemp(prefix="obengineer-outer-install-"))
+    journal: list[tuple[Path, Path | None]] = []
+    for index, path in enumerate(paths):
+        if not path.exists() and not path.is_symlink():
+            journal.append((path, None))
+            continue
+        backup = staging / str(index)
+        if path.is_symlink():
+            backup.symlink_to(os.readlink(path))
+        elif path.is_dir():
+            shutil.copytree(path, backup, symlinks=True)
+        else:
+            backup.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(path, backup, follow_symlinks=False)
+        journal.append((path, backup))
+    return staging, journal
+
+
+def _rollback_install_paths(journal: list[tuple[Path, Path | None]]) -> None:
+    for path, backup in reversed(journal):
+        _remove_path(path)
+        if backup is None:
+            continue
+        path.parent.mkdir(parents=True, exist_ok=True)
+        if backup.is_symlink():
+            path.symlink_to(os.readlink(backup))
+        elif backup.is_dir():
+            shutil.copytree(backup, path, symlinks=True)
+        else:
+            shutil.copy2(backup, path, follow_symlinks=False)
+
+
 def read_manifest(path: Path) -> dict:
     if path.is_symlink():
         return {}
@@ -1333,30 +1411,44 @@ def main(argv=None) -> int:
         print("Resolve or back up the reported paths, then rerun the installer.")
         return 1
 
-    if project:
-        print("  Project scaffold")
-        for action in install_project_scaffold(scope_root, args.dry_run):
-            print(f"    {'would ' if args.dry_run else ''}{action}")
+    outer_staging: Path | None = None
+    outer_journal: list[tuple[Path, Path | None]] = []
+    if not args.dry_run:
+        outer_staging, outer_journal = _snapshot_install_paths(
+            _outer_install_paths(selected, scope_root, project, args.copy)
+        )
+    try:
+        if project:
+            print("  Project scaffold")
+            for action in install_project_scaffold(scope_root, args.dry_run):
+                print(f"    {'would ' if args.dry_run else ''}{action}")
 
-    for host in selected:
-        planner = Planner(args.dry_run)
-        install_host(host, scope_root, project, args.copy, planner)
-        print(f"  {host.label}")
-        print(f"    skills   -> {host.skills_dir(scope_root, project)}")
-        if host.install_commands:
-            print(f"    commands -> {host.commands_dir(scope_root, project)}")
-        else:
-            print(f"    workflows -> {host.skills_dir(scope_root, project) / 'ob-*'}")
-        if installs_config_companion(host, args.copy):
-            print(
-                f"    companion -> "
-                f"{host.base(scope_root, project) / CONFIG_COMPANION}"
-            )
-        if args.dry_run:
-            for line in planner.log:
-                print(f"      would {line}")
-        for note in host.notes:
-            print(f"    {note}")
+        for host in selected:
+            planner = Planner(args.dry_run)
+            install_host(host, scope_root, project, args.copy, planner)
+            print(f"  {host.label}")
+            print(f"    skills   -> {host.skills_dir(scope_root, project)}")
+            if host.install_commands:
+                print(f"    commands -> {host.commands_dir(scope_root, project)}")
+            else:
+                print(f"    workflows -> {host.skills_dir(scope_root, project) / 'ob-*'}")
+            if installs_config_companion(host, args.copy):
+                print(
+                    f"    companion -> "
+                    f"{host.base(scope_root, project) / CONFIG_COMPANION}"
+                )
+            if args.dry_run:
+                for line in planner.log:
+                    print(f"      would {line}")
+            for note in host.notes:
+                print(f"    {note}")
+    except BaseException:
+        if outer_journal:
+            _rollback_install_paths(outer_journal)
+        raise
+    finally:
+        if outer_staging is not None:
+            shutil.rmtree(outer_staging, ignore_errors=True)
 
     print("\nCursor and Claude Code commands, in order:")
     for command in command_files():

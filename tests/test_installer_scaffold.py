@@ -136,6 +136,11 @@ def install_legacy_codex(scope_root: Path, project: bool) -> Path:
 
 
 def run_installed_start(script: Path, project: Path) -> subprocess.CompletedProcess[str]:
+    subprocess.run(["git", "init", "-q"], cwd=project, check=True)
+    ignore = project / ".gitignore"
+    text = ignore.read_text() if ignore.exists() else ""
+    if "/obconfig.yaml" not in text.splitlines():
+        ignore.write_text(text + ("" if not text or text.endswith("\n") else "\n") + "/obconfig.yaml\n/.obengineer/\n")
     return subprocess.run(
         [sys.executable, str(script), "--project-root", str(project), "init"],
         cwd=project,
@@ -512,6 +517,53 @@ def test_project_install_creates_missing_scaffold_and_tracks_ownership(tmp_path)
     for relative, ownership in manifest["created"].items():
         digest = hashlib.sha256((tmp_path / relative).read_bytes()).hexdigest()
         assert ownership["sha256"] == digest
+
+
+def test_outer_transaction_rolls_back_scaffold_on_first_host_failure(
+    tmp_path, monkeypatch
+):
+    (tmp_path / ".gitignore").write_bytes(b"customer-rule\n")
+    before = {path.name: path.read_bytes() for path in tmp_path.iterdir()}
+
+    def fail(*args, **kwargs):
+        raise OSError("injected first host failure")
+
+    monkeypatch.setattr(installer, "install_host", fail)
+    with pytest.raises(OSError, match="first host"):
+        installer.main(["--cursor", "--project", str(tmp_path)])
+    assert {path.name: path.read_bytes() for path in tmp_path.iterdir()} == before
+    assert not (tmp_path / ".cursor").exists()
+    assert not (tmp_path / ".obengineer").exists()
+
+
+def test_outer_transaction_rolls_back_all_hosts_on_later_failure(
+    tmp_path, monkeypatch
+):
+    (tmp_path / ".gitignore").write_text("customer-rule\n")
+    (tmp_path / ".cursor").mkdir()
+    (tmp_path / ".cursor/customer.txt").write_bytes(b"customer-owned")
+    before_ignore = (tmp_path / ".gitignore").read_bytes()
+    original = installer.install_host
+    calls = 0
+
+    def install_then_fail(*args, **kwargs):
+        nonlocal calls
+        calls += 1
+        original(*args, **kwargs)
+        if calls == 2:
+            raise OSError("injected later host failure")
+
+    monkeypatch.setattr(installer, "install_host", install_then_fail)
+    with pytest.raises(OSError, match="later host"):
+        installer.main(["--cursor", "--claude", "--project", str(tmp_path)])
+    assert (tmp_path / ".gitignore").read_bytes() == before_ignore
+    assert (tmp_path / ".cursor/customer.txt").read_bytes() == b"customer-owned"
+    assert not (tmp_path / ".cursor/skills").exists()
+    assert not (tmp_path / ".cursor/commands").exists()
+    assert not (tmp_path / ".claude").exists()
+    assert not (tmp_path / ".obengineer").exists()
+    assert not (tmp_path / "obconfig.yaml.template").exists()
+    assert not (tmp_path / "artifacts/README.md").exists()
 
 
 def test_project_install_and_reinstall_never_overwrite_existing_content(tmp_path):
