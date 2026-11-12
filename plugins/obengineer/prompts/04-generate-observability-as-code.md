@@ -34,11 +34,11 @@ You produce a **plan**. You do not run `apply`, and you do not create anything i
 | `docs/observability/analysis/<app>/V<N>/` | Strategy, operations, use cases, implementation path, and linked work orders |
 | `wiki/apps/<app>/versions/V<N>/services/<service>/detectors/`, `slos/`, `as-code/` | Per-detector thresholds with provenance, objectives, and what the tenant already has |
 | `docs/observability/attribute-schema.json` | Which keys are dimension-eligible, which are attribute-only |
-| `engagement-inputs.yaml` → `tenancy.o11y_realm`, `.environments` | Provider `api_url`, one workspace per environment |
-| `engagement-inputs.yaml` → `entitlement.synthetics` | Run frequency times locations, before proposing checks |
-| `engagement-inputs.yaml` → `entitlement.splunk_platform` | Index retention, and whether Log Observer Connect may be specified at all |
-| `engagement-inputs.yaml` → `constraints.change_windows` | `signalfx_alert_muting_rule` schedules |
-| `engagement-inputs.yaml` → `standards.percentile` | The one percentile in every chart and detector |
+| Secure obconfig projection → Observability realm and singular `engagement.deployment_environment` | Provider `api_url` and one environment workspace |
+| Direct measured Synthetics usage/system limits | Run frequency times locations, when evidenced |
+| Direct Platform index definitions | Measured retention and supported log correlation |
+| Secure obconfig projection → `constraints.change_windows` | `signalfx_alert_muting_rule` schedules |
+| Secure obconfig projection → `standards.percentile` | The one percentile in every chart and detector |
 | The tenant, via MCP if enabled | What already exists, so it is imported rather than duplicated |
 
 Tokens are never inputs to a file. `variable` with `sensitive = true`, fed from the

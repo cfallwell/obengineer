@@ -62,15 +62,16 @@ def test_skill_python_compiles(skill):
         compile(script.read_text(), str(script), "exec")
 
 
-def test_guided_commands_replace_manual_intake_and_generation():
+def test_obconfig_commands_replace_prompt_driven_intake():
     stems = {path.stem for path in COMMANDS.glob("*.md")}
     assert {"ob-start", "ob-add-inputs", "ob-edit-inputs", "ob-analyze"} <= stems
     assert "ob-intake" not in stems
     assert "ob-generate" not in stems
     for name in ("ob-start", "ob-add-inputs", "ob-edit-inputs"):
         text = (COMMANDS / f"{name}.md").read_text()
-        assert "yes 1 3 4" in text or name == "ob-edit-inputs"
-        assert "ob-analyze.md" in text
+        assert "obconfig.yaml" in text
+        assert "Proceed with analysis using this configuration? (yes/no)" in text
+        assert "yes 1 3" not in text
 
 
 def test_commands_are_short_dispatchers_and_plugin_complete():
@@ -79,7 +80,7 @@ def test_commands_are_short_dispatchers_and_plugin_complete():
         assert text.startswith("---\n")
         assert "description:" in text
         assert "{{OBENGINEER_ROOT}}" in text
-        assert len(text.split()) < 400
+        assert len(text.split()) < 450
         mirror = PLUGIN / "commands" / command.name
         assert mirror.is_file()
         assert mirror.read_text() == text.replace(
@@ -87,87 +88,71 @@ def test_commands_are_short_dispatchers_and_plugin_complete():
         )
 
 
-def test_input_prompt_uses_number_selection_and_no_required_unknown():
-    prompt = (PROMPTS / "00-manage-analysis-inputs.md").read_text()
+def test_input_prompt_uses_two_exact_gates():
+    prompt = (PROMPTS / "00-load-obconfig.md").read_text()
     skill = (SKILLS / "engagement-intake" / "SKILL.md").read_text()
     for text in (prompt, skill):
-        assert "Would you like to add more inputs to the analysis phase?" in text
-        assert "yes 1 3 4" in text
-        assert "one at a time" in text or "once for each selected" in text
-        assert "never types `unknown`" in text or "never have to type `unknown`" in text
-        assert "named owner" in text or "names of engineers" in text
+        assert "Repair it now? (yes/no)" in text
+        assert "Proceed with analysis using this configuration? (yes/no)" in text
+        assert "artifact" in text.lower() and "digest" in text.lower()
 
 
-def test_start_asks_required_question_before_any_discovery_and_gates_analysis():
+def test_start_validates_before_discovery_and_gates_analysis():
     command = (COMMANDS / "ob-start.md").read_text()
-    prompt = (PROMPTS / "00-manage-analysis-inputs.md").read_text()
+    prompt = (PROMPTS / "00-load-obconfig.md").read_text()
     analyze = (COMMANDS / "ob-analyze.md").read_text()
-    assert command.index("start_turn.py") < command.index(
-        "prompts/00-manage-analysis-inputs.md"
-    )
-    assert command.index("Before reading source") < command.index(
-        "discover measurable optional facts"
-    )
+    assert command.index("validate") < command.index("summary")
     for text in (command, prompt):
-        normalized = re.sub(r"\s+", " ", text)
-        assert "explicit production URL" in normalized
-        assert "no browser: <reason>" in normalized
-        assert "what hurts" in normalized.lower()
-        assert "yes 1 3" in normalized
-        assert "never starts analysis" in normalized
-        assert "exact `no`" in normalized
-        for marker in ("[x]", "[ ]", "[-]"):
-            assert marker in text
-    assert "analysis_authorized: true" in analyze
-    assert "last_event: review-no" in analyze
+        assert "exact `yes`" in text or "Only exact `yes`" in text
+        assert "exact `no`" in text or "Exact `no`" in text
+    assert "one-shot authorization" in analyze
+    assert "artifact-tree digest" in analyze
 
 
 def test_intake_runtime_and_schemas_are_packaged():
     skill = SKILLS / "engagement-intake"
     for relative in (
-        "scripts/start_turn.py",
-        "scripts/prefill_engagement_inputs.py",
-        "scripts/manage_run_context.py",
-        "schemas/env-prefill.schema.json",
-        "schemas/run-context.schema.json",
+        "scripts/obconfig.py",
+        "scripts/manage_obconfig.py",
+        "scripts/direct_api.py",
+        "schemas/obconfig.schema.json",
     ):
         path = skill / relative
         assert path.is_file()
         mirror = PLUGIN / "skills" / "engagement-intake" / relative
         assert mirror.is_file()
         assert mirror.read_bytes() == path.read_bytes()
-    run_schema = json.loads((skill / "schemas/run-context.schema.json").read_text())
-    assert run_schema["properties"]["state"]["enum"] == [
-        "new", "required", "optional-review", "optional-answers"
-    ]
+    schema = json.loads((skill / "schemas/obconfig.schema.json").read_text())
+    assert schema["properties"]["schema_version"]["const"] == 4
+    assert set(schema["x-obengineer-secret-paths"]) == {
+        "splunk.observability.read_token",
+        "splunk.platform.read_token",
+        "analysis_access.dummy_login.password",
+    }
 
 
-def test_environment_template_starts_with_safe_onboarding_fields():
-    template = (ROOT / "templates/memory-repo/.env.template").read_text()
-    assert template.startswith(
-        "PRODUCTION_URL=\nTEST_LOGIN_ID=\nPASSWORD_REF=\n"
-    )
-    assignments = [
-        line.split("=", 1)[0]
+def test_canonical_template_is_the_only_field_authority():
+    template = (ROOT / "obconfig.yaml.template").read_text()
+    assert "schema_version: 4" in template
+    assert "deployment_environment: production" in template
+    assert "read_token:" in template and "password:" in template
+    assert not (ROOT / "inputs/engagement-inputs.template.yaml").exists()
+    assert not (SKILLS / "references/engagement-inputs.md").exists()
+    assert not (ROOT / "templates/memory-repo/.env.template").exists()
+    assert not (ROOT / "scripts/setup-splunk-access.sh").exists()
+    assert (
+        PLUGIN / "obconfig.yaml.template"
+    ).read_bytes() == (ROOT / "obconfig.yaml.template").read_bytes()
+    uncommented_leaves = [
+        line
         for line in template.splitlines()
-        if line and not line.startswith("#") and "=" in line
+        if line.strip()
+        and not line.lstrip().startswith("#")
+        and ":" in line
+        and not line.rstrip().endswith(":")
+        and "#" not in line
     ]
-    assert assignments[:3] == [
-        "PRODUCTION_URL", "TEST_LOGIN_ID", "PASSWORD_REF"
-    ]
-    assert "RAW_PASSWORD" not in template
-    assert "ARTIFACTS_DIR=artifacts" in template
-    assert "${SPLUNK_ACCESS_TOKEN}" in template
-    assert "${SPLUNK_TOKEN}" in template
-
-
-def test_setup_script_is_secret_safe_and_guided():
-    script = (ROOT / "scripts" / "setup-splunk-access.sh").read_text()
-    assert "read -r -s" in script
-    assert "chmod 600" in script
-    assert "SPLUNK_ACCESS_TOKEN" in script and "SPLUNK_TOKEN" in script
-    assert "values were not printed" in script
-    assert "x-access-token" not in script
+    assert uncommented_leaves == []
 
 
 def test_direct_apis_and_mcp_are_complementary():
@@ -178,11 +163,11 @@ def test_direct_apis_and_mcp_are_complementary():
         assert "direct" in text.lower() and "API" in text
         assert "MCP" in text
     assert "MCP is not the only" in mcp
-    for variable in (
-        "SPLUNK_REALM", "SPLUNK_ACCESS_TOKEN", "SPLUNK_HOST",
-        "SPLUNK_TOKEN", "SPLUNK_ENTERPRISE_INDEXES",
+    for term in (
+        "sf.org.numActiveTimeSeries", "sf.org.limit.activeTimeSeries",
+        "mandatory", "not-configured", "request headers",
     ):
-        assert variable in telemetry
+        assert term in telemetry
 
 
 def test_analysis_uses_bounded_host_parallelism_but_serial_names():
@@ -342,7 +327,7 @@ def test_baggage_and_cardinality_budgets_remain_numeric():
     baggage = (SKILLS / "references" / "baggage-budget.md").read_text()
     assert "512" in baggage and "64 bytes" in baggage
     cardinality = (SKILLS / "cardinality-budget" / "SKILL.md").read_text()
-    for term in ("distinct values", "custom_mts_entitled", "custom_mts_in_use"):
+    for term in ("distinct values", "enforced system limit", "current usage"):
         assert term in cardinality
 
 

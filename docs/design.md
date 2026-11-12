@@ -83,8 +83,8 @@ Direct Observability Cloud and Splunk Platform APIs are first-class evidence sou
 Connected MCP tools supplement them. Missing one source limits only the conclusions that
 depend on it.
 
-Credentials are configured by an interactive terminal script and remain in local `.env`.
-They never enter chat or committed files.
+Credentials remain only in ignored mode-0600 local `obconfig.yaml`, are sent only in
+validated HTTPS request headers, and never enter chat or committed/generated files.
 
 ## Safety boundaries
 

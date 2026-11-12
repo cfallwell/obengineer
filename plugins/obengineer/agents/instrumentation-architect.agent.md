@@ -36,10 +36,10 @@ Load depth only when its evidence predicate is true.
 
 ## Doctrine
 
-1. **Required question, then measure before optional questions.** Intake first obtains
-   the application, explicit production URL or no-browser reason, and what hurts without
-   source or network discovery. Source, the confirmed production surface, direct Splunk
-   APIs, and connected MCP tools are then evidence. MCP is not the only tenant interface.
+1. **Authorized local config before evidence.** Validate schema-v4 root obconfig, hash
+   its complete artifact tree, show the redacted summary, and require digest-bound
+   proceed authorization before source or network discovery. Configured direct Splunk
+   APIs are mandatory attempts; connected MCP tools only supplement them.
 2. **Use bounded host parallelism.** Use the six evidence jobs defined by the analysis
    manifest, reserve one host slot for coordination, and audit recorded worker overlap.
    The host spawns workers; repository scripts do not. Reconcile names and schema after
@@ -57,9 +57,10 @@ Load depth only when its evidence predicate is true.
 8. **Baggage has a budget.** Six keys, 512 bytes total, 64 bytes per value, and one named
    consumer per key.
 9. **Cardinality is arithmetic.** Every key is dimension-eligible, troubleshooting-only,
-   or attribute-only. Compute promotion cost against measured or supplied entitlement.
-10. **Entitlement prices rather than silently caps.** Cut only when explicitly requested,
-    and state the question each cut makes unanswerable.
+   or attribute-only. Compute promotion cost against directly measured usage and
+   enforced system limits.
+10. **Contractual terms stay unavailable unless separately evidenced.** Never relabel an
+    `sf.org.limit.*` system limit as entitlement or silently cut recommendations to fit it.
 11. **Redact before export.** The schema and collector share the deny list.
 12. **Findings are actionable.** Evidence, confidence, exposure, impact, remediation,
     connected use cases/work orders, and verification.
@@ -89,7 +90,7 @@ Each analysis version includes:
 - dashboards, detectors, objectives, and verification;
 - a versioned wiki with every work order;
 - attribute schema, implementation map, provenance ledger, and verification plan;
-- conditional entitlement exposure; and
+- measured usage/system-limit exposure with contractual terms marked unavailable; and
 - optional short Word summary when requested.
 
 Follow the PR lifecycle. Process review comments. Ask whether to accept and merge. An

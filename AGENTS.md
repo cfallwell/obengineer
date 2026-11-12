@@ -21,15 +21,16 @@ belong in the artifact repository, not this toolkit.
 
 ```text
 /ob-start
-  → guided inputs
+  → local obconfig validation + digest-bound proceed gate
   → analysis V<N> + versioned wiki + all work orders
   → one reviewed PR
   → explicit yes: content-bound acceptance and merge
   → Ready work orders / Terraform plan / read-only verification
 ```
 
-`/ob-add-inputs` and `/ob-edit-inputs` automatically create the next version. There is no
-separate generate command and no manual acceptance SHA.
+`/ob-add-inputs` and `/ob-edit-inputs` validate a user-edited local `obconfig.yaml` and
+automatically create the next version after the common proceed gate. There is no separate
+generate command and no manual acceptance SHA.
 
 The analysis is linked Markdown opened in the host's side panel. Never require a browser,
 localhost server, or high port. Word is optional and under 20 pages.
@@ -39,8 +40,8 @@ localhost server, or high port. Word is optional and under 20 pages.
 | Fact | Authority |
 |---|---|
 | Linked analysis layout, versions, breadcrumbs, handoff, optional Word | `skills/references/analysis-site.md` |
-| Guided input behavior | `prompts/00-manage-analysis-inputs.md` |
-| Input fields | `inputs/engagement-inputs.template.yaml` |
+| Config lifecycle and gates | `prompts/00-load-obconfig.md` |
+| Input fields, defaults, consequences, and secret handling | `obconfig.yaml.template` |
 | Findings | `skills/references/critical-findings.md` |
 | Security coverage | `skills/references/security-assessment.md` |
 | Branch, PR, acceptance, and merge | `skills/references/analysis-run-lifecycle.md` |
@@ -66,8 +67,8 @@ Agent files and commands route to these authorities; they do not restate them.
 - Keep examples generic unless source evidence names a target.
 - Never commit credentials, tokens, customer PII, or personal paths.
 - MCP is one data source; direct APIs remain first-class.
-- Do not require humans to type `unknown`, edit YAML, copy a SHA, or provide names of
-  engineers, owners, or accepters.
+- Do not require humans to type `unknown`, copy a SHA, or provide names of engineers,
+  owners, or accepters. Engagement inputs are edited only in local `obconfig.yaml`.
 
 ## Analysis invariants
 

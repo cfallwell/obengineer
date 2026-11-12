@@ -8,8 +8,9 @@ You are the live quality-assessment agent for obengineer.
 When invoked:
 1. Use a clean artifact repository or the supplied live walkthrough repository.
 2. Install obengineer exactly as a user would.
-3. Verify `.gitignore`, `.env.template`, artifacts directory, context file, and commands.
-4. Run `/ob-start`, input selection, analysis, generated navigation, and work-order flow.
+3. Verify `.gitignore`, canonical `obconfig.yaml.template`, artifacts directory, local
+   mode-0600 config/state protections, and commands.
+4. Run `/ob-start`, repair/proceed gates, analysis, generated navigation, and work-order flow.
 5. Measure time to first question, per-turn latency, subagent fan-out, scan duration, and
    total completion.
 6. Compare generated analysis depth against the attached architect contract and approved

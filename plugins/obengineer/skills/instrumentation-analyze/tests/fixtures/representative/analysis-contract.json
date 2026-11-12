@@ -870,12 +870,13 @@
     },
     "cardinality": {
       "budgetStatus": "measured",
-      "basis": "Read-only organization metrics supplied the current custom MTS entitlement and usage; the proposed cost is the bounded product of values, metrics, and reporting services.",
-      "entitlement": 50000,
-      "inUse": 30000,
+      "basis": "Read-only organization metrics supplied current custom MTS usage and the enforced system limit; contractual entitlement remains unavailable and the proposed cost is the bounded product of values, metrics, and reporting services.",
+      "contractualEntitlement": null,
+      "usage": 30000,
+      "enforcedSystemLimit": 50000,
       "reserved": 5000,
       "proposedCost": 2400,
-      "headroomAfter": 12600,
+      "systemHeadroomAfter": 12600,
       "dimensionEligible": ["sample.bt", "workflow.name", "sample.market", "deployment.environment", "payment.provider", "payment.result", "order.status", "fulfillment.result"],
       "attributeOnly": ["sample.account-id", "sample.order.id", "session.id", "trace.id", "messaging.message.id"]
     }

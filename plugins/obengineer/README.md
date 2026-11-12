@@ -13,9 +13,10 @@ ChatGPT Desktop: @ob-start
 ChatGPT Desktop requires its local executor for these Python-backed workflows. ChatGPT
 web/cloud and Work surfaces without local execution are not supported.
 
-The command discovers measurable facts, asks for the minimum, offers numbered optional
-inputs, then creates analysis V1. Use `/ob-add-inputs` or `/ob-edit-inputs` at any time;
-each automatically creates the next immutable version.
+The command creates local ignored mode-0600 `obconfig.yaml` when missing, then stops for
+editing. On rerun it validates, hashes the complete artifact directory, shows a redacted
+summary, and requires exact proceed authorization before analysis V1. Edit the same file
+and use `/ob-add-inputs` or `/ob-edit-inputs` for the next immutable version.
 
 The analysis PR includes:
 
@@ -34,9 +35,9 @@ SHA or named accepter is required.
 obengineer combines direct Observability Cloud and Splunk Platform APIs with relevant MCP
 tools already connected to the host. MCP is not the only source.
 
-For read-only API credentials, run the toolkit's
-`scripts/setup-splunk-access.sh` in the artifact repository. It writes local `.env` and
-never prints tokens.
+Read-only API credentials remain only in local `obconfig.yaml` and are sent only in
+validated HTTPS request headers. The committed `obconfig.yaml.template` is the sole
+field authority.
 
 ## Continue
 

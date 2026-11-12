@@ -1,0 +1,114 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://obengineer.dev/schemas/obconfig.schema.json",
+  "title": "obengineer local configuration v4",
+  "type": "object",
+  "required": [
+    "schema_version", "engagement", "initial_scope", "artifacts", "cloud_diagrams",
+    "surfaces", "security_assessment", "analysis_access", "splunk", "backends",
+    "tenancy", "standards", "constraints", "outcomes", "traffic_baseline",
+    "business_context", "public_evidence", "developer_tools"
+  ],
+  "properties": {
+    "schema_version": {"const": 4},
+    "engagement": {
+      "type": "object",
+      "required": ["application", "deployment_environment"],
+      "properties": {
+        "application": {"type": "string"},
+        "customer": {"type": "string"},
+        "scope": {"type": "string"},
+        "date": {"type": "string"},
+        "document_version": {"type": "integer", "minimum": 1},
+        "deployment_environment": {"type": "string", "minLength": 1}
+      }
+    },
+    "initial_scope": {"type": "object"},
+    "artifacts": {
+      "type": "object",
+      "required": ["directory"],
+      "properties": {"directory": {"type": "string", "minLength": 1}}
+    },
+    "cloud_diagrams": {"type": "object"},
+    "surfaces": {
+      "type": "object",
+      "required": ["production_urls", "no_browser_reason"],
+      "properties": {
+        "production_urls": {"type": "array", "items": {"type": "string"}},
+        "no_browser_reason": {"type": "string"}
+      }
+    },
+    "security_assessment": {
+      "type": "object",
+      "required": ["mode", "authorized_origins"],
+      "properties": {
+        "mode": {"enum": ["passive", "safe-active", "none"]},
+        "authorized_origins": {"type": "array", "uniqueItems": true, "items": {"type": "string"}}
+      }
+    },
+    "analysis_access": {
+      "type": "object",
+      "required": ["dummy_login"],
+      "properties": {
+        "dummy_login": {
+          "type": "object",
+          "required": ["login_id", "password"],
+          "properties": {
+            "login_id": {"type": "string", "x-obengineer-sensitive": true},
+            "password": {"type": "string", "x-obengineer-secret": true}
+          }
+        }
+      }
+    },
+    "splunk": {
+      "type": "object",
+      "required": ["observability", "platform"],
+      "properties": {
+        "observability": {
+          "type": "object",
+          "required": ["realm", "read_token"],
+          "properties": {
+            "realm": {"type": "string"},
+            "read_token": {"type": "string", "x-obengineer-secret": true}
+          }
+        },
+        "platform": {
+          "type": "object",
+          "required": ["host", "read_token", "index_allowlist"],
+          "properties": {
+            "host": {"type": "string"},
+            "read_token": {"type": "string", "x-obengineer-secret": true},
+            "index_allowlist": {
+              "type": "array", "uniqueItems": true, "items": {"type": "string", "minLength": 1}
+            }
+          }
+        }
+      }
+    },
+    "backends": {"type": "object"},
+    "tenancy": {"type": "object"},
+    "standards": {"type": "object"},
+    "constraints": {"type": "object"},
+    "outcomes": {"type": "object"},
+    "traffic_baseline": {"type": "object"},
+    "business_context": {"type": "object"},
+    "public_evidence": {"type": "object"},
+    "developer_tools": {"type": "object"},
+    "extensions": {"type": "object"}
+  },
+  "additionalProperties": true,
+  "x-obengineer-secret-paths": [
+    "splunk.observability.read_token",
+    "splunk.platform.read_token",
+    "analysis_access.dummy_login.password"
+  ],
+  "x-obengineer-retired-keys": {
+    "entitlement": "remove entitlement input; analysis measures sf.org usage and enforced system limits",
+    "tenancy.environments": "replace with singular engagement.deployment_environment scalar",
+    "outcomes.known_pain": "remove retired pain commentary; use outcomes.first_journey or evidence ranking",
+    "business_context.commentary": "remove retired what-hurts commentary",
+    "analysis_access.token_ref": "replace with splunk.platform.read_token",
+    "analysis_access.api_key_ref": "replace with splunk.observability.read_token",
+    "analysis_access.password_ref": "replace with analysis_access.dummy_login.password in local ignored obconfig.yaml"
+  }
+}

@@ -23,7 +23,11 @@ metadata:
 2. Validate the schema version 2 `verification-plan.json`, `provenance-ledger.json`, and optional
    human-approved `verification-exclusions.json`.
 3. Load only the read integrations named by eligible criteria.
-4. Refuse every tenant mutation operation.
+4. Securely load local root `obconfig.yaml` through the engagement-intake loader and
+   redactor. For each configured Splunk product, mandate a direct `direct_api.py`
+   attempt and record success, denial, unavailable/timeout, or unsupported endpoint.
+   MCP is supplemental and cannot satisfy or relabel the direct attempt.
+5. Refuse every tenant mutation operation.
 
 Authorities:
 

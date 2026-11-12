@@ -22,6 +22,6 @@ Implement one host-owned listener that:
 - emits one `route.change` span per completed navigation; and
 - is absent from remotes.
 
-Session replay detail loads only when entitlement exists and always-on or sampled behavior
-was accepted in writing. With no browser, keep the required document heading and write
+Session replay detail loads only when direct tenant evidence confirms availability and
+always-on or sampled behavior was separately accepted in writing. With no browser, keep the required document heading and write
 `Not in evidence` plus the evidence needed; emit no browser code.

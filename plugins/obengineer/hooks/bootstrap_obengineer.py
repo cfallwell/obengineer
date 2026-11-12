@@ -2,7 +2,7 @@
 """SessionStart hook: report whether this plugin's prerequisites are available.
 
 Read-only and non-fatal by design. It installs nothing, contacts nothing outside
-localhost, and always exits 0. PyYAML supports guided inputs; Word rendering is
+localhost, and always exits 0. PyYAML supports schema-v4 obconfig; Word rendering is
 optional and its missing packages are reported as an optional capability.
 """
 

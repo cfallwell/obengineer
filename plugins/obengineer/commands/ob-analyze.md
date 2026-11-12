@@ -6,21 +6,22 @@ Run an obengineer analysis version. `/ob-start`, `/ob-add-inputs`, and
 `/ob-edit-inputs` normally dispatch here. Direct invocation does not bypass intake
 authorization.
 
-1. Run
-   `python3 "${CLAUDE_PLUGIN_ROOT}/skills/engagement-intake/scripts/manage_run_context.py" show --project-root .`.
-   Continue only when it reports `Analysis authorized: yes (explicit no recorded)` and
-   the context contains `analysis_authorized: true` and `last_event: review-no`.
-   Otherwise follow
-   `${CLAUDE_PLUGIN_ROOT}/commands/ob-start.md`. Neither direct invocation nor a
-   `yes <numbers>` response authorizes analysis.
+1. Determine the intended next immutable `V<N>` and originating command. Run
+   `python3 "${CLAUDE_PLUGIN_ROOT}/skills/engagement-intake/scripts/manage_obconfig.py"
+   --project-root . show --command <origin> --intended-version V<N>`.
+   Continue only when the one-shot authorization matches schema version, config digest,
+   complete artifact-tree digest, command, and intended version. Otherwise return to the
+   common redacted summary/proceed gate; direct invocation never bypasses it.
 2. Adopt `${CLAUDE_PLUGIN_ROOT}/agents/instrumentation-architect.agent.md`.
-3. Load `docs/observability/engagement-inputs.yaml`. If absent, follow
-   `${CLAUDE_PLUGIN_ROOT}/commands/ob-start.md`. Missing optional answers never block
-   analysis; put useful gaps on the intake-recommendations page.
-4. Determine the next immutable `V<N>`. Read accepted names and finding ids from the
+3. Load local root `obconfig.yaml` only through `obconfig.py`; never read `.env`, process
+   environment, or legacy engagement inputs. Consume credentials only in direct adapter
+   request headers and pass consumers redacted availability metadata.
+4. Read accepted names and finding ids from the
    latest version before scanning. Reuse them and report changes under
    `${CLAUDE_PLUGIN_ROOT}/skills/references/incremental-runs.md`.
-5. Follow `${CLAUDE_PLUGIN_ROOT}/prompts/01-analyze-application.md`.
+5. Rehash the entire artifact directory. Reread every added/changed file, remove deleted
+   context, and reuse only unchanged path/length/digest context. Preserve historical
+   accepted analysis files without rewriting them. Follow Prompt 01.
 6. During the same run, follow
    `${CLAUDE_PLUGIN_ROOT}/prompts/02-build-instrumentation-wiki.md` to create the
    versioned wiki and every proposed work order.
@@ -31,7 +32,9 @@ authorization.
 8. Follow `${CLAUDE_PLUGIN_ROOT}/skills/references/analysis-run-lifecycle.md`: include
    inputs, the analysis site, wiki, and work orders in one PR and process review
    comments.
-9. Validate the provenance ledger and schema version 2 read-only verification plan.
+9. Validate the sanitized provenance ledger and schema version 2 read-only verification
+   plan. In a success or failure cleanup, consume the one-shot authorization; successful
+   consumption also records the local last-analysis binding for add/edit comparison.
 
 The review surface is owned by
 `${CLAUDE_PLUGIN_ROOT}/skills/references/analysis-site.md`: linked Markdown opened in
@@ -47,7 +50,7 @@ Required outputs:
 - `docs/observability/provenance-ledger.json`
 - `docs/observability/verification-plan.json`
 - `wiki/apps/<app>/versions/V<N>/` with subject notes and every work order
-- conditional entitlement exposure and optional short `.docx`.
+- measured usage/enforced-system-limit exposure and optional short `.docx`.
 
 Open one analysis PR. When it becomes ready for review, read its comments and commit
 the requested corrections. Ask the human to review the linked PR and whether to accept

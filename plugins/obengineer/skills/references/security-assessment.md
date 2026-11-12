@@ -16,16 +16,20 @@ claim full coverage where evidence was unavailable.
 
 ## Authorization modes
 
-`security_assessment.mode` in `engagement-inputs.yaml` controls requests:
+`security_assessment.mode` in local `obconfig.yaml` controls requests:
 
 | Mode | Permitted |
 |---|---|
 | `passive` | Source, configuration, dependency metadata, supplied artifacts, browser/runtime observation, and requests the normal application flow already makes. Default. |
-| `safe-active` | Passive checks plus non-mutating requests to explicitly authorized origins and paths, within the supplied request and rate limits. |
+| `safe-active` | Passive checks plus fixed-code non-mutating requests to normalized exact HTTPS `authorized_origins`, within fixed code-owned request/rate ceilings. |
 | `none` | No security screening beyond redacting credential-shaped values encountered incidentally. Record the opt-out and its owner. |
 
 Never mutate state, brute force, bypass a tenant boundary, submit destructive forms,
 run load, exploit a vulnerability, enumerate another user's objects, or fuzz production.
+Never accept configurable exclusions, paths, methods, request counts, or rate ceilings.
+An active request is permitted only when its normalized origin exactly matches the
+validated allowlist. Wildcards, paths, credentials, loopback/private/link-local hosts,
+redirect credential forwarding, and non-HTTPS origins are rejected.
 An observation that would require one of those actions is **Not in evidence** and names
 the safe test environment or owner needed to settle it.
 

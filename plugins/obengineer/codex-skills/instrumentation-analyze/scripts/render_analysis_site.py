@@ -715,7 +715,7 @@ class Renderer:
                 ),
             ),
             ("Parent-child, span links, and pivots", "joins.md", "An explicit join type for every evidenced causal or identity boundary."),
-            ("Cardinality and MPM", "cardinality.md", "Entitlement arithmetic and explicit dimension-eligible versus attribute-only lists."),
+            ("Cardinality and MPM", "cardinality.md", "Measured usage/system-limit arithmetic and explicit dimension-eligible versus attribute-only lists."),
         ]
         if c["spaRoutes"]["applicable"]:
             pages.insert(0, ("Single initialization and SPA routes", "single-init-spa-routes.md", "One provider owner, bounded route classification, and client-navigation spans."))
@@ -828,9 +828,10 @@ class Renderer:
         card = c["cardinality"]
         if card["budgetStatus"] == "unavailable":
             budget = (
-                "No entitlement or current-usage budget was supplied or measured. "
+                "No current usage or enforced system limit was measured. "
                 "The design therefore reports its proposed MTS cost without inventing "
-                "headroom or silently trimming required dimensions.\n\n"
+                "system headroom or silently trimming required dimensions. Contractual "
+                "entitlement is unavailable without a separate measured source.\n\n"
                 + table(
                     ("Budget status", "Proposed cost", "Basis"),
                     ((card["budgetStatus"], card["proposedCost"], card["basis"]),),
@@ -838,14 +839,14 @@ class Renderer:
             )
         else:
             budget = (
-                "The budget is arithmetic against the supplied or measured entitlement. "
-                "The proposed promotion must fit after current use and the operational "
-                "reserve.\n\n"
+                "The budget is arithmetic against directly measured usage and an enforced "
+                "system limit, which is not contractual entitlement. The proposed promotion "
+                "is shown after current use and the operational reserve.\n\n"
                 + table(
-                    ("Status", "Entitlement", "In use", "Reserved", "Proposed cost", "Headroom after"),
+                    ("Status", "System limit", "Usage", "Reserved", "Proposed cost", "System headroom after"),
                     ((
-                        card["budgetStatus"], card["entitlement"], card["inUse"],
-                        card["reserved"], card["proposedCost"], card["headroomAfter"],
+                        card["budgetStatus"], card["enforcedSystemLimit"], card["usage"],
+                        card["reserved"], card["proposedCost"], card["systemHeadroomAfter"],
                     ),),
                 )
             )

@@ -33,8 +33,8 @@ to analysis review. An older-version, proposed, blocked, or superseded order can
 
 **Scope, before any code.** Engineering authorizes `initial_scope` after the
 contract exists: `full`, `repositories`, or `parent_folders`. `unknown` means
-stop and ask. The field meaning is
-[`../references/engagement-inputs.md`](../references/engagement-inputs.md). The
+stop and ask. The field definition and consequence are owned by root
+`obconfig.yaml.template`. The
 job that refuses to write code without that authorization is
 [`../references/ci-integration.md`](../references/ci-integration.md). Do not
 adopt every repository a connected host can see. A parent-folder authorization

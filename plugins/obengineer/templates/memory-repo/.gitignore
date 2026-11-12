@@ -1,9 +1,7 @@
-# Filled secrets for this memory repository.
-# Commit .env.template. Do not commit .env.
-.env
-.env.local
-!.env.template
-.obengineer/
+# Local obengineer configuration, credentials, backups, and authorization state.
+/obconfig.yaml
+/.obengineer/
+!/obconfig.yaml.template
 
 # Other local secret files.
 *.pem

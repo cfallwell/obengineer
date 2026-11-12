@@ -69,7 +69,7 @@ two provider blocks look inconsistent and are both correct. There is also no
 | `signalfx_heatmap_chart` | Per-instance or per-dimension saturation at a glance. |
 | `signalfx_table_chart` | Tabular comparison across a dimension. |
 | `signalfx_text_chart` | Markdown. Use it for the runbook link and for what the dashboard is *for*; an unexplained dashboard gets rebuilt by the next person. |
-| `signalfx_log_view` | Logs in a dashboard, via Log Observer. Requires the entitlement. |
+| `signalfx_log_view` | Logs in a dashboard, via Log Observer. Requires directly evidenced tenant availability. |
 | `signalfx_log_timeline` | Log volume over time alongside metrics. |
 | `signalfx_event_feed_chart` | Events, including release markers posted to the Events API. |
 | `signalfx_slo_chart` | An SLO's compliance and error budget on a dashboard. The one chart with **no `program_text`** — `slo_id` is its only required argument, so a generator that templates SignalFlow into every chart will break on this one. |
@@ -224,8 +224,8 @@ generating them rather than inferring: the `requests` block inside an API check,
 Synthetics REST API reference for both, which means the field set can move without a provider
 release.
 
-Run frequency multiplied by locations is billable — size it against `entitlement.synthetics`
-before proposing it. Import an existing check by its numeric check id.
+Run frequency multiplied by locations is consumption — compare it with directly measured
+usage/system limits when available before proposing it. Import an existing check by its numeric check id.
 
 ## Splunk platform — `splunk`
 
@@ -236,7 +236,7 @@ verification is off unless someone turns it on, and that is worth a line in the 
 
 | Resource | Use for |
 |---|---|
-| `splunk_indexes` | The index a contract's logs land in, with retention from `entitlement.splunk_platform.retention_days` as `frozen_time_period_in_secs`. `datatype` is `event` or `metric`. |
+| `splunk_indexes` | The index a contract's logs land in, with retention from direct index-definition evidence as `frozen_time_period_in_secs`. `datatype` is `event` or `metric`. |
 | `splunk_sh_indexes_manager` | The **Splunk Cloud** equivalent, managed from the search head. Use this instead of `splunk_indexes` against Cloud, or the apply fails on a self-service tenant. |
 | `splunk_inputs_http_event_collector` | A per-source HEC token. `token` is computed if not supplied, which is the way to want it. Sensitive in state. |
 | `splunk_global_http_event_collector` | Singleton that enables HEC and sets its listener. |

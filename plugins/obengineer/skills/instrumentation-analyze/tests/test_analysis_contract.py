@@ -43,6 +43,11 @@ def schema_v1_contract():
         order.pop("repositoryMapping")
     value["contracts"]["cardinality"].pop("budgetStatus")
     value["contracts"]["cardinality"].pop("basis")
+    cardinality = value["contracts"]["cardinality"]
+    cardinality["entitlement"] = cardinality.pop("enforcedSystemLimit")
+    cardinality["inUse"] = cardinality.pop("usage")
+    cardinality["headroomAfter"] = cardinality.pop("systemHeadroomAfter")
+    cardinality.pop("contractualEntitlement")
     return value
 
 
@@ -200,7 +205,11 @@ def test_schema_v1_contract_migrates_deterministically_before_validation():
         "checkout.order.submit",
     ]
     assert migrated["workOrders"][0]["repositoryMapping"]["status"] == "mapped"
-    assert migrated["contracts"]["cardinality"]["budgetStatus"] == "supplied"
+    cardinality = migrated["contracts"]["cardinality"]
+    assert cardinality["budgetStatus"] == "unavailable"
+    assert cardinality["usage"] is None
+    assert cardinality["enforcedSystemLimit"] is None
+    assert cardinality["systemHeadroomAfter"] is None
     assert validate_contract(old) == []
     assert migrate_contract(migrated) == migrated
 
@@ -256,20 +265,21 @@ def test_unavailable_cardinality_budget_preserves_cost_without_invented_headroom
     cardinality.update({
         "budgetStatus": "unavailable",
         "basis": (
-            "The proposed MTS cost uses bounded dimension products, while entitlement "
-            "and current usage were neither supplied nor measurable in this run."
+            "The proposed MTS cost uses bounded dimension products, while current usage "
+            "and an enforced system limit were not measurable in this run."
         ),
-        "entitlement": None,
-        "inUse": None,
+        "contractualEntitlement": None,
+        "usage": None,
+        "enforcedSystemLimit": None,
         "reserved": None,
-        "headroomAfter": None,
+        "systemHeadroomAfter": None,
     })
     assert validate_contract(value) == []
 
-    cardinality["entitlement"] = 50000
+    cardinality["enforcedSystemLimit"] = 50000
     failures = validate_contract(value)
     assert any(
-        "unavailable budget cannot claim entitlement" in failure
+        "unavailable budget cannot claim usage" in failure
         or "expected null" in failure
         for failure in failures
     )
@@ -475,9 +485,9 @@ def test_telemetry_workflow_and_lexical_quality_mutations_fail():
 
 def test_cardinality_arithmetic_is_checked():
     value = contract()
-    value["contracts"]["cardinality"]["headroomAfter"] += 1
+    value["contracts"]["cardinality"]["systemHeadroomAfter"] += 1
     assert any(
-        "entitlement - inUse - reserved - proposedCost" in failure
+        "enforcedSystemLimit - usage - reserved - proposedCost" in failure
         for failure in validate_contract(value)
     )
 

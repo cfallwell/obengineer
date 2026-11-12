@@ -37,7 +37,7 @@ The target is read-only. Application changes happen only through accepted work o
 | [`../references/existing-telemetry.md`](../references/existing-telemetry.md) | Direct APIs, connected integrations, MetricSets, usage, and SignalFlow cross-check |
 | [`../references/cross-cutting-attributes.md`](../references/cross-cutting-attributes.md) | Cross-Cutting Attributes and Baggage Propagation |
 | [`../references/business-value.md`](../references/business-value.md) | Value from stated, measured, public, and derived evidence |
-| [`../references/entitlement-exposure.md`](../references/entitlement-exposure.md) | Separate account-team pricing |
+| [`../references/entitlement-exposure.md`](../references/entitlement-exposure.md) | Measured usage and enforced-system-limit appendix |
 | [`schemas/analysis-job-manifest.schema.json`](schemas/analysis-job-manifest.schema.json) | Six bounded host-run evidence workstreams and coordinator reservation |
 | [`schemas/analysis-worker-result.schema.json`](schemas/analysis-worker-result.schema.json) | Auditable worker evidence and execution intervals |
 | [`schemas/analysis-contract.schema.json`](schemas/analysis-contract.schema.json) | Canonical content rendered into the linked analysis site |
@@ -66,8 +66,8 @@ directory contains the landing page and all linked detail pages. The wiki
 contains one note per substantive object and every work order. The version landing page
 links the matching wiki snapshot.
 
-Create entitlement exposure only when entitlement or a meaningful traffic baseline was
-supplied. Create a short `.docx` only when the human asks for it; it is under 20 pages and
+Create the usage/system-limit appendix only when direct measurement or meaningful
+bounded recommendation arithmetic supports it. Create a short `.docx` only when the human asks for it; it is under 20 pages and
 contains the summary, architecture, findings, path, work-order summary, and use cases.
 
 ## Rules
@@ -76,8 +76,13 @@ contains the summary, architecture, findings, path, work-order summary, and use 
 - Derive the number of business transactions and workflows from current evidence. A
   same-customer prior guide is a quality and continuity input, not a fixed taxonomy or
   required count; retain, revise, add, or retire names with provenance.
-- Use direct Observability Cloud and Splunk Platform APIs when configured. Use connected
-  MCP tools as additional sources; do not treat MCP as the only tenant interface.
+- Load only digest-authorized root `obconfig.yaml`. Rehash the complete artifact
+  directory, reread added/changed files, remove deleted context, and preserve accepted
+  historical versions.
+- A configured product mandates a direct request through `direct_api.py` and one explicit
+  source disposition: success, access denial, timeout/unavailable, or unsupported.
+  Use connected MCP tools only as supplemental evidence; MCP cannot satisfy or relabel
+  the direct attempt.
 - Never print or store a secret. Record shape, location, and exposure only.
 - Missing optional inputs do not block analysis and do not create empty chapters.
 - Findings link affected use cases, workflows, business transactions, contracts, and
@@ -86,9 +91,10 @@ contains the summary, architecture, findings, path, work-order summary, and use 
 - Keep Cross-Cutting Attributes and Baggage Propagation complete in the wiki: provider
   bootstrap, allowlisted `SpanProcessor.onStart`, identity write, backend composite
   propagator, and message inject/extract where applicable.
-- Entitlement prices the strategy; it does not silently trim it.
-- When entitlement or current usage is unavailable, preserve proposed MTS arithmetic but
-  leave entitlement, usage, reserve, and headroom explicitly unavailable.
+- Directly measured usage and `sf.org.limit.*` enforced limits price system headroom;
+  they are never contractual entitlement and never silently trim the strategy.
+- When usage or an enforced limit is unavailable, preserve proposed MTS arithmetic but
+  leave usage, reserve, and system headroom explicitly unavailable.
 - Every detector has a threshold; every objective has an error budget.
 - No named engineer, named owner, or accepter is required.
 - Never start a web server, open a browser, or return localhost.

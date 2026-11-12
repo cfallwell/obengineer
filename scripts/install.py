@@ -21,9 +21,8 @@ Every install writes digested ownership records next to what it created. Reinsta
 refuses unowned or modified collisions, and `--uninstall` removes only unchanged
 installer-owned paths.
 
-A memory repository keeps its API keys in `.env`. The guided setup script creates or
-updates that file without printing a credential:
-`scripts/setup-splunk-access.sh`. The installer never writes a credential.
+A project keeps read-only credentials only in ignored mode-0600 `obconfig.yaml`.
+The installer owns the committed template and ignore rules, never the actual config.
 """
 
 from __future__ import annotations
@@ -54,12 +53,11 @@ except ModuleNotFoundError:  # Direct execution from scripts/.
 ROOT = Path(__file__).resolve().parent.parent
 CANONICAL_SKILLS = ROOT / "skills"
 COMMANDS = ROOT / "commands"
-INPUTS = ROOT / "inputs"
 MANIFEST_NAME = ".obengineer-install.json"
-CODEX_INPUTS_SUBDIR = Path("obengineer/inputs")
+CONFIG_COMPANION = Path("obengineer/obconfig.yaml.template")
 SCAFFOLD_MANIFEST = Path(".obengineer/scaffold-manifest.json")
 SCAFFOLD_FILES = (
-    (Path("templates/memory-repo/.env.template"), Path(".env.template")),
+    (Path("obconfig.yaml.template"), Path("obconfig.yaml.template")),
     (
         Path("templates/memory-repo/artifacts/README.md"),
         Path("artifacts/README.md"),
@@ -342,7 +340,7 @@ def ownership_matches(path: Path, ownership: object) -> bool:
         return False
 
 
-def installs_inputs_companion(host: Host, copy: bool) -> bool:
+def installs_config_companion(host: Host, copy: bool) -> bool:
     return host.install_workflows or copy
 
 
@@ -367,8 +365,8 @@ def desired_host_targets(
             else ()
         ),
         *(
-            [host.base(scope_root, project) / CODEX_INPUTS_SUBDIR]
-            if installs_inputs_companion(host, copy)
+            [host.base(scope_root, project) / CONFIG_COMPANION]
+            if installs_config_companion(host, copy)
             else []
         ),
     ]
@@ -738,11 +736,10 @@ def install_host(
                 skills_dir / name,
                 copy or host.install_workflows,
             )
-        if installs_inputs_companion(host, copy):
-            planner.link_or_copy(
-                INPUTS,
-                base / CODEX_INPUTS_SUBDIR,
-                True,
+        if installs_config_companion(host, copy):
+            planner.write(
+                base / CONFIG_COMPANION,
+                (ROOT / "obconfig.yaml.template").read_text(),
             )
         if host.install_commands:
             for command in command_files():
@@ -789,11 +786,10 @@ def install_host(
                 skills_dir / name,
                 copy or host.install_workflows,
             )
-        if installs_inputs_companion(host, copy):
-            planner.link_or_copy(
-                INPUTS,
-                base / CODEX_INPUTS_SUBDIR,
-                True,
+        if installs_config_companion(host, copy):
+            planner.write(
+                base / CONFIG_COMPANION,
+                (ROOT / "obconfig.yaml.template").read_text(),
             )
         if host.install_commands:
             for command in command_files():
@@ -981,6 +977,25 @@ def install_project_scaffold(scope_root: Path, dry_run: bool) -> list[str]:
             }
     actions = install_project_gitignore(scope_root, dry_run, working_manifest)
 
+    legacy_template = scope_root / ".env.template"
+    legacy_owned = created.get(".env.template")
+    if isinstance(legacy_owned, dict):
+        expected = legacy_owned.get("sha256")
+        if (
+            legacy_template.is_file()
+            and not legacy_template.is_symlink()
+            and isinstance(expected, str)
+            and file_digest(legacy_template) == expected
+        ):
+            actions.append(f"remove unchanged installer-owned {legacy_template}")
+            if not dry_run:
+                legacy_template.unlink()
+                created.pop(".env.template", None)
+        else:
+            actions.append(f"preserve modified legacy template {legacy_template}")
+            if not dry_run:
+                created.pop(".env.template", None)
+
     for source_rel, destination_rel in SCAFFOLD_FILES:
         source = ROOT / source_rel
         destination = scope_root / destination_rel
@@ -1075,8 +1090,26 @@ def uninstall_project_scaffold(scope_root: Path, dry_run: bool) -> list[str]:
     ] if isinstance(gitignore, dict) else []
     if gitignore_path.is_file() and tracked_lines:
         remaining = gitignore_path.read_text().splitlines()
+        protected_lines = set()
+        if (scope_root / "obconfig.yaml").exists() or (
+            scope_root / "obconfig.yaml"
+        ).is_symlink():
+            protected_lines.add("/obconfig.yaml")
+        local_state = scope_root / ".obengineer"
+        has_user_local_state = (
+            local_state.is_symlink()
+            or (
+                local_state.is_dir()
+                and any(
+                    child.name != SCAFFOLD_MANIFEST.name
+                    for child in local_state.iterdir()
+                )
+            )
+        )
+        if has_user_local_state or "/obconfig.yaml" in protected_lines:
+            protected_lines.add("/.obengineer/")
         for line in tracked_lines:
-            if line in remaining:
+            if line in remaining and line not in protected_lines:
                 remaining.remove(line)
         if remaining:
             actions.append(
@@ -1202,7 +1235,7 @@ def show_status(scope_root: Path, project: bool) -> None:
             print(f"    commands {host.commands_dir(scope_root, project)}")
         else:
             print(f"    workflows {host.skills_dir(scope_root, project) / 'ob-*'}")
-        companion = host.base(scope_root, project) / CODEX_INPUTS_SUBDIR
+        companion = host.base(scope_root, project) / CONFIG_COMPANION
         if unsafe_manifest is None and companion.exists():
             print(
                 f"    companion {companion}"
@@ -1224,7 +1257,7 @@ def main(argv=None) -> int:
                     help="scope to one repository instead of this user")
     ap.add_argument("--copy", action="store_true",
                     help=(
-                        "copy Cursor/Claude skills and inputs "
+                        "copy Cursor/Claude skills and config template "
                         "(Codex skills are always copied)"
                     ))
     ap.add_argument("--uninstall", action="store_true",
@@ -1314,10 +1347,10 @@ def main(argv=None) -> int:
             print(f"    commands -> {host.commands_dir(scope_root, project)}")
         else:
             print(f"    workflows -> {host.skills_dir(scope_root, project) / 'ob-*'}")
-        if installs_inputs_companion(host, args.copy):
+        if installs_config_companion(host, args.copy):
             print(
                 f"    companion -> "
-                f"{host.base(scope_root, project) / CODEX_INPUTS_SUBDIR}"
+                f"{host.base(scope_root, project) / CONFIG_COMPANION}"
             )
         if args.dry_run:
             for line in planner.log:
@@ -1333,10 +1366,8 @@ def main(argv=None) -> int:
     print("\nOr name a skill directly: $engagement-intake, $baggage-propagation, "
           "$cardinality-budget, ...")
     if project:
-        print("\nOptional read-only Splunk access setup:")
-        print(f"  {ROOT / 'scripts' / 'setup-splunk-access.sh'}")
-        print("Run it from the memory repository. It writes local .env without "
-              "printing credentials.")
+        print("\nCopy obconfig.yaml.template to obconfig.yaml, chmod 0600, edit it, "
+              "then run /ob-start. The command can create the local copy for you.")
     if args.dry_run:
         print("\n(dry run — nothing was written)")
     return 0

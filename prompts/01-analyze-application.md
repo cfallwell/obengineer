@@ -3,7 +3,7 @@
 **Agent:** [`../agents/instrumentation-architect.agent.md`](../agents/instrumentation-architect.agent.md)  
 **Skills:** `instrumentation-analyze`, `instrumentation-wiki`,
 `baggage-propagation`, `cardinality-budget`, `deliverable-review`
-**Input:** `docs/observability/engagement-inputs.yaml`
+**Input:** digest-authorized local root `obconfig.yaml` and its complete artifact tree
 **Output:** one immutable analysis version and its wiki in one reviewed PR
 
 ## Contract
@@ -16,11 +16,9 @@ legacy monolithic template.
 Use `../templates/analysis-site/index.md` and `detail.md` as the approved layout. Do not
 replace the long linked index with duplicated object detail.
 
-If inputs do not exist, invoke `/ob-start`. Missing optional inputs do not block analysis
-and do not require the human to type `unknown`.
-Do not begin collection unless `.obengineer/run-context.json` records
-`analysis_authorized: true` and `last_event: review-no`. Only the exact `no` response at
-optional review creates that state; a `yes` selection never does.
+If config does not exist, invoke `/ob-start`. Do not begin collection unless
+`manage_obconfig.py show` verifies the unconsumed one-shot binding for schema version,
+config digest, artifact-tree digest, originating command, and intended version.
 
 ## Evidence collection
 
@@ -37,13 +35,17 @@ Reserve one host slot for the coordinator. The host starts workers; the reposito
 only audit worker result intervals and must never claim it spawned them. If two or more
 jobs are runnable, their recorded intervals overlap without exceeding remaining host
 capacity. MCP servers supplement direct APIs. They are not the only tenant source.
-Record source provenance and reconcile facts after parallel collection.
+Every configured Splunk product requires a direct adapter request and explicit
+source-specific disposition in analysis; MCP is supplemental and cannot suppress or
+relabel it. Record source provenance and reconcile facts after parallel collection.
 Every worker interval fits its manifest `deadlineSeconds`. A `limited` result names
 nonempty limitations plus the exact manifest evidence scopes or required outputs that
 degraded. Record collection, reconciliation, rendering, validation, and total intervals
 in `analysis-run-timing.json`; each interval fits its manifest budget.
 
-Use the host's subagent facility. Launch as many runnable jobs as fit
+Before workers start, hash the full configured artifact directory. Reread every
+added/changed file, remove deleted context, and reuse only unchanged
+path/length/digest context. Use the host's subagent facility. Launch as many runnable jobs as fit
 `min(6, available host slots - 1)` in one parallel tool call before awaiting any result;
 start queued jobs as slots free. Do not perform runnable worker jobs serially in the
 coordinator. If the host cannot run subagents, keep the PR draft and report the analysis

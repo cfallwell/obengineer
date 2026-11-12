@@ -2,7 +2,7 @@
 
 **Agent:** [`../agents/instrumentation-verifier.agent.md`](../agents/instrumentation-verifier.agent.md)
 **Skill:** `instrumentation-verify`
-**Inputs:** `docs/observability/engagement-inputs.yaml`, exact acceptance, verification
+**Inputs:** securely loaded local root `obconfig.yaml`, exact acceptance, verification
 plan, provenance ledger, and optional exclusions
 **Output:** read-only verification JSON/Markdown, ledger append, outcome metrics/issues
 
@@ -13,7 +13,9 @@ Follow the verifier agent and the verification-run authority. Discover acceptanc
 Validate its accepted content commit and digest, the plan, exclusions, and ledger before
 querying. New plans, results, and exclusions use schema version 2,
 `analysis_content_commit`, and stable plan `source_ref` values; schema version 1 remains
-readable only for migration. Use only read operations.
+readable only for migration. Load obconfig through the same secure loader/redactor used
+by analysis. Each configured Splunk product mandates a direct adapter request and an
+explicit disposition; MCP remains supplemental. Use only read operations.
 
 Human-approved unremediable criteria are omitted from machine result rows and denominators
 but remain in the human report, exclusion record, and ledger. For each unmet eligible

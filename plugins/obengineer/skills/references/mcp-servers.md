@@ -58,7 +58,7 @@ Discover connected Jira, GitHub, GitLab, Artifactory, and repository tools witho
 the human to enumerate what the host can already see. Record each relevant match as
 `{tool: "<named tool>", via: "mcp" | "env", key: "<server or variable name>"}` in
 `developer_tools.matched`. Do not read the value, do not write it into
-`engagement-inputs.yaml`, and do not ask the human to paste it. A credential
+generated artifacts, and do not ask the human to paste it. A credential
 stays in the user environment or in the MCP server that already holds it.
 
 A named tool with no match is not installed by the run.
@@ -68,7 +68,7 @@ A named tool with no match is not installed by the run.
 Jira is enabled only when the human named Jira under `developer_tools.named`
 **and** `developer_tools.matched` contains
 `{tool: "jira", via: "mcp", key: "<connected server key>"}`. At intake, only
-then read issue keys that match `outcomes.known_pain`. Connected-but-unnamed
+then read issue keys relevant to `outcomes.first_journey` or evidence-ranked findings. Connected-but-unnamed
 Jira and named-but-unavailable Jira are not used. Do not ask for a token.
 
 After the human accepts the contract, engineering has the **option** of

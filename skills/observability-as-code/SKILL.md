@@ -51,8 +51,9 @@ exist fails with an error that reads like a provider bug.
 
 Load the canonical acceptance record and run `verify_analysis_acceptance.py` against its
 full commit SHA. A merged file or generic approval is not acceptance. Then load the accepted
-guide, `attribute-schema.json`, `implementation-map.json`, and `engagement-inputs.yaml`, and build
-one table before writing any HCL, because it is also the handover document:
+guide, `attribute-schema.json`, `implementation-map.json`, and the secure non-secret
+obconfig projection, and build one table before writing any HCL, because it is also the
+handover document:
 
 Validate `provenance-ledger.json`; use its tenant/source IDs and append inventory,
 imports, plan/schema-check results, refusals, and artifact digests. Never alter sealed
@@ -144,7 +145,7 @@ The handover states, in this order:
 3. **What was refused**, with the contract section and the missing key for each.
 4. **What has no Terraform support** and must be configured in the tenant: APM MetricSets, APM Business Transaction rules, RUM application settings, and the Log Observer Connect connection itself. The contract's promotion list is a TAM task and Terraform cannot take it — say so rather than leaving a gap the customer discovers during configuration.
 5. **Which thresholds are placeholders** awaiting a baseline.
-6. **Cost implications**: Synthetics run frequency times locations, and any metric ruleset that raises MTS rather than lowering it. Consumption against entitlement is not priced here — that is the account team's document at [`../references/entitlement-exposure.md`](../references/entitlement-exposure.md), and a third home for those numbers is how the three end up disagreeing. State what this plan adds; point at that document for what it costs.
+6. **Cost implications**: Synthetics run frequency times locations, and any metric ruleset that raises MTS rather than lowering it. Compare additions with directly measured usage and enforced system limits; do not present either as contractual entitlement. Commercial pricing belongs in the account team's document at [`../references/entitlement-exposure.md`](../references/entitlement-exposure.md). State what this plan adds and keep contractual terms explicitly unavailable unless separately evidenced.
 
 ## Warning signs
 

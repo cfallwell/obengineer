@@ -8,7 +8,7 @@ outputs, changes, and verification.
 
 ```text
 /ob-start
-  → guided inputs
+  → local obconfig validation, artifact hash, and proceed gate
   → parallel evidence collection
   → linked analysis V<N>
   → versioned wiki and all work orders
@@ -106,7 +106,8 @@ After acceptance the handoff gives:
 ## Safety
 
 - Production analysis is read-only.
-- Secrets stay in `.env` or a secret store and never enter artifacts.
+- Secrets stay only in ignored mode-0600 `obconfig.yaml`, enter direct request headers
+  only, and never enter generated artifacts.
 - Application changes require a Ready work order and authorized paths.
 - Implementation opens review PRs and does not silently widen the schema.
 - Terraform plans and never applies.

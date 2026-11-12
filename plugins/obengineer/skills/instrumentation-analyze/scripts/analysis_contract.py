@@ -733,17 +733,19 @@ def migrate_contract(contract: Any) -> Any:
 
     cardinality = (migrated.get("contracts") or {}).get("cardinality")
     if isinstance(cardinality, dict):
-        unavailable = any(
-            cardinality.get(key) is None
-            for key in ("entitlement", "inUse", "reserved", "headroomAfter")
-        )
-        cardinality.setdefault(
-            "budgetStatus", "unavailable" if unavailable else "supplied"
-        )
-        cardinality.setdefault(
-            "basis",
-            "Migrated from schema v1: numeric budget fields are preserved as supplied "
-            "inputs, while absent values remain unavailable rather than being inferred.",
+        cardinality.pop("entitlement", None)
+        cardinality.pop("inUse", None)
+        cardinality.pop("headroomAfter", None)
+        cardinality["contractualEntitlement"] = None
+        cardinality["usage"] = None
+        cardinality["enforcedSystemLimit"] = None
+        cardinality["reserved"] = None
+        cardinality["systemHeadroomAfter"] = None
+        cardinality["budgetStatus"] = "unavailable"
+        cardinality["basis"] = (
+            "Migrated from schema v1: legacy supplied ceilings and usage are not direct "
+            "measurements, so usage, enforced system limit, reserve, system headroom, "
+            "and contractual entitlement remain unavailable."
         )
     return migrated
 
@@ -1618,7 +1620,8 @@ def validate_contract(contract: Any) -> list[str]:
             failures,
         ):
             for nullable_field in (
-                "entitlement", "inUse", "reserved", "headroomAfter"
+                "contractualEntitlement", "usage", "enforcedSystemLimit",
+                "reserved", "systemHeadroomAfter"
             ):
                 if nullable_field not in cardinality:
                     failures.append(
@@ -1626,10 +1629,10 @@ def validate_contract(contract: Any) -> list[str]:
                         + nullable_field
                     )
             budget_status = cardinality.get("budgetStatus")
-            if budget_status not in {"measured", "supplied", "unavailable"}:
+            if budget_status not in {"measured", "unavailable"}:
                 failures.append(
                     "contract.contracts.cardinality.budgetStatus: "
-                    "expected measured, supplied, or unavailable"
+                    "expected measured or unavailable"
                 )
             _substantive(
                 cardinality.get("basis"),
@@ -1637,27 +1640,35 @@ def validate_contract(contract: Any) -> list[str]:
                 failures,
             )
             numbers = (
-                cardinality.get("entitlement"),
-                cardinality.get("inUse"),
+                cardinality.get("enforcedSystemLimit"),
+                cardinality.get("usage"),
                 cardinality.get("reserved"),
                 cardinality.get("proposedCost"),
-                cardinality.get("headroomAfter"),
+                cardinality.get("systemHeadroomAfter"),
             )
+            if cardinality.get("contractualEntitlement") is not None:
+                failures.append(
+                    "contract.contracts.cardinality.contractualEntitlement: "
+                    "must remain unavailable without a separate measured contract source"
+                )
             if budget_status == "unavailable":
                 if any(
                     cardinality.get(key) is not None
-                    for key in ("entitlement", "inUse", "reserved", "headroomAfter")
+                    for key in (
+                        "usage", "enforcedSystemLimit", "reserved",
+                        "systemHeadroomAfter",
+                    )
                 ):
                     failures.append(
                         "contract.contracts.cardinality: unavailable budget "
-                        "cannot claim entitlement, usage, reserve, or headroom"
+                        "cannot claim usage, system limit, reserve, or headroom"
                     )
             elif all(isinstance(value, int) for value in numbers):
                 expected = numbers[0] - numbers[1] - numbers[2] - numbers[3]
                 if numbers[4] != expected:
                     failures.append(
-                        "contract.contracts.cardinality.headroomAfter: "
-                        f"expected entitlement - inUse - reserved - proposedCost = {expected}"
+                        "contract.contracts.cardinality.systemHeadroomAfter: "
+                        f"expected enforcedSystemLimit - usage - reserved - proposedCost = {expected}"
                     )
             dimension_eligible = set(cardinality.get("dimensionEligible", []))
             attribute_only = set(cardinality.get("attributeOnly", []))

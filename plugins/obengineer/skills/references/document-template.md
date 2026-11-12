@@ -36,7 +36,8 @@ relative host-side links remain listed as paths.
 - Use cases: why it matters, question answered, created workflow/transaction, and proof.
 - No full attribute dictionary, code samples, OWASP matrix, raw evidence, detector
   catalogue, or Terraform detail.
-- No licensing or overage figures; those stay in entitlement exposure.
+- No licensing or commercial overage figures; measured usage/system-limit arithmetic
+  stays in the account-team appendix.
 - No empty or `Not in evidence` sections.
 
 The rendered document must be fewer than 20 pages. If it is longer, shorten summaries;
