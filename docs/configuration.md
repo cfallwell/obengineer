@@ -100,7 +100,9 @@ rejected.
 are not a substitute. `host_and_remotes` describes bundle ownership (for example
 micro-frontend remotes). `edge_cdn` names the CDN or edge/TLS boundary in front of the
 site for analysis to verify; the CDN in front of the site also shapes the recommendation
-for delivering the RUM agent (see [How it works](how-it-works.md)).
+for delivering the RUM agent. When the application has a web front-end, the analysis
+links the matching CDN injection reference from its foundation section (see
+[RUM load order and CDN delivery](how-it-works.md#rum-load-order-and-cdn-delivery)).
 
 ### `security_assessment` — security evidence collection
 
@@ -218,7 +220,9 @@ credentials here.
 
 ## The two gates before analysis
 
-`/ob-start` asks two kinds of question and accepts only exact answers.
+`/ob-start` asks two kinds of question on the first run and accepts only exact answers.
+After the first analysis, `/ob-analyze` asks the same questions itself: rerun
+`/ob-analyze`, not `/ob-start`, whenever you change `obconfig.yaml` or `artifacts/`.
 
 **Repair gate.** If the YAML is invalid, it reports the position without printing values:
 
@@ -253,7 +257,8 @@ Proceed with analysis using this configuration? (yes/no)
 
 `no` stops with no network or analysis activity. `yes` authorizes exactly one analysis
 of exactly this configuration and artifact set. If you edit `obconfig.yaml` or the
-artifacts while that analysis is still running, it is not published; rerun `/ob-start`.
+artifacts while that analysis is still running, it is not published; rerun
+`/ob-analyze` to summarize and analyze the edited inputs.
 
 ## Security assessment modes
 
@@ -306,7 +311,7 @@ historical accepted analyses are never rewritten.
 | `obconfig.yaml is invalid at line …` with no safe repair. | Open the file at the reported line and column. Duplicate keys are a common cause. |
 | A paired-field error for `splunk.observability` or `splunk.platform`. | Set both `realm` and `read_token`, or all of `host`, `read_token`, and `index_allowlist`, or leave the whole block empty. |
 | `production_urls` error. | Add at least one production URL, or explain why there is none in `no_browser_reason`. |
-| The analysis says a source is `not-configured`. | Expected when that `splunk` block is empty. Add read-only access and rerun `/ob-start` to produce a new version. |
+| The analysis says a source is `not-configured`. | Expected when that `splunk` block is empty. Add read-only access and rerun `/ob-analyze` to produce a new version. |
 | `/ob-implement` stops asking for authorization. | `initial_scope.authorized` is `unknown`. Set it to `full`, `repositories`, or `parent_folders`. |
 
 ## Internals

@@ -1,66 +1,59 @@
 ---
-description: Analyze — publish a versioned linked analysis with its wiki and work orders
+description: Analyze — rerun analysis after editing obconfig.yaml or artifacts/
 ---
 
-Run one obengineer analysis version. Direct invocation never bypasses the one-shot authorization.
+Run one analysis version. After the first `/ob-start`, edit `obconfig.yaml` or
+`artifacts/` and rerun `/ob-analyze`. Direct invocation never bypasses the
+one-shot authorization. `manage_obconfig.py` means
+`python3 "{{OBENGINEER_ROOT}}/skills/engagement-intake/scripts/manage_obconfig.py" --project-root .`.
 
-1. Determine the intended next immutable `V<N>` and originating command. Run
-   `python3 "{{OBENGINEER_ROOT}}/skills/engagement-intake/scripts/manage_obconfig.py"
-   --project-root . claim --command <origin> --intended-version V<N>`.
-   Continue only when this atomic one-winner claim matches schema/config, full artifact
+1. Determine the intended next immutable `V<N>` and `<origin>`. When `/ob-start`,
+   `/ob-add-inputs`, or `/ob-edit-inputs` dispatched here after its exact `yes`,
+   `<origin>` is that command; go to step 2 without asking again. Otherwise `<origin>`
+   is `ob-analyze`: if `obconfig.yaml` is missing, tell the user to run `/ob-start`
+   first and stop. Apply `{{OBENGINEER_ROOT}}/prompts/00-load-obconfig.md` gates: run
+   `manage_obconfig.py validate` (on failure, its exact repair gate), then `summary`,
+   which rehashes artifacts. Show it unchanged and ask exactly
+   `Proceed with analysis using this configuration? (yes/no)`. Exact `no` stops. Exact
+   `yes` runs `manage_obconfig.py authorize --answer yes --command ob-analyze
+   --intended-version V<N>`; any other answer repeats the gate.
+2. Run `manage_obconfig.py claim --command <origin> --intended-version V<N>`. Continue
+   only when this atomic one-winner claim matches schema/config, full artifact
    manifest/delta and artifact-tree digest, command, and version. Feed its sanitized
    delta to collection.
-2. After step 1, run the non-secret projection exactly:
-   `python3 "{{OBENGINEER_ROOT}}/skills/engagement-intake/scripts/manage_obconfig.py"
-   --project-root . config-projection --command <origin>
-   --intended-version V<N>`. Its redacted JSON is analysis's only configuration input;
-   never read raw `obconfig.yaml`, environment, or legacy inputs.
-3. Adopt `{{OBENGINEER_ROOT}}/agents/instrumentation-architect.agent.md`.
-4. Invoke the supported direct evidence path exactly:
-   `python3 "{{OBENGINEER_ROOT}}/skills/engagement-intake/scripts/manage_obconfig.py"
-   --project-root . direct-api --phase analysis --command <origin>
-   --intended-version V<N>`. Feed its redacted JSON into provenance; never import the
-   adapter or pass credentials.
-5. Invoke the supported safe-active path exactly:
-   `python3 "{{OBENGINEER_ROOT}}/skills/engagement-intake/scripts/manage_obconfig.py"
-   --project-root . safe-active --command <origin> --intended-version V<N>`.
-   Append its redacted outcomes; passive/none makes zero requests.
-6. Reuse accepted names/finding ids per `skills/references/incremental-runs.md`.
-7. Rehash artifacts, apply the claimed delta, preserve accepted history, and follow
-   Prompt 01.
-8. During the same run, follow
-   `{{OBENGINEER_ROOT}}/prompts/02-build-instrumentation-wiki.md` to create the
-   versioned wiki and every proposed work order.
-9. Use the skills routed by Prompt 01; render Word only when requested.
-10. Follow `skills/references/analysis-run-lifecycle.md` for the one PR and review.
-11. Validate all Prompt 01 outputs, then stage every intended analysis-owned path. Never
-   stage `obconfig.yaml` or `.obengineer`. With the generated outputs in the Git index,
-   run
-   `python3 "{{OBENGINEER_ROOT}}/skills/engagement-intake/scripts/manage_obconfig.py"
-   --project-root . finalize --command <origin> --intended-version V<N>
+3. Run `manage_obconfig.py config-projection --command <origin>
+   --intended-version V<N>`. Its redacted JSON is the only configuration input; never
+   read raw `obconfig.yaml`, environment, or legacy inputs.
+4. Adopt `{{OBENGINEER_ROOT}}/agents/instrumentation-architect.agent.md`.
+5. Run `manage_obconfig.py direct-api --phase analysis --command <origin>
+   --intended-version V<N>`. Feed its redacted JSON into provenance; never pass
+   credentials.
+6. Run `manage_obconfig.py safe-active --command <origin> --intended-version V<N>`.
+   Append redacted outcomes; passive/none makes zero requests.
+7. Reuse accepted names/finding ids per `skills/references/incremental-runs.md`.
+8. Apply the claimed delta, preserve accepted history, and follow Prompt 01 and its
+   routed skills; render Word only when requested. In the same run, follow
+   `{{OBENGINEER_ROOT}}/prompts/02-build-instrumentation-wiki.md` for the versioned wiki
+   and every proposed work order.
+9. Follow `skills/references/analysis-run-lifecycle.md` for the one PR and review.
+10. Validate all Prompt 01 outputs, then stage every intended analysis-owned path. Never
+   stage `obconfig.yaml` or `.obengineer`. Then run
+   `manage_obconfig.py finalize --command <origin> --intended-version V<N>
    --output docs/observability --output wiki/apps/<app>/versions/V<N>`.
-   It binds the complete Git index tree and exact contained output blobs. Commit that
-   index without staging anything else; the commit tree must match exactly.
-12. Before push or PR creation, run `manage_obconfig.py dispatch` with the same
-   command/version. It records only an exact matching HEAD commit/tree. Immediately
-   before each push/PR operation run `manage_obconfig.py verify-dispatch`; dispatch
-   nothing unless it succeeds.
-13. After successful analysis push and PR dispatch, run `consume` with the same
-   command/version. Input changes after finalize belong to the next run and do not
-   alter the immutable dispatched tree. On decline or any pre-dispatch/dispatch failure,
-   run
-   `python3 "{{OBENGINEER_ROOT}}/skills/engagement-intake/scripts/manage_obconfig.py"
-   --project-root . abort --command <origin> --intended-version V<N>` instead. Abort
-   releases the claim without changing artifact baseline/history.
+   It binds the complete index tree and exact output blobs; commit exactly that tree.
+11. Before push or PR creation, run `dispatch` with the same command/version; it records
+   the exact HEAD commit/tree. Immediately before each push/PR operation
+   run `verify-dispatch`; dispatch nothing unless it succeeds.
+12. After successful push and PR dispatch, run `consume` with the same command/version.
+   Later input changes belong to the next run. On decline or any dispatch failure, run
+   `abort` with the same command/version instead; it preserves baseline/history.
 
-The review surface is owned by
-`{{OBENGINEER_ROOT}}/skills/references/analysis-site.md`: linked Markdown opened in
-the host's native side panel. Never start a web server, open a browser, or emit a
-localhost URL.
+Review linked Markdown in the host's native side panel per
+`{{OBENGINEER_ROOT}}/skills/references/analysis-site.md`. Never start a web server,
+open a browser, or emit a localhost URL.
 
-Produce every Prompt 01 output, including `wiki/apps/<app>/versions/V<N>/`. After review,
-explicit `yes` authorizes acceptance and merge. Return the host-native documentation
-link and next Ready work-order command. Do not paste the analysis into chat.
-Use the exact `/ob-implement work-order:<id>` handoff.
+After review, explicit `yes` authorizes acceptance and merge. Return the host-native
+documentation link and the exact `/ob-implement work-order:<id>` handoff. Do not paste
+the analysis into chat.
 
 $ARGUMENTS

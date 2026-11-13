@@ -1,7 +1,7 @@
 interface:
   display_name: "ob-analyze"
-  short_description: "Run an authorized analysis version"
-  default_prompt: "Use $ob-analyze to run an authorized analysis version."
+  short_description: "Rerun analysis after editing inputs"
+  default_prompt: "Use $ob-analyze to rerun analysis after editing inputs."
 
 policy:
   allow_implicit_invocation: false

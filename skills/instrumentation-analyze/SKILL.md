@@ -33,6 +33,7 @@ The target is read-only. Application changes happen only through accepted work o
 | [`../references/agent-wiki.md`](../references/agent-wiki.md) | Versioned subject notes and work orders |
 | [`../references/implementation-work-orders.md`](../references/implementation-work-orders.md) | Work-order hierarchy, foundation gate, bounded targets, repository legs, dependencies, revisions, and PR coordination |
 | [`../references/rum-delivery.md`](../references/rum-delivery.md) | RUM load-order foundation check and CDN delivery recommendation |
+| [`../references/cdn/README.md`](../references/cdn/README.md) | Per-CDN RUM injection references; [`fastly.md`](../references/cdn/fastly.md) is the reference implementation |
 | [`../references/provenance-ledger.md`](../references/provenance-ledger.md) | Evidence and run state |
 | [`../references/context-loading.md`](../references/context-loading.md) | Evidence-gated technical references |
 | [`../references/existing-telemetry.md`](../references/existing-telemetry.md) | Direct APIs, connected integrations, MetricSets, usage, and SignalFlow cross-check |
@@ -218,9 +219,13 @@ orders are `proposed`; dependent foundation orders and all non-foundation orders
 `blocked` while any foundation order exists. Every object links its work orders and every
 work order links back.
 
-For a browser front end, record `architecture.frontend.rumLoadOrder` and
-`cdnDelivery` per [`rum-delivery.md`](../references/rum-delivery.md). An `incorrect` load
-order becomes a foundation order.
+When a web front end exists, the foundation findings include the RUM load-order check and
+the CDN recommendation: record `architecture.frontend.rumLoadOrder` and `cdnDelivery` per
+[`rum-delivery.md`](../references/rum-delivery.md). An `incorrect` load order becomes a
+foundation order. `cdnDelivery.guidance` cites the matching
+`skills/references/cdn/<cdn>.md`, or [`cdn/README.md`](../references/cdn/README.md) when
+that CDN has no reference yet; the work-orders page shows both under Foundation. An
+API-only target (`frontend.applicable: false`) records no RUM load-order or CDN content.
 
 Work order 1 establishes deterministic schema, single-init, workflow-registry, baggage
 allowlist, and deny-list checks before journey code.

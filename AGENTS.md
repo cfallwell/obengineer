@@ -29,7 +29,8 @@ belong in the artifact repository, not this toolkit.
   → Ready work orders / Terraform plan / read-only verification
 ```
 
-Rerunning `/ob-start` after the user edits local `obconfig.yaml` creates the next
+`/ob-start` creates local `obconfig.yaml` and runs the first analysis. Rerunning
+`/ob-analyze` after the user edits `obconfig.yaml` or `artifacts/` creates the next
 version after the common proceed gate. There is no separate
 generate command and no manual acceptance SHA.
 

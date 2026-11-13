@@ -753,6 +753,44 @@ def test_schema_v4_incorrect_rum_load_order_requires_foundation_order():
     )
 
 
+@pytest.mark.parametrize(
+    "guidance",
+    [
+        "skills/references/cdn/fastly.md",
+        "skills/references/cdn/README.md",
+        "skills/references/rum-delivery.md",
+        "skills/references/rum-delivery.md#cdn-delivery",
+    ],
+)
+def test_schema_v4_cdn_guidance_accepts_cdn_references_and_rum_delivery(guidance):
+    value = contract_v4()
+    value["architecture"]["frontend"]["cdnDelivery"]["guidance"] = guidance
+    assert validate_contract(value) == []
+
+
+@pytest.mark.parametrize(
+    "guidance",
+    [
+        "docs/cdn/fastly.md",
+        "skills/references/fastly.md",
+        "skills/references/cdn/../../secrets.md",
+        "https://example.com/fastly.md",
+    ],
+)
+def test_schema_v4_cdn_guidance_rejects_other_paths(guidance):
+    value = contract_v4()
+    value["architecture"]["frontend"]["cdnDelivery"]["guidance"] = guidance
+    assert any(
+        "cdnDelivery.guidance" in item for item in validate_contract(value)
+    )
+
+
+def test_schema_v4_fixture_recommends_fastly_reference():
+    delivery = contract_v4()["architecture"]["frontend"]["cdnDelivery"]
+    assert delivery["cdn"] == "fastly"
+    assert delivery["guidance"] == "skills/references/cdn/fastly.md"
+
+
 def _second_transaction(value, workflow_ids):
     cart = copy.deepcopy(value["businessTransactions"][0])
     cart["id"] = "cart"

@@ -51,36 +51,40 @@ Record the recommendation:
 ```json
 "cdnDelivery": {
   "cdn": "fastly",
-  "recommendation": "Inject the RUM snippet at the edge on HTML responses.",
-  "guidance": "skills/references/rum-delivery.md#fastly"
+  "recommendation": "Inject the RUM snippet at the Fastly edge through an ESI include.",
+  "guidance": "skills/references/cdn/fastly.md"
 }
 ```
 
 `cdn` is `fastly`, `akamai`, `cloudflare`, `cloudfront`, `azure-front-door`,
-`google-cloud-cdn`, `other`, `none`, or `unknown`. `guidance` links the matching section
-below; use `skills/references/rum-delivery.md#cdn-delivery` for `other`, `none`, or
-`unknown`. Never put a RUM token in the recommendation.
+`google-cloud-cdn`, `other`, `none`, or `unknown`. `guidance` cites the matching
+`skills/references/cdn/<cdn>.md` file when one exists, otherwise
+`skills/references/cdn/README.md`. Use `skills/references/rum-delivery.md#cdn-delivery`
+for `other`, `none`, or `unknown`. Never put a RUM token in the recommendation.
+
+The [CDN reference index](cdn/README.md) lists every CDN and how to add one.
 
 ### Fastly
 
-Pending guidance: the maintainer will supply the Fastly example.
+Reference implementation: [`cdn/fastly.md`](cdn/fastly.md) — classic VCL control plane
+with an ESI include as the first child of `<head>`.
 
 ### Akamai
 
-Pending guidance.
+Pending guidance; cite [`cdn/README.md`](cdn/README.md) until added.
 
 ### Cloudflare
 
-Pending guidance.
+Pending guidance; cite [`cdn/README.md`](cdn/README.md) until added.
 
 ### CloudFront
 
-Amazon CloudFront. Pending guidance.
+Amazon CloudFront. Pending guidance; cite [`cdn/README.md`](cdn/README.md) until added.
 
 ### Azure Front Door
 
-Pending guidance.
+Pending guidance; cite [`cdn/README.md`](cdn/README.md) until added.
 
 ### Google Cloud CDN
 
-Pending guidance.
+Pending guidance; cite [`cdn/README.md`](cdn/README.md) until added.

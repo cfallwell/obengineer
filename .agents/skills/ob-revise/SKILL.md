@@ -33,7 +33,7 @@ Accept one selector: `work-order:<id>`, `workflow:<name>`, `business-transaction
 `detector:<id>`, `alert-condition:<id>`, `dashboard:<id>`, or `custom-code:<id>`.
 Resolve it to exactly one subordinate work order. Refuse foundation and use-case orders:
 foundation changes need a new analysis version (edit `obconfig.yaml` or `artifacts/`, then
-rerun `/ob-start`), and a use case is revised through its subordinate orders.
+rerun `/ob-analyze`), and a use case is revised through its subordinate orders.
 
 Collect the requested changes: naming conventions, attributes to add, remove, or rename,
 additional spans, and detector or alert-condition changes. Record the reason and the
@@ -48,7 +48,7 @@ application and version:
 
 A version accepted before work-order kinds existed has a `legacy` ledger and cannot be
 revised; `revise` refuses it, and the change needs a new analysis version: edit
-`obconfig.yaml` or `artifacts/`, then rerun `/ob-start`.
+`obconfig.yaml` or `artifacts/`, then rerun `/ob-analyze`.
 
 Create a branch in the memory repository, commit the revision and ledger change, push, and
 open one PR. Never create a new analysis version or edit digest-bound wiki notes. Merge

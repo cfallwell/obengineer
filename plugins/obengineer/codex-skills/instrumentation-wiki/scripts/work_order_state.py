@@ -525,12 +525,12 @@ def cmd_revise(args) -> int:
         raise StateError(
             f"{args.work_order} belongs to a legacy (contract v3) analysis version; revisions "
             "need the v4 work-order hierarchy. To change it, edit obconfig.yaml or artifacts/ "
-            "and rerun /ob-start to produce the next analysis version."
+            "and rerun /ob-analyze to produce the next analysis version."
         )
     if entry["kind"] == "foundation":
         raise StateError(
             f"{args.work_order} is a foundation work order; foundation changes require a new "
-            "analysis version. Edit obconfig.yaml or artifacts/ and rerun /ob-start."
+            "analysis version. Edit obconfig.yaml or artifacts/ and rerun /ob-analyze."
         )
     if entry["kind"] not in SUBORDINATE_KINDS:
         raise StateError(

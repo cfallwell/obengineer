@@ -16,7 +16,9 @@ legacy monolithic template.
 Use `../templates/analysis-site/index.md` and `detail.md` as the approved layout. Do not
 replace the long linked index with duplicated object detail.
 
-If config does not exist, invoke `/ob-start`. Do not begin collection unless the atomic
+If config does not exist, tell the user to run `/ob-start` first. Direct `/ob-analyze`
+runs the Prompt 00 validate, repair, and proceed gates and authorizes `ob-analyze`
+before claiming. Do not begin collection unless the atomic
 `manage_obconfig.py claim --command <origin> --intended-version V<N>` succeeds for the
 schema version, config digest, full artifact manifest/delta and tree digest, originating
 command, and intended version. Use its sanitized delta as the only artifact-change input.

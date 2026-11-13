@@ -63,6 +63,7 @@ CONTRACT_SCHEMAS = {
     3: SCHEMA_DIRECTORY / "analysis-contract-v3.schema.json",
     4: SCHEMA_DIRECTORY / "analysis-contract-v4.schema.json",
 }
+CDN_GUIDANCE_PREFIXES = ("skills/references/cdn/", "skills/references/rum-delivery.md")
 WORK_ORDER_KINDS = (
     "foundation",
     "use-case",
@@ -2040,9 +2041,9 @@ def _validate_v4_work_orders(
             _substantive(
                 delivery.get("recommendation"), f"{path}.cdnDelivery.recommendation", failures
             )
-            if not str(delivery.get("guidance", "")).startswith(
-                "skills/references/rum-delivery.md"
-            ):
+            guidance = str(delivery.get("guidance", ""))
+            if not guidance.startswith(CDN_GUIDANCE_PREFIXES) or ".." in guidance:
                 failures.append(
-                    f"{path}.cdnDelivery.guidance: must cite skills/references/rum-delivery.md"
+                    f"{path}.cdnDelivery.guidance: must cite skills/references/cdn/ "
+                    "or skills/references/rum-delivery.md"
                 )

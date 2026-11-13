@@ -6,9 +6,10 @@ site, schema, ledger, verification plan, versioned wiki, and complete work-order
 
 ## Input management creates no standalone history
 
-`/ob-start`, `/ob-add-inputs`, and `/ob-edit-inputs` validate the ignored local
-`obconfig.yaml`, hash its artifact directory, and dispatch analysis only after the exact
-proceed gate. They do not open an input-only PR and never commit local config/state.
+`/ob-start`, `/ob-add-inputs`, `/ob-edit-inputs`, and directly invoked `/ob-analyze`
+validate the ignored local `obconfig.yaml`, hash its artifact directory, and dispatch
+analysis only after the exact proceed gate. Reruns after the first `/ob-start` use
+`/ob-analyze`. They do not open an input-only PR and never commit local config/state.
 
 Exact `yes` creates one-shot authorization bound to config, complete artifact manifest
 and delta, command, and intended version. Analysis atomically claims it before network

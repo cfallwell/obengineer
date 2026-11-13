@@ -451,6 +451,38 @@ def test_authorization_is_one_shot_and_bound_to_both_digests(tmp_path):
         )
 
 
+def test_direct_ob_analyze_authorization_is_bound_to_its_own_command(tmp_path):
+    root = project(tmp_path)
+    prepare_config_creation(root)
+    (root / "artifacts/input.txt").write_text("one")
+    for argv in (
+        ["authorize", "--answer", "yes"],
+        ["claim"],
+    ):
+        assert manage_obconfig.main(
+            ["--project-root", str(root), *argv, "--command", "ob-analyze",
+             "--intended-version", "V1"]
+        ) == 0
+    obconfig.abort_claim(root, command="ob-analyze", intended_version="V1")
+
+    obconfig.authorize(
+        root, command="ob-analyze", intended_version="V2", enforce_git=False
+    )
+    with pytest.raises(obconfig.ObconfigError, match="no longer matches"):
+        obconfig.claim_authorization(
+            root, command="ob-start", intended_version="V2", enforce_git=False
+        )
+    claim = obconfig.claim_authorization(
+        root, command="ob-analyze", intended_version="V2", enforce_git=False
+    )
+    assert claim["command"] == "ob-analyze"
+    finalize_for_test(root, "ob-analyze", "V2")
+    obconfig.consume_claim(
+        root, command="ob-analyze", intended_version="V2", enforce_git=False
+    )
+    assert not (root / ".obengineer/analysis-claim.json").exists()
+
+
 def test_concurrent_claim_has_exactly_one_winner(tmp_path):
     root = project(tmp_path)
     (root / "artifacts/input.txt").write_text("one")

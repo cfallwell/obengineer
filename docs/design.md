@@ -6,7 +6,14 @@ reviewers deciding whether to trust its output. For mechanics, see
 
 ## The problem
 
-Observability engagements usually fail in one of five ways:
+Observability is a cultural change, and most organizations struggle with that shift.
+Today most engineering is outsourced, and even management, software architecture, and
+design can be outsourced. How does an enterprise ensure that observability stays aligned
+with the business? How does an organization that has outsourced its engineering drive a
+culture of Observability-Driven Development (ODD) as a material shift in its engineering
+processes? Those questions are why obengineer was developed.
+
+Manual developer custom instrumentation engagements fail when:
 
 1. the design assumes an architecture the application does not have;
 2. findings and recommendations are buried in a long document nobody navigates;
@@ -44,9 +51,10 @@ so no browser, local web server, or port is involved. Word is available through
 
 ## Immutable versions
 
-Every run of `/ob-start` creates the next version, `V1`, `V2`, and so on, in its own
-directory with a matching wiki snapshot. A version never changes after it is published,
-and an older version never links to newer content. Each version opens with what changed
+The first `/ob-start` creates `V1`, and every later `/ob-analyze` creates the next
+version, `V2`, `V3`, and so on, each in its own directory with a matching wiki snapshot.
+A version never changes after it is published, and an older version never links to
+newer content. Each version opens with what changed
 in the inputs and what changed in the results, so reviewers compare versions without
 reading Git history.
 
@@ -84,7 +92,10 @@ while still guaranteeing the plumbing exists first.
 
 RUM delivery is a foundation concern for the same reason. Injecting the RUM snippet at
 the CDN edge places it first on every HTML response and lets the token or version change
-without an application release, so analysis recommends it over in-code injection.
+without an application release, so analysis recommends it over in-code injection. Edge
+configuration differs by CDN, so each CDN gets its own injection reference under
+`skills/references/cdn/`, and the analysis links only the one that matches the site's
+CDN, and only when the target has a web front-end.
 
 ## Acceptance is bound to content, not to a commit
 

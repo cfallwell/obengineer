@@ -196,7 +196,7 @@ def test_revise_rejected_for_foundation_and_use_case(tmp_path, capsys):
     capsys.readouterr()
     assert run(root, "revise", "--work-order", "WO-001", "--file", path) == 1
     message = capsys.readouterr().out
-    assert "new analysis version" in message and "rerun /ob-start" in message
+    assert "new analysis version" in message and "rerun /ob-analyze" in message
     assert run(root, "revise", "--work-order", "WO-010", "--file", path) == 1
     assert ledger(root)["work_orders"]["WO-001"]["revision"] == 1
 
@@ -296,7 +296,7 @@ def test_legacy_v3_init_gate_and_revise_refusal(tmp_path, capsys):
     assert run(root, "revise", "--work-order", "WO-003", "--file",
                change_file(root, "c.yaml", valid_change())) == 1
     message = capsys.readouterr().out
-    assert "v4 work-order hierarchy" in message and "rerun /ob-start" in message
+    assert "v4 work-order hierarchy" in message and "rerun /ob-analyze" in message
     assert "/ob-edit-inputs" not in message
     assert not (state.state_dir(root, APP, VERSION) / "revisions").exists()
     assert all(p.read_bytes() == content for p, content in notes.items())

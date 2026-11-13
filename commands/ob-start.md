@@ -1,9 +1,9 @@
 ---
-description: Start — validate local obconfig and run the next immutable analysis
+description: Start — create local obconfig and run the first analysis; later runs use /ob-analyze
 ---
 
-Start or resume an obengineer engagement.
-Inputs are managed in local project-root `obconfig.yaml`.
+Start an obengineer engagement: create local project-root `obconfig.yaml` and run the
+first analysis. After that, edit `obconfig.yaml` or `artifacts/` and rerun `/ob-analyze`.
 
 1. Read `{{OBENGINEER_ROOT}}/prompts/00-load-obconfig.md` and follow its two exact gates.
 2. Before discovery, run `manage_obconfig.py --project-root . init`. If it creates the

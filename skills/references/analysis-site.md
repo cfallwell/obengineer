@@ -124,7 +124,7 @@ Before acceptance, the landing callout reads:
    [Recommended path](implementation/index.md).
 2. Review [Use cases](use-cases/index.md) and [Work orders](<wiki path>).
 3. If evidence should change, edit `obconfig.yaml` or `artifacts/` and rerun
-   `/ob-start` to produce the next version.
+   `/ob-analyze` to produce the next version.
 4. Reply `yes` in chat to accept V<N> and merge its reviewed analysis PR.
 ```
 
@@ -287,7 +287,7 @@ After an analysis PR merges, the final response has this exact shape:
 Next steps:
 1. Review Architecture, Findings, Strategy, Use Cases, and Work Orders.
 2. If evidence should change, edit `obconfig.yaml` or `artifacts/` and rerun
-   `/ob-start`.
+   `/ob-analyze`.
 3. Reply `yes` to accept this version.
 ```
 

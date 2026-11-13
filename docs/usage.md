@@ -142,7 +142,8 @@ the agent reads unresolved comments, commits supported corrections, reports what
 changed, and asks for acceptance again.
 
 If the analysis is wrong because an input was wrong, do not accept it. Edit
-`obconfig.yaml` or `artifacts/` and rerun `/ob-start` to produce the next version.
+`obconfig.yaml` or `artifacts/` and run `/ob-analyze` to produce the next version (see
+[Start the next version](#13-start-the-next-version)).
 
 ## 6. Accept with `yes`
 
@@ -169,8 +170,11 @@ Foundation work orders are prerequisites taken from findings and recommendations
 from use cases: for example, the deterministic contract checks that keep the accepted
 schema enforced in CI, fixing the RUM agent so it loads and initializes before the
 front-end framework (Angular, React, Vue, Next.js) bootstraps, and moving RUM snippet
-injection to the CDN edge. There are at most about ten, and they have no subordinate
-work orders.
+injection to the CDN edge. When the application has a web front-end, the foundation
+section of the analysis links the CDN-specific injection reference for the CDN it found
+(Fastly today, in [`cdn/fastly.md`](../skills/references/cdn/fastly.md); other CDNs are
+pending and fall back to the [CDN index](../skills/references/cdn/README.md)). There are
+at most about ten foundation orders, and they have no subordinate work orders.
 
 Before running implementation, set `initial_scope.authorized` in `obconfig.yaml`; with
 the default `unknown`, `/ob-implement` stops and asks engineering for scope.
@@ -253,8 +257,9 @@ Reply `yes` to merge it. The accepted analysis and its digest are untouched, so 
 version is created. Attribute additions that appear in the schema's deny list are
 rejected.
 
-Foundation and use-case orders cannot be revised. To change those, edit the inputs and
-rerun `/ob-start` for a new version.
+Foundation and use-case orders cannot be revised. To change those, edit
+`obconfig.yaml` or `artifacts/` and run `/ob-analyze` for a new version. A use case
+changes through its subordinate orders, which are revisable.
 
 ## 10. Re-implement a changed order
 
@@ -311,29 +316,37 @@ docs/observability/verification/verification-<app>-<timestamp>.md
 Each criterion is `met`, `unmet`, or `unmeasurable`. Every `unmet` row gives the
 expected and observed values, the remediation route (an implementation work order, a
 Terraform change, a contract amendment, or a human owner), the exact next command, and
-how to recheck. In CI, an `unmet` result fails the job. Verification never changes the
-tenant.
+how to recheck. In CI, an `unmet` result fails the job and is reported in the job
+summary (see [Continuous integration](ci.md#scheduled-runs)). Verification never changes
+the tenant.
 
 ## 13. Start the next version
 
-When evidence or inputs change (new artifacts, tenant access added, a new constraint),
-edit `obconfig.yaml` or `artifacts/` and rerun:
+`/ob-start` is the first-run command: it creates `obconfig.yaml` and runs the first
+analysis. Every later analysis starts with `/ob-analyze`. When evidence or inputs change
+(new artifacts, tenant access added, a new constraint, a new feature shipped), edit
+`obconfig.yaml` or `artifacts/` and run:
 
 ```text
-/ob-start
+/ob-analyze
 ```
 
-The summary shows the artifact delta, and `yes` produces `V<N+1>` in its own
-directory and PR. Accepted names and finding ids are reused, and the new version opens
-with `Changes in this version`. Earlier versions stay readable and unchanged; only the
+`/ob-analyze` validates the file, prints the same redacted summary with the artifact
+delta, and asks `Proceed with analysis using this configuration? (yes/no)` itself. `yes`
+produces `V<N+1>` in its own directory and PR; `no` stops with no network activity.
+Accepted names and finding ids are reused, and the new version opens with
+`Changes in this version`. Earlier versions stay readable and unchanged; only the
 accepted version's work orders can be implemented.
+
+To run this loop for every feature release, with contract checks on each pull request,
+see [Continuous integration](ci.md).
 
 ## Command reference
 
 | Command | Arguments | What it does | Writes |
 |---|---|---|---|
-| `/ob-start` | none | Creates or validates `obconfig.yaml`, shows the redacted summary, asks to proceed, then runs analysis. | `obconfig.yaml` on first run; then everything `/ob-analyze` writes. |
-| `/ob-analyze` | none | Runs an analysis version that `/ob-start` has already authorized. Normally invoked by `/ob-start`; it never bypasses the proceed gate. | `docs/observability/analysis/<app>/V<N>/`, `docs/observability/*.json`, `wiki/apps/<app>/versions/V<N>/`, one PR; `acceptance.yaml` after `yes`. |
+| `/ob-start` | none | First run only. Creates `obconfig.yaml`, then validates it, shows the redacted summary, asks to proceed, and runs the first analysis. | `obconfig.yaml` on the first invocation; then everything `/ob-analyze` writes. |
+| `/ob-analyze` | none | Every later analysis. Validates `obconfig.yaml` and `artifacts/`, shows the redacted summary, asks `Proceed with analysis using this configuration? (yes/no)`, and on `yes` runs the next version. | `docs/observability/analysis/<app>/V<N>/`, `docs/observability/*.json`, `wiki/apps/<app>/versions/V<N>/`, one PR; `acceptance.yaml` after `yes`. |
 | `/ob-implement` | `<selector> [reimplement]`. Selectors: `work-order:`, `use-case:`, `workflow:`, `business-transaction:`, `detector:`, `alert-condition:`, `dashboard:`, `custom-code:`, `objective:`, `config:` | Implements one Ready work order after the foundation gate. | One PR per mapped repository plus a coordination PR; `wiki/apps/<app>/implementation/V<N>/state.yaml`. |
 | `/ob-revise` | `work-order:<id>` (or `workflow:`, `business-transaction:`, `detector:`, `alert-condition:`, `dashboard:`, `custom-code:`) | Revises one subordinate work order in the accepted version. | `wiki/apps/<app>/implementation/V<N>/revisions/<WO-id>/R<k>.md`, `state.yaml`, one PR. |
 | `/ob-terraform` | none | Generates a Terraform plan from the accepted version. Never applies. | `terraform/apps/<app>/`, `terraform/portfolio/`, a plan and handover. |
@@ -345,12 +358,13 @@ accepted version's work orders can be implemented.
 
 | Symptom | Fix |
 |---|---|
-| `/ob-start` keeps repeating the proceed question. | Only `yes` or `no` is accepted, exactly. |
-| `/ob-implement` says the acceptance digest does not match. | An accepted file changed after acceptance. Revert it, or rerun `/ob-start` for a new version. |
+| `/ob-start` or `/ob-analyze` keeps repeating the proceed question. | Only `yes` or `no` is accepted, exactly. |
+| `/ob-analyze` tells you to run `/ob-start` first. | `obconfig.yaml` does not exist yet. Run `/ob-start` once to create it and produce `V1`. |
+| `/ob-implement` says the acceptance digest does not match. | An accepted file changed after acceptance. Revert it, or run `/ob-analyze` for a new version. |
 | `/ob-implement` stops and asks for scope. | Set `initial_scope.authorized` to `full`, `repositories`, or `parent_folders`. |
 | `/ob-implement` reports `foundation work orders incomplete`. | Implement the listed foundation orders first, or record their status once deployed. |
 | A selector matches zero or several work orders. | Use `work-order:<id>` from the work-order queue in the wiki. |
-| A work order is `blocked` with an unresolved repository mapping. | Add the repository remote and authorized paths (listed on the Intake recommendations page) and rerun `/ob-start`. |
-| `/ob-revise` refuses the order. | Foundation and use-case orders are not revisable; rerun `/ob-start` with changed inputs instead. |
+| A work order is `blocked` with an unresolved repository mapping. | Add the repository remote and authorized paths (listed on the Intake recommendations page) to `obconfig.yaml` and run `/ob-analyze`. |
+| `/ob-revise` refuses the order. | Foundation and use-case orders, and orders in a version accepted before work-order kinds existed, are not revisable; change `obconfig.yaml` or `artifacts/` and run `/ob-analyze` instead. |
 | `/ob-terraform` refuses a chart grouping. | The key is attribute-only in the schema. Use a dimension-eligible key, or change the schema in a new version. |
 | `/ob-verify` reports `unmeasurable`. | Access or evidence is missing; the row names what to configure. |

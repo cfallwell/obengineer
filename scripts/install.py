@@ -79,13 +79,20 @@ LEGACY_COMMAND_DIGESTS = {
         "a967cb53e0992efde45dea0a7b849a2d10cd051fc2e1e21637bdeba58d10d3d7",
     },
     "ob-analyze.md": {
+        "002a7d2ec07f3f05b76f35aea0c080c1417a16bb9c157d77aa5efbd57a0d7a3a",
         "41ce324344fc0823616d650dc954465a779e0bfb16e954e9ff4b25e6edca672e",
         "5814b6a3ae7a880e1294a120648ef2f4c29be5b0f3c42eeca5a96512c531f615",
         "58176e1e5ab35f4a74d651378262e74a7c99e6fe2ef1b0f4c1b79b5428a1111a",
+        "5e2acc7a86399c5383f9bbc406e5f787cfba22aa78ada84eb1e29513869fa5a6",
+        "7bc7f514b302de4e04f41d05a2d3f267ac4a3ff616e00784b52f2f8212a67dcf",
+        "931ba8391b6d721f058458260c68cf83078c5822231b5f06aa50db1bf92cf960",
         "aa6526cd18ba76fe8be5a4b80ebeb5fe45e6b6f74de4b787296c038c47a91f00",
+        "ae6b65ca5df632b7773f4a841c61595efb9f2792d9d5d274ada815fb704aa424",
         "beb70d9a0d5e57090ae159e7cdf0985419d5fe8adfeefb535db63c9c9bff6ef4",
         "c0ef56511504a7ce6be6a1cf7733468f5710e521531a3fd060581fd86f98aabe",
+        "c1227b2237dbef89f694e6f97c9382849a01ebaf32713e2f44a5f0a767d43520",
         "f6c0231f5ccc97e1fd6337499f13e42e87283915055cc4f07344aaa2a7911555",
+        "f97306a7b6c4271e9009a5c1b31acf9694c722a1febcd1245a363b0a76c2a42a",
         "fa3036ffe90bbe9c99247d60f473803341e24b92560f0179a62f698fb2dc0e24",
     },
     "ob-build-terraform.md": {"4ff68bea8d3c47857fab2fe09414f5d649b98c9b2215fc674f8c09643a8d2b97"},
@@ -117,6 +124,7 @@ LEGACY_COMMAND_DIGESTS = {
         "a15f685ec2efeb373226b4dfb7d7635b35638bb00f7e04c43e2e3c3daff293c8",
     },
     "ob-revise.md": {
+        "4e56e3bc781b297f6e17b4d17e3dca2961c742452f60bdb4bae20b840800dfc5",
         "c2b28a037d84efec4e85b57e5ebe359578d1ce9a3c5fbb2eec12333e220d099c",
         "d87789399c665ce29dab86b89c3d5f3f720d346d1516f94c8ee0c4a59e0fea44",
     },
@@ -128,6 +136,7 @@ LEGACY_COMMAND_DIGESTS = {
     "ob-start.md": {
         "385314e5cb15838d7cea0ca4e75e961d2e515eee981b2fe8d91ee0462f9bb5a5",
         "5f667844a3d0063574277fcdde4ed870af4cb0d1ad908acf4dac876c1559c173",
+        "7be4e78748fef8f363eb97a2248001c87b8b6bf179aafe53ca689612cde65f2d",
         "993a6a0f5ab146d6c8a9978d7e384bc7bd46206bf2006a57b6a20f961eed5727",
         "a71a0ed85bd0f5a3af9a77eb17b75b5ecf5e6e21d3877ae7b8d181b9ad48fc7a",
     },
@@ -181,7 +190,10 @@ HOSTS: dict[str, Host] = {
         label="Cursor",
         user_dir=".cursor",
         project_dir=".cursor",
-        notes=("Type /ob to list /ob-start, /ob-add-inputs, /ob-edit-inputs, /ob-analyze, /ob-implement, /ob-revise, /ob-terraform, /ob-verify, /ob-review, and /ob-render.",),
+        notes=(
+            "Type /ob to list /ob-start, /ob-add-inputs, /ob-edit-inputs, /ob-analyze, /ob-implement, /ob-revise, /ob-terraform, /ob-verify, /ob-review, and /ob-render.",
+            "After the first /ob-start analysis, edit obconfig.yaml or artifacts/ and rerun /ob-analyze.",
+        ),
     ),
     "claude": Host(
         key="claude",
@@ -1877,7 +1889,8 @@ def main(argv=None) -> int:
           "$cardinality-budget, ...")
     if project:
         print("\nCopy obconfig.yaml.template to obconfig.yaml, chmod 0600, edit it, "
-              "then run /ob-start. The command can create the local copy for you.")
+              "then run /ob-start. The command can create the local copy for you. "
+              "Later runs: edit obconfig.yaml or artifacts/ and rerun /ob-analyze.")
     if args.dry_run:
         print("\n(dry run — nothing was written)")
     return 0

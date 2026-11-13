@@ -1,7 +1,7 @@
 # Architecture review — 18 Sep 2026
 
 > Archived point-in-time review. The current assessment is
-> [Architecture review — 9 Nov 2026](architecture-review.md). The newer review links
+> [Architecture review — 9 Nov 2026](11-09-26-architecture-review.md). The newer review links
 > each revised conclusion back to the relevant section here.
 
 A review of obengineer as it stands, and answers to the questions raised with it. Written

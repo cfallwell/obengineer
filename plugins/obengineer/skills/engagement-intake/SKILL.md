@@ -1,8 +1,8 @@
 ---
 name: engagement-intake
 description: >-
-  Load and protect schema-v4 obconfig for /ob-start, /ob-add-inputs, and
-  /ob-edit-inputs. Validate, safely repair only after explicit consent, hash all
+  Load and protect schema-v4 obconfig for /ob-start, direct /ob-analyze reruns,
+  /ob-add-inputs, and /ob-edit-inputs. Validate, safely repair only after explicit consent, hash all
   supplied artifacts, show a redacted summary, and bind one-shot analysis
   authorization to exact input bytes. Use for $engagement-intake or local input changes.
 metadata:
@@ -54,6 +54,9 @@ Follow [`../../prompts/00-load-obconfig.md`](../../prompts/00-load-obconfig.md).
    verify dispatch against immutable Git objects before push/PR work. Consume only a
    successfully published dispatch; abort every declined/failed run without changing
    baseline/history.
+
+Direct `/ob-analyze` reruns apply these same gates and authorize `ob-analyze`;
+without `obconfig.yaml` they direct the user to `/ob-start` first.
 
 `/ob-add-inputs` and `/ob-edit-inputs` are compatibility entry points. They never edit
 YAML or ask field questions. Unchanged config prints
