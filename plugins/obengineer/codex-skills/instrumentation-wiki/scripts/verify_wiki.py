@@ -112,9 +112,15 @@ WIKILINK = re.compile(r"\[\[([^\]|#]+)")
 WORK_ORDER_ID = re.compile(r"^WO-[0-9]{3,}$")
 SELECTOR = re.compile(
     r"^(?:work-order:WO-[0-9]{3,}|"
-    r"(?:business-transaction|workflow|use-case|detector|objective|config):"
+    r"(?:business-transaction|workflow|use-case|detector|alert-condition|"
+    r"dashboard|custom-code|objective|config):"
     r"[a-z0-9][a-z0-9._-]*)$"
 )
+SUBORDINATE_KINDS = {
+    "workflow", "business-transaction", "detector", "alert-condition",
+    "dashboard", "custom-code",
+}
+WORK_ORDER_KINDS = {"foundation", "use-case", *SUBORDINATE_KINDS}
 WORK_ORDER_SECTIONS = (
     "findings",
     "use cases",
@@ -232,6 +238,97 @@ def acceptance_verifier():
     sys.modules[spec.name] = module
     spec.loader.exec_module(module)
     return module.verify
+
+
+def check_work_order_hierarchy(
+    orders: dict[str, dict], bodies: dict[str, str]
+) -> list[str]:
+    """v4 kind, parent, and subordinate rules; the contract's rules restated."""
+    failures: list[str] = []
+
+    def id_list(order_id: str, fm: dict, key: str) -> list[str]:
+        value = fm.get(key)
+        if not isinstance(value, list) or not all(
+            isinstance(item, str) and WORK_ORDER_ID.fullmatch(item) for item in value
+        ):
+            failures.append(f"{order_id}: {key} must be a list of work-order IDs")
+            return []
+        return value
+
+    kinds = {order_id: fm.get("kind") for order_id, fm in orders.items()}
+    parents = {}
+    subordinates = {}
+    for order_id, fm in orders.items():
+        kind = kinds[order_id]
+        if kind not in WORK_ORDER_KINDS:
+            failures.append(
+                f"{order_id}: kind {kind!r} is not one of {sorted(WORK_ORDER_KINDS)}"
+            )
+        if fm.get("revision") != 1:
+            failures.append(f"{order_id}: revision must be 1 in the analysis wiki")
+        parents[order_id] = id_list(order_id, fm, "parents")
+        subordinates[order_id] = id_list(order_id, fm, "subordinates")
+
+    for order_id, fm in orders.items():
+        kind = kinds[order_id]
+        depends_on = fm.get("depends_on") if isinstance(fm.get("depends_on"), list) else []
+        if kind == "foundation":
+            if parents[order_id] or subordinates[order_id]:
+                failures.append(
+                    f"{order_id}: foundation work orders have no parents or subordinates"
+                )
+            non_foundation = [d for d in depends_on if kinds.get(d) != "foundation"]
+            if non_foundation:
+                failures.append(
+                    f"{order_id}: foundation work order depends on non-foundation "
+                    f"orders {sorted(non_foundation)}"
+                )
+        elif kind == "use-case":
+            if parents[order_id]:
+                failures.append(f"{order_id}: use-case work orders have no parents")
+            if not subordinates[order_id]:
+                failures.append(f"{order_id}: use-case work order lists no subordinates")
+            if depends_on:
+                failures.append(f"{order_id}: use-case work order depends_on must be empty")
+            section = markdown_sections(bodies.get(order_id, "")).get(
+                "subordinate work orders"
+            )
+            if section is None:
+                failures.append(
+                    f"{order_id}: use-case work order is missing ## subordinate work orders"
+                )
+            for child in subordinates[order_id]:
+                if section is not None and child not in section:
+                    failures.append(
+                        f"{order_id}: ## subordinate work orders does not name {child}"
+                    )
+                if child not in orders:
+                    failures.append(f"{order_id}: subordinate {child} does not exist")
+                elif kinds[child] not in SUBORDINATE_KINDS:
+                    failures.append(
+                        f"{order_id}: subordinate {child} has kind {kinds[child]!r}"
+                    )
+                elif order_id not in parents[child]:
+                    failures.append(
+                        f"{child}: parents does not name use case {order_id}"
+                    )
+        elif kind in SUBORDINATE_KINDS:
+            if not parents[order_id]:
+                failures.append(f"{order_id}: subordinate work order lists no parents")
+            if subordinates[order_id]:
+                failures.append(f"{order_id}: subordinate work orders have no subordinates")
+            if depends_on:
+                failures.append(f"{order_id}: subordinate work order depends_on must be empty")
+            for parent in parents[order_id]:
+                if kinds.get(parent) != "use-case":
+                    failures.append(
+                        f"{order_id}: parent {parent} is not a use-case work order"
+                    )
+                elif order_id not in subordinates.get(parent, []):
+                    failures.append(
+                        f"{order_id}: parent {parent} does not list it as a subordinate"
+                    )
+    return failures
 
 
 def check(target: Path, repo_root: Path, index_max_lines: int) -> list[str]:
@@ -409,6 +506,15 @@ def check(target: Path, repo_root: Path, index_max_lines: int) -> list[str]:
         failures.append("missing docs/observability/implementation-map.json")
 
     # ---- unified work orders ---------------------------------------------
+    # v4 mode: any note declaring `kind` puts every work order under the
+    # foundation / use-case / subordinate hierarchy. v3 wikis carry no kind.
+    order_notes = [p for p in app_work_orders if p.name != "index.md"]
+    v4_mode = any("kind" in fields.get(p, {}) for p in order_notes)
+    foundation_ids = {
+        fields.get(p, {}).get("work_order_id", p.stem)
+        for p in order_notes
+        if fields.get(p, {}).get("kind") == "foundation"
+    }
     work_order_fields: dict[str, dict] = {}
     work_order_bodies: dict[str, str] = {}
     for p in app_work_orders:
@@ -537,8 +643,17 @@ def check(target: Path, repo_root: Path, index_max_lines: int) -> list[str]:
             failures.append(
                 f"{rel[p]}: accepted versions cannot leave work orders proposed"
             )
+        gated = (
+            v4_mode and fm.get("kind") != "foundation" and bool(foundation_ids)
+        )
+        if gated and is_accepted and status != "blocked":
+            failures.append(
+                f"{rel[p]}: non-foundation work order must stay blocked while "
+                "foundation work orders exist"
+            )
         if (
             is_accepted
+            and not gated
             and status == "blocked"
             and not dependencies
             and repository_mapping != "unresolved"
@@ -551,7 +666,7 @@ def check(target: Path, repo_root: Path, index_max_lines: int) -> list[str]:
         if not is_accepted:
             expected = (
                 "blocked"
-                if dependencies or repository_mapping == "unresolved"
+                if gated or dependencies or repository_mapping == "unresolved"
                 else "proposed"
             )
             if status != expected:
@@ -560,6 +675,8 @@ def check(target: Path, repo_root: Path, index_max_lines: int) -> list[str]:
                 )
 
     order_ids = set(work_order_fields)
+    if v4_mode:
+        failures.extend(check_work_order_hierarchy(work_order_fields, work_order_bodies))
     graph: dict[str, list[str]] = {}
     for order_id, fm in work_order_fields.items():
         dependencies = fm.get("depends_on", [])

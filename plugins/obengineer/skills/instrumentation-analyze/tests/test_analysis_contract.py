@@ -655,3 +655,99 @@ def test_published_json_schemas_capture_bounded_jobs_and_required_objects():
     assert set(timing_schema["properties"]["phases"]["required"]) == {
         "collection", "reconciliation", "render", "validation"
     }
+
+
+FIXTURE_V4 = Path(__file__).resolve().parent / "fixtures" / "representative-v4"
+
+
+def contract_v4():
+    return load_json(FIXTURE_V4 / "analysis-contract.json")
+
+
+def _order(value, order_id):
+    return next(order for order in value["workOrders"] if order["id"] == order_id)
+
+
+def test_schema_v4_hierarchy_fixture_and_frozen_v3_fixture_both_pass():
+    assert contract_v4()["schemaVersion"] == 4
+    assert validate_contract(contract_v4()) == []
+    assert validate_contract(contract()) == []
+    value = contract_v4()
+    implementation_map = {
+        "schema_version": 1,
+        "repositories": [
+            {"id": "sample-web", "remote": "owner/sample-web", "authorized_paths": ["src/", "test/"]},
+            {"id": "sample-platform", "remote": "owner/sample-platform", "authorized_paths": ["collector/", "test/"]},
+            {"id": "sample-services", "remote": "owner/sample-services", "authorized_paths": ["services/", "packages/"]},
+            {"id": "sample-observability", "remote": "owner/sample-observability", "authorized_paths": ["terraform/", "verification/"]},
+        ],
+        "targets": [
+            {
+                "selector": f"work-order:{order['id']}",
+                "work_order": order["id"],
+                "repositories": [leg["repository"] for leg in order["repositoryLegs"]],
+                "mapping_status": "complete",
+                "evidence": ["FACT-source-contract"],
+            }
+            for order in value["workOrders"]
+        ] + [{
+            "selector": "custom-code:order-total-attribute",
+            "work_order": "WO-006",
+            "repositories": [leg["repository"] for leg in _order(value, "WO-006")["repositoryLegs"]],
+            "mapping_status": "complete",
+            "evidence": ["FACT-source-contract"],
+        }],
+    }
+    assert validate_implementation_mapping(value, implementation_map) == []
+
+
+def test_schema_v4_requires_reciprocal_parent():
+    value = contract_v4()
+    _order(value, "WO-003")["parentIds"] = []
+    failures = validate_contract(value)
+    assert any("does not name WO-002 as a parent" in item for item in failures)
+    assert any("subordinate work order requires a parent" in item for item in failures)
+
+
+def test_schema_v4_foundation_must_precede_other_orders():
+    value = contract_v4()
+    value["workOrders"].append(value["workOrders"].pop(0))
+    assert any(
+        "foundation work orders must precede" in item
+        for item in validate_contract(value)
+    )
+
+
+def test_schema_v4_non_foundation_cannot_depend_on_orders():
+    value = contract_v4()
+    _order(value, "WO-004")["dependsOn"] = ["WO-001"]
+    assert any(
+        "only foundation work orders declare dependencies" in item
+        for item in validate_contract(value)
+    )
+
+
+def test_schema_v4_foundation_cannot_have_subordinates():
+    value = contract_v4()
+    _order(value, "WO-001")["subordinateIds"] = ["WO-003"]
+    assert any(
+        "foundation work order cannot have parents or subordinates" in item
+        for item in validate_contract(value)
+    )
+
+
+def test_schema_v4_incorrect_rum_load_order_requires_foundation_order():
+    value = contract_v4()
+    value["architecture"]["frontend"]["rumLoadOrder"]["status"] = "incorrect"
+    assert validate_contract(value) == []
+    foundation = value["workOrders"][0]
+    foundation["kind"] = "custom-code"
+    foundation["parentIds"] = ["WO-002"]
+    foundation["status"] = "proposed"
+    _order(value, "WO-002")["subordinateIds"].append("WO-001")
+    for order in value["workOrders"][1:]:
+        order["status"] = "proposed"
+    assert any(
+        "incorrect RUM load order requires a foundation work order" in item
+        for item in validate_contract(value)
+    )

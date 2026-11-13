@@ -131,8 +131,14 @@ wiki/apps/<app>/versions/V<N>/implementation/work-orders/
 
 The queue index contains:
 
-| ID | Outcome | Depends on | Status | Unlocks | Detail |
-|---|---|---|---|---|---|
+| ID | Kind | Outcome | Depends on | Status | Unlocks | Detail |
+|---|---|---|---|---|---|---|
+
+Rows follow the hierarchy in
+[implementation-work-orders.md](implementation-work-orders.md#work-order-hierarchy):
+foundation orders first, then each use-case order followed by its subordinates grouped
+workflow, business transaction, detector, alert condition, dashboard, and custom code.
+A use-case note carries a `## subordinate work orders` section naming each subordinate ID.
 
 Each order carries:
 
@@ -150,12 +156,25 @@ Each order carries:
 - verification criteria; and
 - copy-ready issue text when an external tracker was requested.
 
-Before acceptance, dependency-free orders are `proposed`; dependent orders are `blocked`.
-Acceptance changes eligible orders to `ready`. A later version compares the prior queue
-and marks each order retained, changed, superseded, implemented, or verified.
+Before acceptance, dependency-free foundation orders are `proposed`; dependent foundation
+orders are `blocked`; non-foundation orders are `blocked` while any foundation order
+exists. Acceptance changes eligible foundation orders to `ready`. Non-foundation notes
+keep their accepted status; live readiness after the foundation gate opens comes from the
+state ledger. A later version compares the prior queue and marks each order retained,
+changed, superseded, implemented, or verified.
 
 Canonical work-order frontmatter carries `work_order_id`, `selectors`, `depends_on`, and
-structured `repository_legs`; the body carries the required reverse-link sections.
+structured `repository_legs`; the body carries the required reverse-link sections. v4
+notes also carry `kind`, `parents` (use-case work-order IDs), `subordinates`, and
+`revision: 1`. When any note has `kind`, every note must have all four.
+
+Work-order notes are digest-bound and never edited after acceptance. Implementation status
+and revisions R2, R3, ... live outside the digest:
+
+```text
+wiki/apps/<app>/implementation/V<N>/state.yaml
+wiki/apps/<app>/implementation/V<N>/revisions/<WO-id>/R<k>.md
+```
 Verification rejects unsupported selectors, unknown or cyclic dependencies, repository
 IDs absent from the implementation map, absolute or traversal paths, paths outside
 `authorized_paths`, meaningless changes/tests, and a `ready` status whose acceptance or

@@ -179,12 +179,18 @@ orders that realize it.
 
 Analysis creates every work order before review. The landing queue contains:
 
-| ID | Outcome | Depends on | Status | Unlocks | Detail |
-|---|---|---|---|---|---|
+| ID | Kind | Outcome | Depends on | Status | Unlocks | Detail |
+|---|---|---|---|---|---|---|
 
 Rows link the canonical versioned wiki pages. Do not copy repository legs, code detail,
-or acceptance criteria onto the landing page. Before acceptance, dependency-free rows
-are `proposed`; acceptance makes them `ready`. Dependent rows remain `blocked`.
+or acceptance criteria onto the landing page. Foundation rows come first. Then each
+use-case row is followed by its subordinates grouped workflow, business transaction,
+detector, alert condition, dashboard, and custom code. Before acceptance, dependency-free
+foundation rows are `proposed`; acceptance makes them `ready`. Dependent rows and all
+non-foundation rows remain `blocked` until every foundation order is implemented or
+verified. Live status and revisions come from
+`wiki/apps/<app>/implementation/V<N>/state.yaml`; see
+[implementation-work-orders.md](implementation-work-orders.md#state-ledger-and-revisions).
 
 ## Use cases, workflows, and business transactions
 

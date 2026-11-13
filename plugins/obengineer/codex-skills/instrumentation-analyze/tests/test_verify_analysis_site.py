@@ -130,3 +130,90 @@ def test_repeated_character_page_is_not_substantive(site):
         "insufficient substantive content" in failure
         for failure in verify.check(version, root)
     )
+
+
+def v4_contract() -> dict:
+    contract = json.loads((FIXTURE / "analysis-contract.json").read_text())
+    contract["application"]["id"] = "app"
+    contract["schemaVersion"] = 4
+    base = contract["workOrders"]
+    finding = contract["findings"][0]["id"]
+    use_case = contract["useCases"][0]["id"]
+
+    def order(source: dict, identifier: str, title: str, kind: str, **fields) -> dict:
+        item = json.loads(json.dumps(source))
+        item.update(id=identifier, title=title, kind=kind, revision=1)
+        item.setdefault("parentIds", [])
+        item.setdefault("subordinateIds", [])
+        item.setdefault("subjectIds", [])
+        item.setdefault("findingIds", [])
+        item.update(fields)
+        return item
+
+    contract["workOrders"] = [
+        order(base[0], "WO-001", "Install guardrails", "foundation", findingIds=[finding]),
+        order(
+            base[1], "WO-002", "Order submission use case", "use-case",
+            subjectIds=[use_case],
+            subordinateIds=["WO-005", "WO-003", "WO-004"],
+        ),
+        order(
+            base[2], "WO-003", "Checkout transaction", "business-transaction",
+            parentIds=["WO-002"], subjectIds=["checkout"],
+        ),
+        order(
+            base[2], "WO-004", "Submit workflow", "workflow",
+            parentIds=["WO-002"], subjectIds=["checkout-order-submit"],
+        ),
+        order(
+            base[2], "WO-005", "Checkout dashboard", "dashboard",
+            parentIds=["WO-002"],
+        ),
+    ]
+    return contract
+
+
+def test_v4_work_orders_render_foundation_then_use_case_groups(site):
+    version, root = site
+    contract = v4_contract()
+    site_renderer = renderer.Renderer(
+        json.loads((FIXTURE / "analysis-contract.json").read_text()), version
+    )
+    site_renderer.c = json.loads(json.dumps(contract))
+    site_renderer.render_work_orders()
+    text = (version / "work-orders" / "index.md").read_text()
+
+    title = contract["useCases"][0]["title"]
+    positions = [
+        text.index(heading)
+        for heading in (
+            "## Foundation work orders",
+            f"## Use case: {title}",
+            "### Use-case work order",
+            "### Workflows",
+            "### Business transactions",
+            "### Dashboards",
+        )
+    ]
+    assert positions == sorted(positions)
+    assert "released once all foundation work orders are complete" in text
+    assert "| ID | Title | Outcome | Findings | Status | Detail |" in text
+    assert contract["findings"][0]["id"] in text
+    for absent in ("### Detectors", "### Alert conditions", "### Custom code"):
+        assert absent not in text
+    assert "Mapping evidence" not in text
+
+    site_renderer.render_work_orders()
+    assert (version / "work-orders" / "index.md").read_text() == text
+
+    notes = root / "wiki" / "apps" / "app" / "versions" / "V1" / "implementation" / "work-orders"
+    for item in contract["workOrders"]:
+        (notes / f"{item['id']}.md").write_text(f"# {item['id']}\n\n{item['outcome']}\n")
+    assert verify.check(version, root) == []
+
+
+def test_v3_work_orders_keep_flat_table(site):
+    version, _ = site
+    text = (version / "work-orders" / "index.md").read_text()
+    assert "| ID | Outcome | Depends on | Status | Repository mapping |" in text
+    assert "## Foundation work orders" not in text

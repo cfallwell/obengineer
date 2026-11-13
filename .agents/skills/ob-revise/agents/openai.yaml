@@ -1,0 +1,7 @@
+interface:
+  display_name: "ob-revise"
+  short_description: "Revise one subordinate work order"
+  default_prompt: "Use $ob-revise to revise one subordinate work order."
+
+policy:
+  allow_implicit_invocation: false

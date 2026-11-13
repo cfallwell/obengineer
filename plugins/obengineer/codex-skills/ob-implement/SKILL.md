@@ -22,21 +22,33 @@ Run one bounded implementation work order.
    `acceptance.yaml` with:
    `python3 "${PLUGIN_ROOT}/skills/instrumentation-wiki/scripts/verify_analysis_acceptance.py" --record <acceptance-path> --repo .`.
 3. Load only the selected version's analysis intent, schema, implementation map,
-   relevant object notes, and work order. Never load every version or the whole wiki.
+   relevant object notes, work order, and its latest revision. Never load every version
+   or the whole wiki.
 4. Follow `${PLUGIN_ROOT}/prompts/03-implement-instrumentation.md` and use
    `$instrumentation-implement`.
 
 Accept one selector: `work-order:<id>`, `business-transaction:<id>`,
-`workflow:<name>`, `use-case:<id>`, `detector:<id>`, `objective:<id>`, or
-`config:<id>`. Resolve it to exactly one Ready work order. Proposed, Blocked, Superseded,
-or older-version orders cannot run.
+`workflow:<name>`, `use-case:<id>`, `detector:<id>`, `alert-condition:<id>`,
+`dashboard:<id>`, `custom-code:<id>`, `objective:<id>`, or `config:<id>`. Resolve it to
+exactly one Ready work order. `use-case:<id>` runs the gate's `next_subordinate`.
+Proposed, Blocked, Superseded, or older-version orders cannot run.
+
+Before any work, gate the order with the state ledger
+(`S="${PLUGIN_ROOT}/skills/instrumentation-wiki/scripts/work_order_state.py"`):
+
+- If `wiki/apps/<app>/implementation/V<N>/state.yaml` is missing, run `python3 "$S" init`.
+- Run `python3 "$S" gate --work-order <id>`. Non-foundation orders run only when every
+  foundation order is complete (implemented or verified).
+- An implemented, verified, or changed order runs again only when the arguments include
+  `reimplement`; then pass `--reimplement` to `gate`.
 
 One invocation executes one work order. It may open one linked PR per mapped repository
 plus a coordination PR. Stop at authorized repository/path boundaries. Never widen the
 accepted schema or commit a credential.
 
-After PR review and deployment proof, update the touched wiki notes and work-order status
-in the same change. Return to the work-order queue and state which dependency has become
+After PR review and deployment proof, record status with
+`python3 "$S" set-status --work-order <id> --status <status> --pr <url>`. Never edit
+digest-bound wiki notes. Return to the work-order queue and state which order has become
 Ready.
 
 $ARGUMENTS

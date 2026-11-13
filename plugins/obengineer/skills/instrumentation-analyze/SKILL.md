@@ -31,7 +31,8 @@ The target is read-only. Application changes happen only through accepted work o
 | [`../references/security-assessment.md`](../references/security-assessment.md) | Authorized credential/API checks and OWASP coverage |
 | [`../references/analysis-run-lifecycle.md`](../references/analysis-run-lifecycle.md) | Version branch, staged-tree dispatch gate, review loop, acceptance, merge, and handoff |
 | [`../references/agent-wiki.md`](../references/agent-wiki.md) | Versioned subject notes and work orders |
-| [`../references/implementation-work-orders.md`](../references/implementation-work-orders.md) | Bounded targets, repository legs, dependencies, and PR coordination |
+| [`../references/implementation-work-orders.md`](../references/implementation-work-orders.md) | Work-order hierarchy, foundation gate, bounded targets, repository legs, dependencies, revisions, and PR coordination |
+| [`../references/rum-delivery.md`](../references/rum-delivery.md) | RUM load-order foundation check and CDN delivery recommendation |
 | [`../references/provenance-ledger.md`](../references/provenance-ledger.md) | Evidence and run state |
 | [`../references/context-loading.md`](../references/context-loading.md) | Evidence-gated technical references |
 | [`../references/existing-telemetry.md`](../references/existing-telemetry.md) | Direct APIs, connected integrations, MetricSets, usage, and SignalFlow cross-check |
@@ -40,7 +41,8 @@ The target is read-only. Application changes happen only through accepted work o
 | [`../references/entitlement-exposure.md`](../references/entitlement-exposure.md) | Measured usage and enforced-system-limit appendix |
 | [`schemas/analysis-job-manifest.schema.json`](schemas/analysis-job-manifest.schema.json) | Six bounded host-run evidence workstreams and coordinator reservation |
 | [`schemas/analysis-worker-result.schema.json`](schemas/analysis-worker-result.schema.json) | Auditable worker evidence and execution intervals |
-| [`schemas/analysis-contract-v3.schema.json`](schemas/analysis-contract-v3.schema.json) | Current canonical content rendered into the linked analysis site |
+| [`schemas/analysis-contract-v4.schema.json`](schemas/analysis-contract-v4.schema.json) | Current canonical content rendered into the linked analysis site, including the work-order hierarchy and RUM delivery |
+| [`schemas/analysis-contract-v3.schema.json`](schemas/analysis-contract-v3.schema.json) | Frozen historical accepted-contract compatibility |
 | [`schemas/analysis-contract-v2.schema.json`](schemas/analysis-contract-v2.schema.json) | Frozen historical accepted-contract compatibility |
 
 ## Output
@@ -207,8 +209,18 @@ inapplicable contracts produce no detail page or link.
 ### 6. Materialize wiki and work orders
 
 Run `$instrumentation-wiki` during analysis. Generate the full proposed queue under the
-matching wiki version. Dependency-free orders are `proposed`; dependent orders are
-`blocked`. Every object links its work orders and every work order links back.
+matching wiki version using the hierarchy in
+[`implementation-work-orders.md`](../references/implementation-work-orders.md#work-order-hierarchy):
+foundation orders (findings and recommendations, at most about 10) first, then one
+use-case order per use case listing its workflow, business-transaction, detector,
+alert-condition, dashboard, and custom-code subordinates. Dependency-free foundation
+orders are `proposed`; dependent foundation orders and all non-foundation orders are
+`blocked` while any foundation order exists. Every object links its work orders and every
+work order links back.
+
+For a browser front end, record `architecture.frontend.rumLoadOrder` and
+`cdnDelivery` per [`rum-delivery.md`](../references/rum-delivery.md). An `incorrect` load
+order becomes a foundation order.
 
 Work order 1 establishes deterministic schema, single-init, workflow-registry, baggage
 allowlist, and deny-list checks before journey code.
@@ -223,10 +235,11 @@ Validate:
 - job manifest, worker intervals, host capacity, and coordinator reservation;
 - canonical analysis contract and deterministic repeated rendering;
 - schema-v1/v2 mutable working contracts migrate explicitly with
-  `scripts/migrate_analysis_contract.py`; newly generated contracts use schema v3,
-  while accepted schema-v2 snapshots validate and render without mutation;
+  `scripts/migrate_analysis_contract.py`; newly generated contracts use schema v4,
+  while accepted schema-v2 and v3 snapshots validate and render without mutation;
 - provenance ledger and analysis seal;
-- schema version 3 analysis contract and content-bound acceptance inputs;
+- schema version 4 analysis contract (work-order kinds, reciprocal parents and
+  subordinates, foundation-first order, RUM load order) and content-bound acceptance inputs;
 - schema and implementation map;
 - verification plan schema version 2 with stable `source_ref` values and actionable
   `VC-*` criteria;

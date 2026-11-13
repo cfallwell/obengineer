@@ -103,7 +103,9 @@ again. Do not merge, accept, or infer approval without an explicit `yes`.
 
 The human never copies a path or commit SHA. An explicit `yes` after review authorizes:
 
-1. change dependency-free work orders from `proposed` to `ready`;
+1. change dependency-free foundation work orders from `proposed` to `ready` (with no
+   foundation orders, dependency-free orders); non-foundation orders are released later
+   by the foundation gate, not by acceptance;
 2. compute a deterministic SHA-256 digest over the version's analysis index, linked pages,
    analysis contract, schema, implementation map, ledger seal, verification plan, and
    final versioned wiki;
@@ -171,3 +173,11 @@ add/edit-input, and acceptance instructions. Once accepted, provide:
 
 Earlier `[V1] [V2] ...` versions remain selectable and read-only. The accepted version is
 the only executable work-order queue.
+
+## Revisions do not create versions
+
+`/ob-revise work-order:<id>` changes a subordinate work order of the accepted version
+(naming, attributes, spans) as revision R2, R3, ... in its own commit and PR. Revisions and
+implementation status live in `wiki/apps/<app>/implementation/V<N>/`, outside the
+acceptance digest, so the accepted version stays valid and no new `V<N+1>` is created.
+Only new or edited inputs create a new version.

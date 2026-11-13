@@ -367,3 +367,148 @@ def test_credential_is_caught(wiki):
     path = wiki / "findings" / "F-01-a-key.md"
     path.write_text(path.read_text() + "\n-----BEGIN " + "PRIVATE KEY-----\n")
     assert any("private key" in failure for failure in failures(wiki))
+
+
+def test_work_order_with_legs_in_two_repositories_passes(wiki):
+    path = wiki.parents[1] / "implementation" / "work-orders" / "WO-001.md"
+    text = path.read_text()
+    text = text.replace(
+        "    tests: [Run deterministic propagation and workflow contract tests for the repository leg.]\n",
+        "    tests: [Run deterministic propagation and workflow contract tests for the repository leg.]\n"
+        "  - repository: web\n"
+        "    paths: [src/]\n"
+        "    changes: [Propagate checkout trace context from the web client fetch layer.]\n"
+        "    tests: [Run browser propagation contract tests for the web repository leg.]\n",
+    )
+    text = text.replace(
+        "- Change the payments repository only under its authorized `src/` parent.",
+        "- Change the payments and web repositories only under their authorized `src/` parents.",
+    )
+    path.write_text(text)
+    implementation_map = wiki.parents[6] / "docs" / "observability" / "implementation-map.json"
+    data = json.loads(implementation_map.read_text())
+    data["repositories"].append(
+        {"id": "web", "remote": "owner/web", "authorized_paths": ["src/"]}
+    )
+    data["targets"][0]["repositories"] = ["payments", "web"]
+    implementation_map.write_text(json.dumps(data))
+    assert failures(wiki) == []
+
+
+V4_ORDERS = {
+    "WO-001": ("foundation", "config:otel-sdk", "proposed", "[]", "[]"),
+    "WO-002": ("use-case", "use-case:checkout", "blocked", "[]", "[WO-003]"),
+    "WO-003": ("workflow", "workflow:checkout.submit", "blocked", "[WO-002]", "[]"),
+}
+
+
+@pytest.fixture
+def v4_wiki(wiki: Path) -> Path:
+    """One foundation order, one use-case order, and one workflow subordinate."""
+    orders = wiki.parents[1] / "implementation" / "work-orders"
+    template = (orders / "WO-001.md").read_text()
+    for order_id, (kind, selector, status, parents, subordinates) in V4_ORDERS.items():
+        text = (
+            template.replace("title: WO-001", f"title: {order_id}")
+            .replace("**WO-001**", f"**{order_id}**")
+            .replace("# WO-001", f"# {order_id}")
+            .replace("work_order_id: WO-001", f"work_order_id: {order_id}")
+            .replace("status: proposed", f"status: {status}")
+            .replace("workflow:checkout.submit", selector)
+            .replace(
+                "depends_on: []\n",
+                f"depends_on: []\nkind: {kind}\nparents: {parents}\n"
+                f"subordinates: {subordinates}\nrevision: 1\n",
+            )
+        )
+        if kind == "use-case":
+            text += "## Subordinate work orders\n- [[WO-003]] instruments the checkout submit workflow.\n"
+        (orders / f"{order_id}.md").write_text(text)
+    (orders / "index.md").write_text(note(
+        "work orders", "index", "proposed",
+        "- [[WO-001]]\n- [[WO-002]]\n- [[WO-003]]\n",
+    ))
+    for relative in (
+        "findings/F-01-a-key.md", "business-transactions/checkout.md",
+        "use-cases/checkout.md", "workflows/checkout-submit.md",
+    ):
+        path = wiki / relative
+        path.write_text(path.read_text().replace(
+            "work_orders: [WO-001]", "work_orders: [WO-001, WO-002, WO-003]"
+        ))
+    index = wiki / "index.md"
+    index.write_text(index.read_text().replace("| Work orders | 1 |", "| Work orders | 3 |"))
+    implementation_map = wiki.parents[6] / "docs" / "observability" / "implementation-map.json"
+    data = json.loads(implementation_map.read_text())
+    data["targets"] = [
+        {
+            "selector": selector, "work_order": order_id,
+            "repositories": ["payments"], "mapping_status": "complete",
+            "evidence": [],
+        }
+        for order_id, (_, selector, *_rest) in V4_ORDERS.items()
+    ]
+    implementation_map.write_text(json.dumps(data))
+    return wiki
+
+
+def v4_order(wiki: Path, order_id: str) -> Path:
+    return wiki.parents[1] / "implementation" / "work-orders" / f"{order_id}.md"
+
+
+def test_v4_hierarchy_passes(v4_wiki):
+    assert failures(v4_wiki) == []
+
+
+def test_v4_requires_kind_on_every_order(v4_wiki):
+    path = v4_order(v4_wiki, "WO-001")
+    path.write_text(path.read_text().replace("kind: foundation\n", ""))
+    assert any("WO-001: kind None" in failure for failure in failures(v4_wiki))
+
+
+def test_v4_subordinate_requires_reciprocal_parent(v4_wiki):
+    path = v4_order(v4_wiki, "WO-003")
+    path.write_text(path.read_text().replace("parents: [WO-002]", "parents: []"))
+    result = failures(v4_wiki)
+    assert any("WO-003: subordinate work order lists no parents" in f for f in result)
+    assert any("WO-003: parents does not name use case WO-002" in f for f in result)
+
+
+def test_v4_subordinate_rejects_depends_on(v4_wiki):
+    path = v4_order(v4_wiki, "WO-003")
+    text = path.read_text().replace("depends_on: []", "depends_on: [WO-001]")
+    path.write_text(text.replace("## Dependencies\n- none", "## Dependencies\n- WO-001"))
+    assert any(
+        "WO-003: subordinate work order depends_on must be empty" in failure
+        for failure in failures(v4_wiki)
+    )
+
+
+def test_v4_foundation_rejects_subordinates(v4_wiki):
+    path = v4_order(v4_wiki, "WO-001")
+    path.write_text(path.read_text().replace(
+        "kind: foundation\nparents: []\nsubordinates: []",
+        "kind: foundation\nparents: []\nsubordinates: [WO-003]",
+    ))
+    assert any(
+        "WO-001: foundation work orders have no parents or subordinates" in failure
+        for failure in failures(v4_wiki)
+    )
+
+
+def test_v4_use_case_requires_subordinate_section(v4_wiki):
+    path = v4_order(v4_wiki, "WO-002")
+    path.write_text(path.read_text().replace("## Subordinate work orders", "## Notes"))
+    assert any(
+        "WO-002: use-case work order is missing ## subordinate work orders" in failure
+        for failure in failures(v4_wiki)
+    )
+
+
+def test_v4_non_foundation_is_blocked_before_acceptance(v4_wiki):
+    path = v4_order(v4_wiki, "WO-003")
+    path.write_text(path.read_text().replace("status: blocked", "status: proposed"))
+    assert any(
+        "WO-003" in failure and "before acceptance status must be blocked" in failure
+        for failure in failures(v4_wiki)
+    )

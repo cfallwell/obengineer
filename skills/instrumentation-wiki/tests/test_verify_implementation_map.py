@@ -121,3 +121,16 @@ def test_duplicate_and_unsupported_selectors_fail(tmp_path):
         "selector is invalid" in failure
         for failure in verifier.verify(write(tmp_path, data))
     )
+
+
+def test_hierarchy_selector_kinds_are_accepted(tmp_path):
+    data = valid_map()
+    for index, selector in enumerate(
+        ("alert-condition:checkout-errors", "dashboard:checkout", "custom-code:cart-size-attribute"),
+        start=2,
+    ):
+        target = dict(data["targets"][0])
+        target["selector"] = selector
+        target["work_order"] = f"WO-00{index}"
+        data["targets"].append(target)
+    assert verifier.verify(write(tmp_path, data)) == []

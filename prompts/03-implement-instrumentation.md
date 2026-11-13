@@ -50,8 +50,11 @@ PII deny list is enforced. If you see tokens in the repo, stop and report. Do no
   subset of repositories, or a subset of a repository by parent folder. Do not
   adopt every repository a connected host can see.
 - **Target selector:** one of `work-order:<id>`, `business-transaction:<id>`,
-  `workflow:<name>`, `use-case:<id>`, `detector:<id>`, `objective:<id>`, or
-  `config:<id>`, or “follow accepted phase plan”.
+  `workflow:<name>`, `use-case:<id>`, `detector:<id>`, `alert-condition:<id>`,
+  `dashboard:<id>`, `custom-code:<id>`, `objective:<id>`, or `config:<id>`, or
+  “follow accepted phase plan”.
+- **Override (optional):** `reimplement` to re-run an implemented, verified, or changed
+  order.
 
 ## Task
 
@@ -59,6 +62,18 @@ Resolve the selector to exactly one Ready work order in the accepted version. Im
 work order**, across only its mapped repository legs and authorized paths. Zero or multiple
 matches stop and list the missing or ambiguous mappings. A missing repository or Jira
 project is requested from engineering after analysis, never guessed.
+
+Work orders are implementation contracts. Foundation orders come first; the gate asks
+“Are all foundation work orders complete?” and releases every other order, in any order,
+once the answer is yes. `use-case:<id>` runs its next unimplemented subordinate. Run:
+
+```bash
+python3 <obengineer-root>/skills/instrumentation-wiki/scripts/work_order_state.py gate --work-order <id> [--reimplement]
+```
+
+Implement the latest revision (R1 is the accepted note; `/ob-revise` adds R2, R3, ...).
+After the PRs open, record status with `work_order_state.py set-status --work-order <id>
+--status <status> --pr <url>` in `wiki/apps/<app>/implementation/V<N>/state.yaml`.
 
 Runtime, Collector/CI, detector, objective, and configuration legs use the same work-order
 boundary. Never deploy, apply Terraform, or arm a detector.
@@ -68,6 +83,9 @@ boundary. Never deploy, apply Terraform, or arm a detector.
 Match the guide’s Phase 0 contract. Typical browser work when the guide includes RUM:
 
 - Kill switch; dedicated early load; allowlisted instrumentations
+- RUM load order per `skills/references/rum-delivery.md`: one init, in `<head>`, no
+  `async`/`defer` delay, before `bootstrapApplication`, `createRoot`, `createApp`, or the
+  Next.js client entry
 - `applicationName` / `deploymentEnvironment` per guide
 - Classifier + `setGlobalAttributes` + **host SPA/React route-change listener** (`route.change` span; `document-load` is first document only)
 - Custom UX span once per navigation if defined
