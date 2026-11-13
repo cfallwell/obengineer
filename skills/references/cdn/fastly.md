@@ -192,7 +192,7 @@ snippet text, UI click-path, priorities, and backend condition are in
 | `<prefix>_rum_recv` | recv / 110 | Mark `X-Rum-Eligible`; `error 802` for `esi.html` and `init.js` |
 | `<prefix>_rum_fetch` | fetch / 110 | `do_esi` on eligible 200 HTML; cache agent JS 1 day |
 | `<prefix>_rum_error` | error / 110 | Synthetic fragment + init JS from dictionaries |
-| `<prefix>_rum_deliver` | deliver / 110 | Append `connect-src` for rum-ingest; skip redirects |
+| `<prefix>_rum_deliver` | deliver / 110 | Extend the existing `connect-src` for rum-ingest; skip redirects |
 
 ### 6.1 Cookie overrides
 
@@ -229,9 +229,9 @@ Use a dedicated cookie. Do not reuse maintenance or debug cookies already in the
   https://rum-ingest.<realm>.signalfx.com` and
   `https://rum-ingest.<realm>.observability.splunkcloud.com` (Splunk domain change as of
   March 2026). Session recorder lazy-load typically also needs `worker-src 'self' blob:`.
-- **Audit:** Audit the live storefront `Content-Security-Policy` before activation.
-  Appending `connect-src` in VCL is additive; a strict existing policy can still block the
-  agent.
+- **Audit:** Audit the live storefront `Content-Security-Policy` before activation. Extend
+  the existing `connect-src` (or the `default-src` it falls back to) in place; a second
+  `connect-src` directive is ignored by browsers and does not authorize ingest.
 - **Replay:** Session recording captures DOM. Keep `recorder_mode` at `on_demand` or
   `sampled`. Never ship `always`. Mask password and payment fields in recorder config if
   checkout is in scope.
@@ -411,7 +411,10 @@ Then create the condition that selects this backend after all existing condition
 
 1. Conditions → Create → Request.
 2. Name: `Rum agent from Splunk CDN`
-3. Apply if: `req.url.path ~ "^/__o11y/splunk-otel-web(-session-recorder)?\.js$"`
+3. Apply if: `req.http.X-Rum-Asset == "1"`. Match the marker that
+   `<prefix>_rum_recv` sets, not the `/__o11y/` path: the recv snippet rewrites the URL to
+   `/o11y-gdi-rum/...` before generated backend selection runs, so a path condition would
+   no longer match and the request would stay on the origin backend.
 4. Priority: 30 (higher than the highest existing request condition, which is 20 in the
    reference service).
 5. Attach the condition to `F_Splunk_O11y_CDN` as the destination for matching requests.
@@ -439,7 +442,7 @@ use type "none" unless you are prepared to maintain raw VCL.
 *`<prefix>_rum_recv`*
 
 ```vcl
-# First-party agent files: rewrite URL for the prio-30 backend condition.
+# First-party agent files: mark for the prio-30 backend condition, then rewrite the URL.
 if (req.url.path ~ "^/__o11y/splunk-otel-web(-session-recorder)?\.js$") {
   set req.http.host = "cdn.observability.splunkcloud.com";
   set req.http.X-Rum-Asset = "1";
@@ -581,7 +584,12 @@ parties does not apply to this two-tag pair.
 #### A.5.4 Synthetic init JavaScript (body of splunk-rum-init.js)
 
 Paste this into the `synthetic {" ... "}` for `/__o11y/splunk-rum-init.js`. VCL string
-concatenation inserts dictionary values. If you prefer zero VCL interpolation inside the
+concatenation inserts dictionary values. In a Fastly long string, `"}` closes the literal
+and `{"` reopens it, so those delimiters emit no JavaScript quotes. Every interpolated
+string therefore uses `""} json.escape(...) {""`: the extra `"` on each side becomes the
+JavaScript quote, and `json.escape` keeps a stray `"` or `\` in a dictionary value from
+breaking the script. The enabled flag is emitted as a bare `true` or `false` with Fastly's
+`if()` expression, so the kill switch compares a boolean, not a string. If you prefer zero VCL interpolation inside the
 JS, emit a small JSON config in a first `<script>` and keep this file static — the version
 below is one snippet. Adjust the route rules and `ignoreUrls` to the customer's site.
 
@@ -592,9 +600,9 @@ synthetic {"
 (function () {
   if (window.__SPLUNK_RUM_BOOTED__) return;
   window.__SPLUNK_RUM_BOOTED__ = true;
-  window.__FEATURE_RUM_ENABLED__ = "} var.enabled {" === "true";
-  window.__RUM_TOKEN__ = "} var.token {";
-  window.__ENV__ = "} table.lookup(rum_controls, "environment", "prod") {";
+  window.__FEATURE_RUM_ENABLED__ = "} if(var.enabled == "true", "true", "false") {";
+  window.__RUM_TOKEN__ = ""} json.escape(var.token) {"";
+  window.__ENV__ = ""} json.escape(table.lookup(rum_controls, "environment", "prod")) {"";
   if (!window.__FEATURE_RUM_ENABLED__ || typeof SplunkRum === "undefined") return;
 
   var rules = [
@@ -613,15 +621,15 @@ synthetic {"
   window.__PAGE_TYPE__ = p.type;
   window.__PAGE_SLA_TIER__ = p.sla;
 
-  var sample = p.sla === "tier1" ? "} table.lookup(rum_controls, "sample_tier1", "0.50") {"
-             : p.sla === "tier2" ? "} table.lookup(rum_controls, "sample_tier2", "0.10") {"
-             : "} table.lookup(rum_controls, "sample_tier3", "0.05") {";
+  var sample = p.sla === "tier1" ? ""} json.escape(table.lookup(rum_controls, "sample_tier1", "0.50")) {""
+             : p.sla === "tier2" ? ""} json.escape(table.lookup(rum_controls, "sample_tier2", "0.10")) {""
+             : ""} json.escape(table.lookup(rum_controls, "sample_tier3", "0.05")) {"";
   if (document.cookie.indexOf("<prefix>_rum=force") !== -1) sample = "1";
 
   SplunkRum.init({
-    realm: "} table.lookup(rum_controls, "realm", "<realm>") {",
+    realm: ""} json.escape(table.lookup(rum_controls, "realm", "<realm>")) {"",
     rumAccessToken: window.__RUM_TOKEN__,
-    applicationName: "} table.lookup(rum_controls, "application_name", "<application-name>") {",
+    applicationName: ""} json.escape(table.lookup(rum_controls, "application_name", "<application-name>")) {"",
     deploymentEnvironment: window.__ENV__,
     sessionsSampleRate: Number(sample),
     bufferSize: 100,
@@ -645,10 +653,10 @@ synthetic {"
     ]
   });
 
-  var recMode = "} table.lookup(rum_controls, "recorder_mode", "on_demand") {";
-  var recSample = p.sla === "tier1" ? "} table.lookup(rum_controls, "replay_sample_tier1", "0.05") {"
-                : p.sla === "tier2" ? "} table.lookup(rum_controls, "replay_sample_tier2", "0.01") {"
-                : "} table.lookup(rum_controls, "replay_sample_tier3", "0.00") {";
+  var recMode = ""} json.escape(table.lookup(rum_controls, "recorder_mode", "on_demand")) {"";
+  var recSample = p.sla === "tier1" ? ""} json.escape(table.lookup(rum_controls, "replay_sample_tier1", "0.05")) {""
+                : p.sla === "tier2" ? ""} json.escape(table.lookup(rum_controls, "replay_sample_tier2", "0.01")) {""
+                : ""} json.escape(table.lookup(rum_controls, "replay_sample_tier3", "0.00")) {"";
   var recStarted = false;
   function startRecordingOnce(reason) {
     if (recStarted || recMode === "off") return;
@@ -659,7 +667,7 @@ synthetic {"
     s.onload = function () {
       if (!window.SplunkSessionRecorder) return;
       SplunkSessionRecorder.init({
-        realm: "} table.lookup(rum_controls, "realm", "<realm>") {",
+        realm: ""} json.escape(table.lookup(rum_controls, "realm", "<realm>")) {"",
         rumAccessToken: window.__RUM_TOKEN__,
         recorder: "splunk"
       });
@@ -683,21 +691,34 @@ synthetic {"
 
 #### A.5.5 Snippet `<prefix>_rum_deliver` — type deliver, priority 110
 
-*`<prefix>_rum_deliver` — additive CSP only*
+*`<prefix>_rum_deliver` — extend the effective connect-src, never duplicate it*
 
 ```vcl
 if (req.http.X-Rum-Eligible && !req.http.X-Redirect-To && resp.status == 200) {
-  if (resp.http.Content-Security-Policy) {
+  declare local var.ingest STRING;
+  set var.ingest = " https://rum-ingest.<realm>.signalfx.com https://rum-ingest.<realm>.observability.splunkcloud.com";
+  if (resp.http.Content-Security-Policy ~ "(?i)(^|;)\s*connect-src(\s|;|$)") {
+    # Append the ingest hosts inside the existing connect-src directive.
+    set resp.http.Content-Security-Policy = regsub(resp.http.Content-Security-Policy,
+      "(?i)((?:^|;)\s*connect-src[^;]*)", "\1" var.ingest);
+  } else if (resp.http.Content-Security-Policy ~ "(?i)(^|;)\s*default-src\s+([^;]*)") {
+    # connect-src currently falls back to default-src: copy its sources so nothing the
+    # page already connects to is blocked.
     set resp.http.Content-Security-Policy = resp.http.Content-Security-Policy
-      "; connect-src https://rum-ingest.<realm>.signalfx.com https://rum-ingest.<realm>.observability.splunkcloud.com";
+      "; connect-src " re.group.2 var.ingest;
   }
 }
 ```
 
-If the storefront already has a `Content-Security-Policy`, appending a second
-`connect-src` directive is valid. If it has no CSP, do not invent a site-wide policy in
-Fastly as part of this change. Confirm rum-ingest and `script-src 'self'` (or the
-first-party host) in a pre-production HAR before activation.
+Browsers honor only the first `connect-src` in a policy and ignore duplicates, so
+appending a second directive does not authorize RUM. The snippet edits the existing
+directive in place. When the policy has no `connect-src`, connections fall back to
+`default-src`, so the new directive starts from those sources. If the existing directive
+is `connect-src 'none'`, stop and agree the policy with the site owner: `'none'` cannot be
+combined with hosts. If the storefront has no CSP, do not invent a site-wide policy in
+Fastly as part of this change. Apply the same edit to `Content-Security-Policy-Report-Only`
+if the site uses it. Confirm rum-ingest and `script-src 'self'` (or the first-party host)
+in a pre-production HAR before activation.
 
 ### A.6 Storefront SSR change
 
