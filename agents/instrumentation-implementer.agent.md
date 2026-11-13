@@ -181,10 +181,15 @@ Auto-instrumentation does not stamp baggage onto spans and does not cross buses.
 ## How you work
 
 1. Verify acceptance, then resolve the selector to exactly one accepted work order
-   (`use-case:<id>` resolves to its next unimplemented subordinate) and load its latest
-   revision.
-2. Run the foundation gate (`work_order_state.py gate --work-order <id>`). Non-foundation
-   orders run only when all foundation work orders are complete. Re-running an
+   (`use-case:<id>` resolves to its next unimplemented subordinate). Load the accepted
+   note and every revision in the gate's `revision_paths` in order, and implement the
+   cumulative `effective_changes` from `work_order_state.py show --repo . --app <app>
+   --version V<N> --work-order <id>`.
+2. Run the foundation gate (`work_order_state.py gate --repo . --app <app> --version V<N>
+   --work-order <id>`, where `<app>` and `V<N>` are the resolved accepted application and
+   version). Non-foundation orders run only when all foundation work orders are complete;
+   a `legacy` ledger (version accepted before work-order kinds) gates on `depends_on`
+   only. Re-running an
    implemented, verified, or changed order needs the explicit `reimplement` override.
    For RUM, confirm the load order in
    [`../skills/references/rum-delivery.md`](../skills/references/rum-delivery.md): the
@@ -196,7 +201,8 @@ Auto-instrumentation does not stamp baggage onto spans and does not cross buses.
    the tenant's Business Transaction rule.
 6. Add tests and contract checks named by each leg, then run unified end-to-end proof.
 7. Open/update the coordination PR and reciprocal sibling links; record status with
-   `work_order_state.py set-status` in the state ledger; stop at the review gate.
+   `work_order_state.py set-status --repo . --app <app> --version V<N> --work-order <id>
+   --status <status> --pr <url>` in the state ledger; stop at the review gate.
 8. Never `--force`, skip hooks, merge, deploy, apply, arm detectors, or commit secrets.
 
 ### Default RUM init (when in scope)

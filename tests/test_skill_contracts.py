@@ -410,6 +410,37 @@ def test_implement_gates_foundation_and_records_state_in_ledger():
         assert term in command
 
 
+def test_documented_work_order_state_invocations_pass_app_and_version():
+    root = COMMANDS.parent
+    invocation = re.compile(
+        r"(?:work_order_state\.py\"?|\"\$S\")\s+(init|gate|set-status|revise|show|verify)\b[^`\n]*"
+    )
+    sources = [
+        *sorted(COMMANDS.glob("*.md")),
+        *sorted((root / "prompts").glob("*.md")),
+        *sorted((root / "agents").glob("*.md")),
+        *sorted(SKILLS.rglob("*.md")),
+    ]
+    found = 0
+    for path in sources:
+        text = re.sub(r"\s*\n\s*", " ", path.read_text())
+        for match in invocation.finditer(text):
+            found += 1
+            for flag in ("--repo", "--app <app>", "--version V<N>"):
+                assert flag in match.group(0), f"{path}: {match.group(0)!r} lacks {flag}"
+    assert found >= 8
+
+
+def test_implement_loads_cumulative_revision_chain():
+    command = (COMMANDS / "ob-implement.md").read_text()
+    skill = (SKILLS / "instrumentation-implement" / "SKILL.md").read_text()
+    for text in (command, skill):
+        assert "revision_paths" in text
+        assert "effective_changes" in text
+        assert "latest revision" in text
+    assert "legacy" in command
+
+
 def test_revise_changes_subordinate_orders_without_new_version():
     command = (COMMANDS / "ob-revise.md").read_text()
     assert "work_order_state.py\" revise" in command

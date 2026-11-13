@@ -59,10 +59,11 @@ matches stop with the missing mapping. Multiple matches stop and list candidates
 omitted, the first Ready order in display order is selected. `use-case:<id>` runs that use
 case's next unimplemented subordinate. One invocation executes one work order.
 
-Before execution, run the foundation gate:
+Before execution, run the foundation gate, where `<app>` and `V<N>` are the resolved
+accepted application and version:
 
 ```bash
-python3 skills/instrumentation-wiki/scripts/work_order_state.py gate --work-order <id> [--reimplement]
+python3 skills/instrumentation-wiki/scripts/work_order_state.py gate --repo . --app <app> --version V<N> --work-order <id> [--reimplement]
 ```
 
 An `implemented`, `verified`, or `changed` order runs again only with the explicit
@@ -159,9 +160,24 @@ wiki/apps/<app>/implementation/V<N>/state.yaml
 wiki/apps/<app>/implementation/V<N>/revisions/<WO-id>/R<k>.md
 ```
 
-`skills/instrumentation-wiki/scripts/work_order_state.py` owns it: `init`, `gate`,
-`set-status --work-order ID --status S [--pr URL]`, `revise --work-order ID --file
-change.yaml`, and `verify`.
+`skills/instrumentation-wiki/scripts/work_order_state.py` owns it. Every subcommand takes
+`--repo . --app <app> --version V<N>`, the resolved accepted application and version:
+`init`, `gate --work-order ID [--reimplement]`, `set-status --work-order ID --status S
+[--pr URL]`, `revise --work-order ID --file change.yaml`, `show --work-order ID`, and
+`verify`.
+
+`gate` reports `revision_paths` (R2 ... Rn). `show` applies them in order and prints the
+cumulative `effective_changes` (attribute and span add, remove, rename; name renames;
+notes). Implementation loads the accepted note plus every revision and implements the
+cumulative changes. An order counts as complete only when it is `implemented` or
+`verified` at its current revision; `verified` requires the current revision to be
+implemented, and `verify` flags a ledger that disagrees.
+
+A version accepted before work-order kinds existed (contract v3, notes without `kind`)
+gets a `mode: legacy` ledger. Its `ready` or `in-progress` orders run once every
+`depends_on` order is `implemented`, `verified`, or `retired`; there is no foundation gate,
+`reimplement` is still required for `implemented`, `verified`, or `changed` orders, and
+`revise` refuses legacy orders. Notes that mix `kind` and no `kind` are an error.
 
 Subordinate orders are not frozen inside an accepted version. SREs and engineers may change
 naming conventions, add, remove, or rename attributes, or add spans with

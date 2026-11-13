@@ -102,6 +102,7 @@ LEGACY_COMMAND_DIGESTS = {
     "ob-implement.md": {
         "46d6eda31ded85b76ea12fdd07560ebfbe0fefda933709d74191582dd1be4b0c",
         "83d4479d66d138fc040cbbaf07a63a9923894859e21f115051cafda992dd79ca",
+        "90dc449746f4ec93bf43812af12ed0c65e7216f2cc9ebcb841410938e5f080fa",
         "b79d149f6c4f31ba7ede20162cdee956b6197a8c3d078427793c80f73f54e7a7",
         "e04b7e8f80a71459d93f9fde76d0a14d10fd8534cb289dd534714c7416afa8b2",
     },
@@ -114,6 +115,7 @@ LEGACY_COMMAND_DIGESTS = {
         "29db4f6eca1942fe114a12e07c7d3124614ed9bfe10e4b8ce2f10ad067b26fe3",
         "a15f685ec2efeb373226b4dfb7d7635b35638bb00f7e04c43e2e3c3daff293c8",
     },
+    "ob-revise.md": {"d87789399c665ce29dab86b89c3d5f3f720d346d1516f94c8ee0c4a59e0fea44"},
     "ob-review.md": {
         "b84f975270e292ffd677e8a40447d54dc5f104c40635222172f796e9d9252e8a",
         "c14cca38f954a8c53bec01b6c58e6278383f75e2326d9e7da11d0d96dd2e8770",

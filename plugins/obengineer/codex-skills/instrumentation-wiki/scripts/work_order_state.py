@@ -5,6 +5,9 @@ The ledger lives outside the acceptance digest:
   wiki/apps/<app>/implementation/V<N>/state.yaml
   wiki/apps/<app>/implementation/V<N>/revisions/<WO-id>/R<k>.md   (k >= 2)
 R1 is the accepted wiki note under wiki/apps/<app>/versions/V<N>/implementation/work-orders/.
+
+A version whose notes carry no `kind` (accepted under contract v3) gets a `mode: legacy`
+ledger: no foundation gate, readiness from note status and depends_on, and no revisions.
 """
 
 from __future__ import annotations
@@ -36,11 +39,16 @@ KINDS = {"foundation", "use-case", *SUBORDINATE_KINDS}
 STATUSES = {
     "proposed", "ready", "blocked", "in-progress", "implemented", "verified", "changed",
 }
+LEGACY_STATUSES = STATUSES | {"retained", "superseded", "retired"}
 SETTABLE_STATUSES = ("in-progress", "implemented", "verified")
 COMPLETE = {"implemented", "verified"}
+LEGACY_RUNNABLE = {"ready", "in-progress"}
+LEGACY_DEPENDENCY_DONE = COMPLETE | {"retired"}
 REIMPLEMENT_REQUIRED = {"implemented", "verified", "changed"}
 ROLES = {"sre", "engineering", "other"}
 CHANGE_KEYS = {"attributes", "spans", "names", "notes"}
+HIERARCHY = "hierarchy"
+LEGACY = "legacy"
 
 
 class StateError(Exception):
@@ -102,19 +110,27 @@ def id_list(value: object) -> list[str]:
     return list(value)
 
 
-def read_notes(repo: Path, app: str, version: str) -> dict[str, dict]:
+def read_notes(repo: Path, app: str, version: str) -> tuple[str, dict[str, dict]]:
     directory = version_dir(repo, app, version) / "implementation" / "work-orders"
     paths = sorted(directory.glob("WO-*.md"))
     if not paths:
         raise StateError(f"no accepted work-order notes under {directory}")
+    parsed = [(path, frontmatter(path)) for path in paths]
+    with_kind = [path.name for path, fm in parsed if "kind" in fm]
+    if with_kind and len(with_kind) != len(parsed):
+        without = [path.name for path, fm in parsed if "kind" not in fm]
+        raise StateError(
+            f"work-order notes mix v4 kind and legacy notes: with kind {with_kind}, "
+            f"without kind {without}"
+        )
+    mode = HIERARCHY if with_kind else LEGACY
     notes: dict[str, dict] = {}
-    for path in paths:
-        fm = frontmatter(path)
+    for path, fm in parsed:
         order_id = fm.get("work_order_id")
         if order_id != path.stem or not WORK_ORDER_ID.fullmatch(str(order_id)):
             raise StateError(f"{path}: work_order_id does not match filename")
         kind = fm.get("kind")
-        if kind not in KINDS:
+        if mode == HIERARCHY and kind not in KINDS:
             raise StateError(f"{path}: kind must be one of {sorted(KINDS)}")
         try:
             notes[order_id] = {
@@ -126,7 +142,7 @@ def read_notes(repo: Path, app: str, version: str) -> dict[str, dict]:
             }
         except StateError as exc:
             raise StateError(f"{path}: {exc}") from exc
-    return notes
+    return mode, notes
 
 
 def load_ledger(repo: Path, app: str, version: str) -> dict:
@@ -153,6 +169,10 @@ def ledger_failures(data: object, app: str, version: str) -> list[str]:
         failures.append("app does not match --app")
     if data.get("analysis_version") != version:
         failures.append("analysis_version does not match --version")
+    mode = ledger_mode(data)
+    if mode not in (HIERARCHY, LEGACY):
+        failures.append(f"mode must be {HIERARCHY} or {LEGACY}")
+    statuses = LEGACY_STATUSES if mode == LEGACY else STATUSES
     orders = data.get("work_orders")
     if not isinstance(orders, dict) or not orders:
         return failures + ["work_orders must be a non-empty mapping"]
@@ -163,9 +183,12 @@ def ledger_failures(data: object, app: str, version: str) -> list[str]:
         if not isinstance(entry, dict):
             failures.append(f"{order_id}: entry must be a mapping")
             continue
-        if entry.get("kind") not in KINDS:
+        if mode == LEGACY:
+            if "kind" in entry:
+                failures.append(f"{order_id}: legacy ledger entries carry no kind")
+        elif entry.get("kind") not in KINDS:
             failures.append(f"{order_id}: kind is invalid")
-        if entry.get("status") not in STATUSES:
+        if entry.get("status") not in statuses:
             failures.append(f"{order_id}: status is invalid")
         revision = entry.get("revision")
         if not isinstance(revision, int) or isinstance(revision, bool) or revision < 1:
@@ -195,6 +218,17 @@ def ledger_failures(data: object, app: str, version: str) -> list[str]:
     return failures
 
 
+def ledger_mode(data: dict) -> object:
+    return data.get("mode", HIERARCHY)
+
+
+def is_complete(entry: dict) -> bool:
+    return (
+        entry.get("status") in COMPLETE
+        and entry.get("implemented_revision") == entry.get("revision")
+    )
+
+
 def write_ledger(repo: Path, app: str, version: str, data: dict) -> None:
     path = ledger_path(repo, app, version)
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -205,9 +239,12 @@ def cmd_init(args) -> int:
     path = ledger_path(args.repo, args.app, args.version)
     if path.exists():
         raise StateError(f"state ledger already exists: {path}")
-    notes = read_notes(args.repo, args.app, args.version)
+    mode, notes = read_notes(args.repo, args.app, args.version)
     orders = {}
     for order_id, note in notes.items():
+        if mode == LEGACY:
+            orders[order_id] = legacy_entry(note)
+            continue
         status = note["status"] if note["status"] in STATUSES else "proposed"
         if status in COMPLETE | {"changed", "in-progress"}:
             status = "proposed"
@@ -223,12 +260,27 @@ def cmd_init(args) -> int:
         }
     write_ledger(args.repo, args.app, args.version, {
         "schema_version": 1,
+        "mode": mode,
         "app": args.app,
         "analysis_version": args.version,
         "work_orders": orders,
     })
-    print(f"PASS — initialized {path} with {len(orders)} work orders")
+    print(f"PASS — initialized {mode} ledger {path} with {len(orders)} work orders")
     return 0
+
+
+def legacy_entry(note: dict) -> dict:
+    """Carry a v3 note's recorded status forward; v3 notes were the status record."""
+    status = note["status"] if note["status"] in LEGACY_STATUSES else "proposed"
+    implemented = 1 if status in COMPLETE | {"changed"} else None
+    return {
+        "status": status,
+        "revision": 1,
+        "implemented_revision": implemented,
+        "pull_requests": [],
+        "depends_on": note["depends_on"],
+        "subordinates": [],
+    }
 
 
 def get_order(ledger: dict, order_id: str) -> dict:
@@ -243,10 +295,21 @@ def next_subordinate(ledger: dict, entry: dict) -> str | None:
     rank = {kind: index for index, kind in enumerate(SUBORDINATE_KINDS)}
     candidates = [
         sub for sub in entry.get("subordinates") or []
-        if sub in orders and orders[sub].get("status") not in COMPLETE
+        if sub in orders and not is_complete(orders[sub])
     ]
     candidates.sort(key=lambda sub: (rank.get(orders[sub].get("kind"), len(rank)), sub))
     return candidates[0] if candidates else None
+
+
+def relative(repo: Path, path: Path) -> str:
+    return str(path.relative_to(repo))
+
+
+def revision_paths(args, entry: dict) -> list[str]:
+    return [
+        relative(args.repo, revision_path(args.repo, args.app, args.version, args.work_order, k))
+        for k in range(2, entry["revision"] + 1)
+    ]
 
 
 def gate(args, ledger: dict) -> dict:
@@ -255,15 +318,22 @@ def gate(args, ledger: dict) -> dict:
     revision = entry["revision"]
     result = {
         "work_order": args.work_order,
+        "mode": ledger_mode(ledger),
         "runnable": False,
         "reason": "",
         "revision": revision,
-        "revision_path": str(
-            revision_path(args.repo, args.app, args.version, args.work_order, revision)
-            .relative_to(args.repo)
+        "revision_path": relative(
+            args.repo,
+            revision_path(args.repo, args.app, args.version, args.work_order, revision),
         ),
+        "accepted_note": relative(
+            args.repo, accepted_note(args.repo, args.app, args.version, args.work_order)
+        ),
+        "revision_paths": revision_paths(args, entry),
         "next_subordinate": None,
     }
+    if ledger_mode(ledger) == LEGACY:
+        return legacy_gate(args, orders, entry, result)
     if entry["kind"] == "foundation":
         pending = [
             dep for dep in entry.get("depends_on") or []
@@ -293,6 +363,29 @@ def gate(args, ledger: dict) -> dict:
     return result
 
 
+def legacy_gate(args, orders: dict, entry: dict, result: dict) -> dict:
+    status = entry["status"]
+    if status not in LEGACY_RUNNABLE | REIMPLEMENT_REQUIRED:
+        result["reason"] = f"legacy work order is {status}; only ready or in-progress orders run"
+        return result
+    pending = [
+        dep for dep in entry.get("depends_on") or []
+        if orders.get(dep, {}).get("status") not in LEGACY_DEPENDENCY_DONE
+    ]
+    if pending:
+        result["reason"] = f"dependencies incomplete: {pending}"
+        return result
+    if status in REIMPLEMENT_REQUIRED and not args.reimplement:
+        result["reason"] = f"work order is {status}; pass --reimplement to run it again"
+        return result
+    result["runnable"] = True
+    result["reason"] = (
+        "reimplementation override" if status in REIMPLEMENT_REQUIRED
+        else "all legacy dependencies complete"
+    )
+    return result
+
+
 def cmd_gate(args) -> int:
     ledger = load_ledger(args.repo, args.app, args.version)
     result = gate(args, ledger)
@@ -303,11 +396,14 @@ def cmd_gate(args) -> int:
 def cmd_set_status(args) -> int:
     ledger = load_ledger(args.repo, args.app, args.version)
     entry = get_order(ledger, args.work_order)
+    if args.status == "verified" and entry.get("implemented_revision") != entry["revision"]:
+        raise StateError(
+            f"{args.work_order}: cannot verify; current revision R{entry['revision']} is not "
+            f"implemented (implemented revision: {entry.get('implemented_revision')})"
+        )
     entry["status"] = args.status
     if args.status == "implemented":
         entry["implemented_revision"] = entry["revision"]
-    elif args.status == "verified" and entry.get("implemented_revision") is None:
-        raise StateError(f"{args.work_order}: cannot verify before it is implemented")
     if args.pr and args.pr not in entry["pull_requests"]:
         entry["pull_requests"].append(args.pr)
     write_ledger(args.repo, args.app, args.version, ledger)
@@ -373,6 +469,10 @@ def read_change(path: Path, denied: set[str]) -> dict:
         change = yaml.safe_load(path.read_text())
     except (OSError, yaml.YAMLError) as exc:
         raise StateError(f"change file is not readable YAML: {exc}") from exc
+    return validate_change(change, denied)
+
+
+def validate_change(change: object, denied: set[str]) -> dict:
     if not isinstance(change, dict):
         raise StateError("change file must be a mapping")
     reason = change.get("reason")
@@ -409,6 +509,12 @@ def read_change(path: Path, denied: set[str]) -> dict:
 def cmd_revise(args) -> int:
     ledger = load_ledger(args.repo, args.app, args.version)
     entry = get_order(ledger, args.work_order)
+    if ledger_mode(ledger) == LEGACY:
+        raise StateError(
+            f"{args.work_order} belongs to a legacy (contract v3) analysis version; revisions "
+            "need the v4 work-order hierarchy. Create a new analysis version with "
+            "/ob-edit-inputs to change it."
+        )
     if entry["kind"] not in SUBORDINATE_KINDS:
         raise StateError(
             f"{args.work_order} is a {entry['kind']} work order; only subordinate kinds can be revised"
@@ -458,6 +564,11 @@ def verify(repo: Path, app: str, version: str) -> list[str]:
             if directory.name not in ledger["work_orders"]:
                 failures.append(f"revisions for unknown work order: {directory.name}")
     for order_id, entry in ledger["work_orders"].items():
+        if entry["status"] in COMPLETE and not is_complete(entry):
+            failures.append(
+                f"{order_id}: {entry['status']} but implemented revision "
+                f"{entry.get('implemented_revision')} is not current revision {entry['revision']}"
+            )
         if not accepted_note(repo, app, version, order_id).exists():
             failures.append(f"{order_id}: accepted wiki note is missing")
             continue
@@ -473,8 +584,10 @@ def verify(repo: Path, app: str, version: str) -> list[str]:
                 f"{entry['revision']} (expected {expected})"
             )
             continue
-        if expected and entry["kind"] not in SUBORDINATE_KINDS:
-            failures.append(f"{order_id}: {entry['kind']} work orders cannot have revisions")
+        if expected and entry.get("kind") not in SUBORDINATE_KINDS:
+            failures.append(
+                f"{order_id}: {entry.get('kind', 'legacy')} work orders cannot have revisions"
+            )
         for revision in expected:
             path = revision_path(repo, app, version, order_id, revision)
             previous = revision_path(repo, app, version, order_id, revision - 1)
@@ -507,6 +620,108 @@ def cmd_verify(args) -> int:
     return 0
 
 
+class NameDelta:
+    """Net add/remove/rename of names relative to the accepted note (R1)."""
+
+    def __init__(self) -> None:
+        self.added: list[str] = []
+        self.removed: list[str] = []
+        self.renamed: dict[str, str] = {}
+
+    def original_of(self, current: str) -> str | None:
+        return next((o for o, n in self.renamed.items() if n == current), None)
+
+    def apply(self, ops: dict) -> None:
+        for rename in ops.get("rename", []):
+            source, target = rename["from"], rename["to"]
+            if source in self.added:
+                self.added[self.added.index(source)] = target
+            elif (original := self.original_of(source)) is not None:
+                self.renamed[original] = target
+            else:
+                self.renamed[source] = target
+        for name in ops.get("remove", []):
+            if name in self.added:
+                self.added.remove(name)
+                continue
+            original = self.original_of(name)
+            if original is not None:
+                del self.renamed[original]
+                name = original
+            if name not in self.removed:
+                self.removed.append(name)
+        for name in ops.get("add", []):
+            if name in self.removed:
+                self.removed.remove(name)
+            elif name not in self.added:
+                self.added.append(name)
+
+    def result(self, operations: tuple[str, ...]) -> dict:
+        out = {
+            "add": self.added,
+            "remove": self.removed,
+            "rename": [{"from": o, "to": n} for o, n in self.renamed.items() if o != n],
+        }
+        return {op: out[op] for op in operations}
+
+
+def cumulative(
+    repo: Path, app: str, version: str, order_id: str, entry: dict,
+) -> tuple[dict, list[dict]]:
+    deltas = {
+        "attributes": NameDelta(), "spans": NameDelta(), "names": NameDelta(),
+    }
+    notes: list[dict] = []
+    revisions: list[dict] = []
+    for k in range(2, entry["revision"] + 1):
+        path = revision_path(repo, app, version, order_id, k)
+        change = validate_change(frontmatter(path), set())
+        for section, delta in deltas.items():
+            if change["changes"].get(section):
+                delta.apply(change["changes"][section])
+        notes.extend(
+            {"revision": k, "note": note} for note in change["changes"].get("notes") or []
+        )
+        revisions.append({
+            "revision": k,
+            "path": relative(repo, path),
+            "reason": change["reason"],
+            "requested_by_role": change["requested_by_role"],
+        })
+    return {
+        "attributes": deltas["attributes"].result(("add", "remove", "rename")),
+        "spans": deltas["spans"].result(("add", "remove", "rename")),
+        "names": deltas["names"].result(("rename",)),
+        "notes": notes,
+    }, revisions
+
+
+def cmd_show(args) -> int:
+    ledger = load_ledger(args.repo, args.app, args.version)
+    entry = get_order(ledger, args.work_order)
+    broken = [
+        failure for failure in verify(args.repo, args.app, args.version)
+        if failure.startswith(f"{args.work_order}:")
+    ]
+    if broken:
+        raise StateError("; ".join(broken))
+    changes, revisions = cumulative(args.repo, args.app, args.version, args.work_order, entry)
+    print(json.dumps({
+        "work_order": args.work_order,
+        "mode": ledger_mode(ledger),
+        "status": entry["status"],
+        "revision": entry["revision"],
+        "implemented_revision": entry.get("implemented_revision"),
+        "accepted_note": relative(
+            args.repo, accepted_note(args.repo, args.app, args.version, args.work_order)
+        ),
+        "revision_paths": [item["path"] for item in revisions],
+        "revisions": revisions,
+        "effective_changes": changes,
+    }, indent=2))
+    return 0
+
+
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     common = argparse.ArgumentParser(add_help=False)
@@ -526,6 +741,8 @@ def main(argv=None) -> int:
     revise_parser.add_argument("--work-order", required=True)
     revise_parser.add_argument("--file", type=Path, required=True)
     sub.add_parser("verify", parents=[common])
+    show_parser = sub.add_parser("show", parents=[common])
+    show_parser.add_argument("--work-order", required=True)
     args = parser.parse_args(argv)
     if not APP.fullmatch(args.app):
         parser.error("--app must be a simple name")
@@ -539,6 +756,7 @@ def main(argv=None) -> int:
         "set-status": cmd_set_status,
         "revise": cmd_revise,
         "verify": cmd_verify,
+        "show": cmd_show,
     }
     try:
         return handlers[args.command](args)
