@@ -11,6 +11,7 @@ import pytest
 import yaml
 
 from scripts.codex_workflows import (
+    SHORT_DESCRIPTIONS,
     WORKFLOW_ORDER,
     render_openai_yaml,
     render_skill,
@@ -110,6 +111,43 @@ def test_start_validates_before_discovery_and_gates_analysis():
     assert analyze.index(" claim --command") < analyze.index(
         "direct-api --phase analysis"
     )
+
+
+def test_direct_analyze_runs_the_start_gates_before_claiming():
+    analyze = (COMMANDS / "ob-analyze.md").read_text()
+    start = (COMMANDS / "ob-start.md").read_text()
+    gate = "Proceed with analysis using this configuration? (yes/no)"
+    authorize = "authorize --answer yes --command ob-analyze"
+    assert "rerun `/ob-analyze`" in analyze
+    assert "without asking again" in analyze
+    assert "run `/ob-start`\n   first and stop" in analyze
+    assert "repair gate" in analyze
+    for marker in (" validate", "`summary`", gate, authorize):
+        assert marker in analyze
+    assert analyze.index(" validate") < analyze.index("`summary`")
+    assert analyze.index("`summary`") < analyze.index(gate)
+    assert analyze.index(gate) < analyze.index(authorize)
+    assert analyze.index(authorize) < analyze.index(" claim --command")
+    assert "--command ob-start" in start
+    assert "later runs use /ob-analyze" in start.split("---")[1]
+    assert "rerun `/ob-analyze`" in start
+
+
+def test_rerun_guidance_points_to_ob_analyze():
+    surfaces = (
+        COMMANDS / "ob-revise.md",
+        SKILLS / "references" / "analysis-site.md",
+        ROOT / "templates" / "analysis-site" / "index.md",
+        ROOT / "AGENTS.md",
+        PLUGIN / "README.md",
+        SKILLS / "instrumentation-wiki" / "scripts" / "work_order_state.py",
+    )
+    for path in surfaces:
+        flat = " ".join(path.read_text().split())
+        assert "rerun `/ob-start`" not in flat, path
+        assert "rerun /ob-start" not in flat, path
+        assert "/ob-analyze" in flat, path
+    assert SHORT_DESCRIPTIONS["ob-analyze"] == "Rerun analysis after editing inputs"
 
 
 def test_intake_runtime_and_schemas_are_packaged():

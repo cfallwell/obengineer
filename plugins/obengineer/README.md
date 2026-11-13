@@ -16,7 +16,7 @@ web/cloud and Work surfaces without local execution are not supported.
 The command creates local ignored mode-0600 `obconfig.yaml` when missing, then stops for
 editing. On rerun it validates, hashes the complete artifact directory, shows a redacted
 summary, and requires exact proceed authorization before analysis V1. Edit the same file
-and rerun `/ob-start` for the next immutable version.
+or `artifacts/` and rerun `/ob-analyze` for the next immutable version.
 
 The analysis PR includes:
 

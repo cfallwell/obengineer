@@ -24,7 +24,7 @@ SHORT_DESCRIPTIONS = {
     "ob-start": "Start a guided obengineer analysis",
     "ob-add-inputs": "Add evidence and run the next analysis",
     "ob-edit-inputs": "Edit inputs and run the next analysis",
-    "ob-analyze": "Run an authorized analysis version",
+    "ob-analyze": "Rerun analysis after editing inputs",
     "ob-review": "Review an analysis and its wiki",
     "ob-implement": "Implement one Ready work order",
     "ob-revise": "Revise one subordinate work order",

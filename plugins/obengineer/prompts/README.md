@@ -4,8 +4,8 @@ Commands are short entry points. These prompts own the ordered run behavior.
 
 | Stage | Command | Prompt | Result |
 |---|---|---|---|
-| Inputs | `/ob-start` | [00](00-load-obconfig.md) | Secure local config validation, full artifact hash, redacted summary, and digest-bound proceed gate |
-| Analysis | `/ob-analyze` (normally dispatched automatically) | [01](01-analyze-application.md) + [02](02-build-instrumentation-wiki.md) | Immutable `[V<N>]` linked analysis, versioned wiki, and all work orders in one PR |
+| Inputs | `/ob-start` (first run) or `/ob-analyze` (reruns) | [00](00-load-obconfig.md) | Secure local config validation, full artifact hash, redacted summary, and digest-bound proceed gate |
+| Analysis | `/ob-analyze` (dispatched by `/ob-start`, or rerun directly after editing inputs) | [01](01-analyze-application.md) + [02](02-build-instrumentation-wiki.md) | Immutable `[V<N>]` linked analysis, versioned wiki, and all work orders in one PR |
 | Implement | `/ob-implement` | [03](03-implement-instrumentation.md) | One Ready work order across mapped repository legs |
 | Terraform | `/ob-terraform` | [04](04-generate-observability-as-code.md) | Import-aware plan; never apply |
 | Verify | `/ob-verify` | [05](05-verify-accepted-contract.md) | Read-only accepted exit-criterion results |
