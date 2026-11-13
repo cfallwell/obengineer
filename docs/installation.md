@@ -168,7 +168,7 @@ The installer never creates `obconfig.yaml`. The first `/ob-start` run does that
 2. Open the artifact repository in the host and type `/ob-` (Cursor or Claude Code),
    `/skills` (Codex CLI), or `@ob-` (ChatGPT Desktop). The `ob-start` command should be
    listed.
-3. Before running `/ob-start` Copy the `obconfig.yaml.template` to obconfig.yaml and configure for your application. If you miss this step, `/ob-start` will create the file for you, reporting back `Created local obconfig.yaml. Edit it and rerun /ob-start.` That confirms the scripts run from the host.
+3. Before running `/ob-start` Copy the `obconfig.yaml.template` to `obconfig.yaml` and configure for your application. If you miss this step, `/ob-start` will create the file for you, reporting back `Created local obconfig.yaml. Edit it and rerun /ob-start.` That confirms the scripts run from the host.
 
 ## Installer options
 
