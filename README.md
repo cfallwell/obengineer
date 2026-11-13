@@ -52,9 +52,10 @@ After you reply `yes` to accept a version, obengineer carries it out:
   implementation contracts for a use case, workflow, business transaction, detector,
   alert condition, dashboard, or atomic custom-code instrumentation such as one span or
   attribute. Foundation work orders, the prerequisites drawn from findings, come first;
-  once they are all complete, every other order can run in any order. A use case can map
-  to more than one business transaction, and a workflow can cross business-transaction
-  boundaries. Either one can also span multiple repositories. obengineer delivers each
+  once they are all complete, every other order can run in any order. A use case maps
+  to one or more business transactions, each business transaction is made up of one or
+  more workflows, and each workflow belongs to exactly one business transaction. Any of
+  them can span multiple repositories. obengineer delivers each
   work order as one unified change, with one pull request per repository and a
   coordination pull request that links them. You can limit the work to
   one repository or to specific folders within a repository. Typical changes include the

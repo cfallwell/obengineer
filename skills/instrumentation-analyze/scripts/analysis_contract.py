@@ -1829,6 +1829,7 @@ def validate_contract(contract: Any) -> list[str]:
             )
 
     if contract.get("schemaVersion") == 4:
+        _validate_v4_workflow_ownership(transactions, workflows, failures)
         _validate_v4_work_orders(
             contract,
             work_orders,
@@ -1847,6 +1848,54 @@ def validate_contract(contract: Any) -> list[str]:
     _scan_join_types(contract, "contract", failures)
     _scan_placeholders(contract, "contract", failures)
     return sorted(set(failures))
+
+
+def _validate_v4_workflow_ownership(
+    transactions: list[Any],
+    workflows: list[Any],
+    failures: list[str],
+) -> None:
+    owners: dict[Any, list[Any]] = {}
+    for transaction in transactions:
+        if not isinstance(transaction, dict):
+            continue
+        for identifier in transaction.get("workflowIds") or []:
+            owners.setdefault(identifier, []).append(transaction.get("id"))
+    for identifier, transaction_ids in sorted(owners.items(), key=lambda item: str(item[0])):
+        if len(transaction_ids) > 1:
+            failures.append(
+                f"contract.businessTransactions: workflow {identifier} belongs to "
+                f"more than one business transaction {sorted(map(str, transaction_ids))}; "
+                "each workflow belongs to exactly one business transaction"
+            )
+    for index, workflow in enumerate(workflows):
+        if not isinstance(workflow, dict):
+            continue
+        path = f"contract.workflows[{index}]"
+        identifier = workflow.get("id")
+        declared = workflow.get("businessTransactionIds") or []
+        listed_by = owners.get(identifier, [])
+        if not declared and not listed_by:
+            failures.append(
+                f"{path}: workflow {identifier} belongs to no business transaction; "
+                "each workflow belongs to exactly one business transaction"
+            )
+            continue
+        if len(declared) != 1:
+            failures.append(
+                f"{path}.businessTransactionIds: expected exactly one business "
+                f"transaction, found {len(declared)}"
+            )
+        elif listed_by and set(declared) != set(listed_by):
+            failures.append(
+                f"{path}.businessTransactionIds: names {declared[0]} but "
+                f"business transaction workflowIds list it under {sorted(map(str, listed_by))}"
+            )
+        elif not listed_by:
+            failures.append(
+                f"{path}: business transaction {declared[0]} does not list "
+                f"workflow {identifier} in workflowIds"
+            )
 
 
 def _validate_v4_work_orders(

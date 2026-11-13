@@ -65,15 +65,21 @@ project is requested from engineering after analysis, never guessed.
 
 Work orders are implementation contracts. Foundation orders come first; the gate asks
 “Are all foundation work orders complete?” and releases every other order, in any order,
-once the answer is yes. `use-case:<id>` runs its next unimplemented subordinate. Run:
+once the answer is yes. `use-case:<id>` runs its next unimplemented subordinate. With
+`<app>` and `V<N>` the resolved accepted application and version, run:
 
 ```bash
-python3 <obengineer-root>/skills/instrumentation-wiki/scripts/work_order_state.py gate --work-order <id> [--reimplement]
+S=<obengineer-root>/skills/instrumentation-wiki/scripts/work_order_state.py
+python3 "$S" gate --repo . --app <app> --version V<N> --work-order <id> [--reimplement]
+python3 "$S" show --repo . --app <app> --version V<N> --work-order <id>
 ```
 
-Implement the latest revision (R1 is the accepted note; `/ob-revise` adds R2, R3, ...).
-After the PRs open, record status with `work_order_state.py set-status --work-order <id>
---status <status> --pr <url>` in `wiki/apps/<app>/implementation/V<N>/state.yaml`.
+Load the accepted note (R1) and every revision in `revision_paths` in order (R2, R3, ...
+from `/ob-revise`), and implement the cumulative `effective_changes` from `show`, not only
+the latest revision. A `legacy` ledger (version accepted before work-order kinds) gates on
+`depends_on` only and has no revisions. After the PRs open, record status with
+`python3 "$S" set-status --repo . --app <app> --version V<N> --work-order <id> --status <status> --pr <url>`
+in `wiki/apps/<app>/implementation/V<N>/state.yaml`.
 
 Runtime, Collector/CI, detector, objective, and configuration legs use the same work-order
 boundary. Never deploy, apply Terraform, or arm a detector.
@@ -115,7 +121,8 @@ Unit-test: processor copies baggage to attributes; inject writes `traceparent` +
 2. `workflow.name` and `workflow.step` from schema enums (subordinate intent within the
    APM Business Transaction).
    Set and propagate the registered `<org>.bt` global tag and validate the
-   `<org>.bt` / `workflow.name` pair from the contract.
+   `<org>.bt` / `workflow.name` pair from the contract; each `workflow.name` pairs with
+   exactly one `<org>.bt`.
 3. Span events at documented boundaries.
 4. Allowlisted attributes only; money in minor units + currency when amounts exist.
 5. On error: `recordException`; span status ERROR.

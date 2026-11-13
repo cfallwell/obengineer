@@ -54,18 +54,25 @@ still one concern: the unified accepted work order.
 Work orders are implementation contracts in a hierarchy: foundation orders, then use-case
 orders and their workflow, business-transaction, detector, alert-condition, dashboard, and
 custom-code subordinates. `use-case:<id>` runs that use case's next unimplemented
-subordinate. Before any edit, run the foundation gate:
+subordinate. Before any edit, run the foundation gate, where `<app>` and `V<N>` are the
+resolved accepted application and version:
 
 ```bash
-python3 <obengineer-root>/skills/instrumentation-wiki/scripts/work_order_state.py gate --work-order <id>
+S=<obengineer-root>/skills/instrumentation-wiki/scripts/work_order_state.py
+python3 "$S" gate --repo . --app <app> --version V<N> --work-order <id>
+python3 "$S" show --repo . --app <app> --version V<N> --work-order <id>
 ```
 
 A non-foundation order runs only when all foundation work orders are complete. An
 `implemented`, `verified`, or `changed` order runs again only with the explicit
-`reimplement` override (`--reimplement`). Implement the latest revision (R1 is the
-accepted note; R2, R3, ... come from `/ob-revise`). Record status with `work_order_state.py
-set-status` in `wiki/apps/<app>/implementation/V<N>/state.yaml`, never in digest-bound
-wiki notes. RUM work follows the load-order check in
+`reimplement` override (`--reimplement`). A `legacy` ledger (version accepted before
+work-order kinds) gates on `depends_on` only and has no revisions. Load the accepted note
+(R1) and every revision in the gate's `revision_paths` in order (R2, R3, ... from
+`/ob-revise`), and implement the cumulative `effective_changes` from `show`, not only the
+latest revision. Record status with
+`python3 "$S" set-status --repo . --app <app> --version V<N> --work-order <id> --status <status> --pr <url>`
+in `wiki/apps/<app>/implementation/V<N>/state.yaml`, never in digest-bound wiki notes;
+`verified` requires the current revision to be implemented. RUM work follows the load-order check in
 [`../references/rum-delivery.md`](../references/rum-delivery.md).
 
 Validate [`../references/provenance-ledger.md`](../references/provenance-ledger.md), load
@@ -103,7 +110,8 @@ Collector, and configuration work orders are valid without inventing runtime cod
 - **Attribute names come from the guide.** If a name is wrong, change the guide and the schema first, then the code. Renaming in code alone breaks the dashboards the TAM already built.
 - **Business Transaction grouping is `<org>.bt`.** Set the bounded global tag at the
   earliest known surface, propagate and stamp it across repository boundaries, and validate
-  its registered pair with `workflow.name`. One BT can contain many workflows.
+  its registered pair with `workflow.name`. One BT can contain many workflows; each
+  workflow belongs to exactly one BT.
 - **Placeholders for every secret.** Tokens arrive from the environment, the edge, or a secret store. No credential value in a repository, ever.
 - **Money in minor units** with an ISO 4217 currency code in a sibling attribute.
 - **Never emit a deny-list key.** The list in the guide and the `deny` block in `attribute-schema.json` are the same list.

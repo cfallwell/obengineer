@@ -1,29 +1,43 @@
-# Installation and lifecycle
+# Installation
 
-obengineer installs Markdown command entry points and skill directories into an agent
-host. The installer does not install Python, create a Git repository, or write a
-credential. Credentials remain only in ignored local `obconfig.yaml`.
+This page explains how to install obengineer's commands and skills into Cursor, Claude
+Code, Codex CLI, or ChatGPT Desktop, how to confirm the install worked, and how to
+upgrade or remove it. After installation, continue with [Configuration](configuration.md)
+and the [end-to-end walkthrough](usage.md).
 
-## 1. Choose where generated artifacts will live
+The installer copies or links Markdown command files and skill directories into a host's
+configuration directory. It does not install Python, create a Git repository, write a
+credential, or contact any network service.
 
-The toolkit checkout and generated artifacts should remain separate:
+## Prerequisites
+
+| Requirement | Needed for | Notes |
+|---|---|---|
+| Git | Everything | The artifact repository must be a Git repository with at least one commit, because every analysis is delivered as a pull request. |
+| Python 3 and `PyYAML==6.0.3` | Everything | The intake, validation, wiki, and state-ledger scripts are Python. |
+| Push access and a forge CLI or integration the host can use | Analysis, implementation, and revision PRs | The agent opens pull requests against the artifact repository and the mapped application repositories. |
+| Terraform CLI | `/ob-terraform` only | Analysis, review, implementation, and verification do not use Terraform. |
+| `python-docx` and `markdown-it-py==4.2.0` | `/ob-render` only | Needed only for the optional Word summary. |
+| Read-only Splunk tokens | Measured tenant evidence (optional) | Configured later in `obconfig.yaml`; see [Configuration](configuration.md#splunk-tenant-access). |
+
+## 1. Choose the artifact repository
+
+Keep the toolkit checkout separate from the repository that receives generated
+artifacts:
 
 ```text
-/path/to/obengineer/       toolkit, prompts, agents, and canonical skills
-/path/to/memory-repo/      engagement inputs, analysis, wiki, and Terraform
+/path/to/obengineer/       toolkit: commands, prompts, agents, skills, scripts
+/path/to/memory-repo/      artifacts: obconfig.yaml, analysis, wiki, Terraform
 ```
 
 The artifact repository can be:
 
-- the application repository, which keeps code and contract checks together;
+- the application repository itself, which keeps code and contract checks in one place;
 - a separate memory repository shared by several application repositories; or
-- a submodule mounted into the relevant repositories.
+- a Git submodule mounted into each relevant application repository.
 
-Record the choice in the generated wiki's `meta/decisions.md` and keep only one copy.
-See the canonical [CI integration reference](../skills/references/ci-integration.md)
-for the trade-offs.
-
-Create or clone the repository before project-scoped installation:
+See [CI integration](../skills/references/ci-integration.md) for the trade-offs. If the
+repository does not exist yet, create it with an initial commit:
 
 ```bash
 mkdir -p /path/to/memory-repo
@@ -31,7 +45,7 @@ git -C /path/to/memory-repo init
 git -C /path/to/memory-repo commit --allow-empty -m "Initial commit"
 ```
 
-## 2. Clone the toolkit and install dependencies
+## 2. Clone the toolkit and install Python dependencies
 
 ```bash
 git clone https://github.com/cfallwell/obengineer.git
@@ -39,232 +53,218 @@ cd obengineer
 python3 -m pip install PyYAML==6.0.3
 ```
 
-`PyYAML==6.0.3` validates/migrates engagement inputs. Install `python-docx` and
-`markdown-it-py==4.2.0` only when rendering the optional Word summary. `make deps`
-installs development and renderer dependencies.
-
-Install the Terraform CLI when using `/ob-terraform`; analysis, review, and application
-implementation do not require it.
-
-## 3. Install into one or more hosts
-
-Project-scoped installation is recommended because the commands are available only
-when working in the repository that owns the artifacts:
+Install the optional Word renderer dependencies only if you plan to use `/ob-render`:
 
 ```bash
-./install.sh --cursor --project /path/to/memory-repo
-./install.sh --claude --codex --project /path/to/memory-repo
-./install.sh --all --project /path/to/memory-repo
+python3 -m pip install python-docx markdown-it-py==4.2.0
 ```
 
-User-scoped installation omits `--project`:
+`make deps` installs the renderer and test dependencies together, which is useful for
+toolkit maintainers.
+
+## 3. Install into a host
+
+Project-scoped installation is recommended. The commands then appear only when the host
+has the artifact repository open:
+
+```bash
+./install.sh --cursor --project /path/to/memory-repo          # Cursor
+./install.sh --claude --project /path/to/memory-repo          # Claude Code
+./install.sh --codex  --project /path/to/memory-repo          # Codex CLI and ChatGPT Desktop
+./install.sh --all    --project /path/to/memory-repo          # every supported host
+```
+
+Host flags can be combined, for example `--claude --codex`. Omit `--project` to install
+for the current user in every repository:
 
 ```bash
 ./install.sh --cursor
 ./install.sh --all
 ```
 
-Restart the host after installation so it discovers the new commands and skills.
-Cursor and Claude Code invoke workflows as `/ob-start`. Codex CLI uses `$ob-start`;
-ChatGPT Desktop uses `@ob-start` only with its local executor available. These
-Python-backed workflows are not supported in ChatGPT web/cloud or Work surfaces that do
-not provide local execution.
+Restart the host or open a new session afterwards so it discovers the new commands.
 
-Project-scoped installation also creates only missing root scaffold files:
+### How each host invokes the commands
+
+| Host | Invocation | Example |
+|---|---|---|
+| Cursor | Slash command | `/ob-start` |
+| Claude Code | Slash command | `/ob-start` |
+| Codex CLI | Explicit workflow skill | `$ob-start` |
+| ChatGPT Desktop | Explicit workflow skill, with its local executor available | `@ob-start` |
+
+ChatGPT web, ChatGPT cloud, and other surfaces without local command execution are not
+supported, because every workflow runs Python scripts in the artifact repository.
+
+Codex workflow skills are explicit-only: they never activate implicitly from a prompt.
+Type `/skills` in Codex CLI to list them, then invoke one by name.
+
+## What the installer creates
+
+### Host files
+
+| Host | User-scoped location | Project-scoped location |
+|---|---|---|
+| Cursor | `~/.cursor/skills/`, `~/.cursor/commands/` | `<project>/.cursor/skills/`, `<project>/.cursor/commands/` |
+| Claude Code | `~/.claude/skills/`, `~/.claude/commands/` | `<project>/.claude/skills/`, `<project>/.claude/commands/` |
+| Codex CLI and ChatGPT Desktop | `~/.agents/skills/` | `<project>/.agents/skills/` |
+
+- **Cursor and Claude Code** receive one command file per workflow (`ob-start.md`,
+  `ob-analyze.md`, `ob-implement.md`, `ob-revise.md`, `ob-terraform.md`, `ob-verify.md`,
+  `ob-review.md`, `ob-render.md`, and the rest) plus the canonical skill directories.
+  Skills are relative symlinks into the toolkit by default; command files are written
+  as copies because each one contains the toolkit's resolved absolute path.
+- **Codex** receives copied canonical skill directories plus one `ob-*` workflow skill per
+  command. Each workflow skill delegates to the matching command contract and passes
+  your arguments through. Codex skills are always copies because Codex ignores skill
+  symlinks that resolve outside the opened repository. The config template is copied to
+  `<Codex base>/obengineer/obconfig.yaml.template`.
+- Every host directory receives `.obengineer-install.json`, an ownership manifest that
+  records the toolkit path, the scope, and a digest or symlink target for every file the
+  installer created. Reinstall and uninstall use it to touch only installer-owned files.
+
+### Project scaffold (project-scoped installs only)
+
+The installer creates these root files only if they are missing, and never overwrites
+an existing file:
 
 ```text
-.gitignore
-obconfig.yaml.template
-artifacts/README.md
+.gitignore                ignores /obconfig.yaml and /.obengineer/, keeps the template tracked
+obconfig.yaml.template    the configuration template; copy it to obconfig.yaml
+artifacts/README.md       explains the supplied-evidence directory
 ```
 
-It never overwrites an existing file. `.obengineer/scaffold-manifest.json` records
-digests for files the installer created and the exact `.gitignore` lines it added.
-Reinstall preserves edits. After the final installed host is removed, uninstall removes
-only unchanged owned scaffold files and safe tracked ignore lines; it never removes
-actual `obconfig.yaml`, its ignore protection while it exists, the `artifacts/`
-directory, or files the user added.
+If `.gitignore` already exists, the installer appends only the missing ignore lines.
+`.obengineer/scaffold-manifest.json` (itself ignored) records which scaffold files and
+`.gitignore` lines the installer added.
 
-### Install locations
+The installer never creates `obconfig.yaml`. The first `/ob-start` run does that.
 
-| Host | User-scoped | Project-scoped |
-|---|---|---|
-| Cursor | `~/.cursor/{skills,commands}` | `<project>/.cursor/{skills,commands}` |
-| Claude Code | `~/.claude/{skills,commands}` | `<project>/.claude/{skills,commands}` |
-| Codex CLI / ChatGPT Desktop | `~/.agents/skills` | `<project>/.agents/skills` |
+## Verify the install
 
-Codex receives the canonical skills plus nine explicit-only `ob-*` workflow wrapper
-skills. It receives no prompt files. Each wrapper delegates to the matching command
-contract, preserves invocation arguments as `$ARGUMENTS`, and disables implicit
-invocation. Canonical Codex skill directories are always copied because Codex does not
-discover skill-directory symlinks that resolve outside the opened repository. The
-canonical config template is copied byte-identically to the installer-owned companion
-`<Codex base>/obengineer/obconfig.yaml.template`.
+1. List what is installed:
 
-Each host directory receives `.obengineer-install.json`. That manifest records the
-source checkout, scope, and a digest or symlink target for every installer-owned path.
-Reinstall refuses untracked collisions and modified installed paths before writing
-anything. Uninstall removes only entries whose current digest still matches and
-preserves modified commands and skills. The separate project scaffold manifest is local
-and ignored.
+   ```bash
+   ./install.sh --list --project /path/to/memory-repo
+   ```
 
-### Installer options
+   A healthy Cursor and Codex install reports:
+
+   ```text
+   scope: project /path/to/memory-repo
+
+     Project scaffold 2 installer-owned file(s)
+     Cursor       installed
+       skills   /path/to/memory-repo/.cursor/skills
+       commands /path/to/memory-repo/.cursor/commands
+     Claude Code  host not found
+     ...
+     Codex        installed
+       skills   /path/to/memory-repo/.agents/skills
+       workflows /path/to/memory-repo/.agents/skills/ob-*
+       companion /path/to/memory-repo/.agents/obengineer/obconfig.yaml.template
+   ```
+
+2. Open the artifact repository in the host and type `/ob-` (Cursor or Claude Code),
+   `/skills` (Codex CLI), or `@ob-` (ChatGPT Desktop). The `ob-start` command should be
+   listed.
+3. Run `/ob-start` once. On a fresh repository it creates `obconfig.yaml` and stops with
+   `Created local obconfig.yaml. Edit it and rerun /ob-start.` That confirms the scripts
+   run from the host.
+
+## Installer options
+
+Output of `./install.sh --help`, summarized:
 
 | Option | Behavior |
 |---|---|
-| `--cursor` | Select Cursor. |
-| `--claude` | Select Claude Code. |
-| `--codex` | Select Codex. |
-| `--all` | Select all supported hosts. It can be combined with individual host flags without changing the result. |
-| `--project PATH` | Resolve `PATH` to an absolute path and install into host-specific directories beneath it. Without this option, installation is under the current user's home directory. |
-| `--copy` | Copy Cursor and Claude skill trees instead of creating relative directory symlinks, and install their namespaced config-template companion. Codex canonical skills and companion are always copied; its workflow wrappers are always rendered. |
-| `--list` | Display all host paths and whether each host has an obengineer manifest, then exit without changing files. |
-| `--dry-run` | Print every planned link, copy, write, or removal without changing files or writing a manifest. |
-| `--uninstall` | Remove paths listed in the selected host's manifest. Combine it with a host selector and the same `--project` scope used for installation. |
-| `-h`, `--help` | Print the current command-line reference. |
+| `--cursor` | Install for Cursor. |
+| `--claude` | Install for Claude Code. |
+| `--codex` | Install for Codex CLI and ChatGPT Desktop. |
+| `--all` | Install for every supported host. Combining it with individual host flags changes nothing. |
+| `--project PATH` | Install into host directories beneath `PATH` instead of the user's home directory. |
+| `--copy` | Copy Cursor and Claude Code skills (instead of symlinking) and install their config-template companion. Codex skills are always copied. |
+| `--uninstall` | Remove what a previous install created for the selected hosts and scope. |
+| `--list` | Show what is installed and where, then exit without changes. |
+| `--dry-run` | Print every planned link, copy, write, or removal without changing anything. |
+| `-h`, `--help` | Print the command-line reference. |
 
-At least one host selector is required except with `--list`.
+At least one host flag is required, except with `--list`.
 
-### Symlink and copy behavior
+## Upgrade
 
-Symlinks are the Cursor and Claude default. A canonical skill edit in the toolkit is then
-visible to those hosts immediately, although the host may need a restart or new session.
-Codex always receives materialized canonical skill directories plus the namespaced config
-companion so `/skills` discovery and direct `$engagement-intake` execution do not depend
-on links outside the opened repository. `--copy` selects materialized skills for Cursor
-and Claude as well and installs the same companion beneath their host base. Default
-Cursor and Claude symlink installs do not add the companion because their scripts resolve
-the canonical toolkit template through the symlink.
-
-Re-run installation after:
-
-- using `git pull` to receive command changes, because command files are copied;
-- moving the toolkit checkout, because installed commands contain its resolved
-  absolute path; or
-- receiving skill changes when the original install used `--copy`.
-
-Reinstalling a legacy project installation upgrades its manifest to digest-based
-ownership only when each colliding command still names the legacy toolkit source and each
-colliding skill symlink still targets that source. Modified or copied legacy paths cannot be
-verified and are refused rather than overwritten.
-
-Reinstalling this release migrates `/ob-intake`, `/ob-generate`, and `/ob-wiki` to
-`/ob-start`, and
-`/ob-build-terraform` to `/ob-terraform`. The installer removes retired command files
-only when the prior obengineer manifest proves it created them; same-named user files that
-were not installed by obengineer are left alone.
-
-A Codex reinstall also migrates installer-owned project `.agents/prompts` and
-user-scoped `~/.codex` installations to `.agents/skills`. Only paths whose current
-digest or symlink target still matches the legacy manifest are removed. Modified,
-unowned, unsafe, or unverifiable legacy paths are preserved. Legacy removals and the new
-workflow installation share the same rollback transaction.
-
-The installer never replaces an untracked destination with the same skill or command
-name. It reports `REFUSE` and leaves the host and project scaffold unchanged. Move or
-back up the reported user file explicitly before retrying. A reinstall replaces only
-paths whose manifest ownership record still matches; an operational failure rolls those
-changes back. Inner host and outer scaffold transactions journal the exact inode, type,
-mode, and content digest they write. Rollback removes or restores only a current exact
-match. A concurrent file, symlink, or directory replacement is preserved, the backup
-staging directory is retained for manual recovery, and installation exits nonzero with
-an incomplete-rollback error. After a backup move, every host target is created
-exclusively; the installer never removes or overwrites a pathname that appears before
-the initial link, copy, or write. Transaction staging is a unique mode-0700 hidden
-directory on the target's own filesystem, never the system temporary directory.
-Multi-device transactions use one contained staging directory per device. If any
-required same-filesystem staging directory cannot be created, installation fails before
-changing a target.
-
-Root scaffold files follow a stricter rule: existing files are never replaced, including
-files created by an earlier install. An owned file changed after installation is treated
-as user content and preserved during uninstall.
-
-## 4. Configure the engagement
-
-Copy root `obconfig.yaml.template` to `obconfig.yaml`, set mode `0600`, and edit it.
-`/ob-start` performs the copy safely when missing and then stops. The template owns all
-field definitions and consequences. Plaintext least-privilege read tokens and a
-disposable dummy password are accepted only in ignored local config; `${VAR}` references
-are neither required nor interpreted. Relevant MCP integrations supplement mandatory
-configured direct API attempts.
-
-## Claude Code plugin installation
-
-Claude Code can install the self-contained plugin bundle instead of loose
-project-scoped skills:
+Pull the toolkit, then rerun the install with the same host flags and scope you used
+originally:
 
 ```bash
-claude plugin marketplace add /path/to/obengineer
-# Install the obengineer plugin from the added marketplace.
-```
-
-The plugin includes commands (with `${CLAUDE_PLUGIN_ROOT}` paths), agents, prompts, hooks,
-skills, and MCP declarations. Its committed
-`.mcp.json` is empty by design; tenant-specific server commands still require operator
-configuration.
-
-## Inspect, upgrade, and remove
-
-Inspect project-scoped status:
-
-```bash
-./install.sh --list --project /path/to/memory-repo
-```
-
-Upgrade a symlink-based installation by reusing the original host selectors. For
-example, upgrade a Cursor-only installation with:
-
-```bash
+cd /path/to/obengineer
 git pull --ff-only
 ./install.sh --cursor --project /path/to/memory-repo
 ```
 
-Use `--all` only when all three hosts were installed originally or should be installed
-now.
+Rerun the install after any of these:
 
-Preview and then remove selected hosts:
+- a `git pull`, because command files are copies;
+- moving the toolkit checkout, because installed commands contain its absolute path; or
+- a skill change, if you installed with `--copy` or use Codex.
+
+Symlinked Cursor and Claude Code skills pick up toolkit edits immediately; the host may
+need a new session.
+
+Reinstall replaces only files whose ownership record still matches. It refuses (prints
+`REFUSE` and changes nothing) when a destination exists that the installer did not create
+or that you have modified. Move or back up the reported file, then rerun.
+
+Reinstalling also migrates older installations: retired commands (`/ob-intake`,
+`/ob-generate`, `/ob-wiki`, `/ob-build-terraform`) are removed when the previous manifest
+proves the installer created them, and older Codex installs under `.agents/prompts` or
+`~/.codex` are moved to `.agents/skills`. Files you created or modified are preserved.
+
+## Uninstall
+
+Preview, then remove, using the same host flags and scope as the install:
 
 ```bash
 ./install.sh --cursor --project /path/to/memory-repo --uninstall --dry-run
 ./install.sh --cursor --project /path/to/memory-repo --uninstall
 ```
 
-Use the same toolkit checkout when possible. Manifest entries are relative to their host
-directory and digest-checked, so uninstall stays bounded and does not depend on the
-source checkout remaining at its original path.
+Uninstall removes only installer-owned files whose content is unchanged. When the last
+installed host is removed, it also removes unchanged scaffold files and the `.gitignore`
+lines it added. It never removes `obconfig.yaml`, the ignore line protecting it while it
+exists, the `artifacts/` directory, generated analysis or wiki content, or any file you
+edited or added.
 
-## Installation troubleshooting
+## Claude Code plugin (alternative)
 
-### No commands or Codex workflows appear
-
-1. Restart the host or open a new session.
-2. Run `./install.sh --list --project <repo>`.
-3. Confirm that the host opened `<repo>`, not the toolkit checkout.
-4. Confirm the command directory in the status output matches the host's current
-   convention.
-5. Re-run installation after moving the toolkit.
-
-For Codex CLI, type `/skills` and explicitly invoke `$ob-start`. In ChatGPT Desktop,
-select `@ob-start`. Codex wrappers intentionally do not activate implicitly.
-
-### Rendering fails with an import error
-
-Install into the same Python interpreter used by the command:
+Claude Code can install the self-contained plugin bundle instead of loose project files:
 
 ```bash
-python3 -m pip install python-docx markdown-it-py==4.2.0 PyYAML==6.0.3
-python3 -c "import docx, markdown_it, yaml; print(docx.__version__, markdown_it.__version__, yaml.__version__)"
+claude plugin marketplace add /path/to/obengineer
 ```
 
-### A materialized skill did not update
+Then install the `obengineer` plugin from the added marketplace. The plugin contains the
+commands, agents, prompts, hooks, skills, and an intentionally empty `.mcp.json`; add any
+tenant-specific MCP servers yourself.
 
-Re-run the install. For Cursor or Claude, omit `--copy` to return to symlink mode. Codex
-skills are always materialized and therefore require reinstall after canonical changes.
+## Troubleshooting
 
-### Tenant data is reported as “Not in evidence”
+| Symptom | Cause | Fix |
+|---|---|---|
+| No `/ob-*` commands or `$ob-*` skills appear. | The host has not reloaded, or it opened the toolkit checkout instead of the artifact repository. | Restart the host, open the artifact repository, and run `./install.sh --list --project <repo>` to confirm the paths. Rerun the install if you moved the toolkit. |
+| Codex does not run a workflow from a plain-language request. | Workflow skills are explicit-only by design. | Invoke it by name: `$ob-start` in Codex CLI, `@ob-start` in ChatGPT Desktop. |
+| The install prints `REFUSE` and exits. | A file with the same name exists that the installer does not own, or an owned file was modified. | Move or back up the named file, then rerun. Nothing was changed. |
+| The install reports an incomplete rollback. | A file was replaced concurrently during the install. | The backup staging directory is kept; restore from it manually, then rerun. |
+| A command fails with `ModuleNotFoundError: yaml` or `docx`. | Dependencies are installed into a different Python. | Install into the `python3` on the host's `PATH`: `python3 -m pip install PyYAML==6.0.3 python-docx markdown-it-py==4.2.0`, then check with `python3 -c "import yaml, docx, markdown_it"`. |
+| Skill edits in the toolkit are not visible. | The skills are copies (`--copy` or Codex). | Rerun the install, or for Cursor and Claude Code reinstall without `--copy` to use symlinks. |
+| Analysis labels tenant facts "Not in evidence". | Installation does not grant tenant access. | Add read-only tokens in `obconfig.yaml` (see [Configuration](configuration.md#splunk-tenant-access)) or connect the relevant MCP servers. |
 
-Installation alone does not enable tenant access. Configure the required MCP servers
-and environment variables described in [Configuration](configuration.md). The analysis
-continues without them, but tenant facts remain stated or unavailable rather than
-measured.
+## Internals
+
+The installer is transactional. Before writing, it stages backups in a private
+(mode 0700) hidden directory on the same filesystem as each target, creates every new
+target exclusively, and records the inode, type, mode, and digest of what it wrote. If
+any step fails it rolls back only paths that still match what it wrote; anything
+replaced concurrently is preserved and the staging directory is kept for manual
+recovery. Scaffold files are stricter still: an existing file is never replaced, even
+one an earlier install created, and an owned file you edited is treated as yours.

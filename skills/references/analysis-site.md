@@ -123,7 +123,8 @@ Before acceptance, the landing callout reads:
 1. Review [Architecture](overview/index.md), [Findings](findings/index.md), and the
    [Recommended path](implementation/index.md).
 2. Review [Use cases](use-cases/index.md) and [Work orders](<wiki path>).
-3. Run `/ob-add-inputs` or `/ob-edit-inputs` if evidence should change.
+3. If evidence should change, edit `obconfig.yaml` or `artifacts/` and rerun
+   `/ob-start` to produce the next version.
 4. Reply `yes` in chat to accept V<N> and merge its reviewed analysis PR.
 ```
 
@@ -194,7 +195,9 @@ verified. Live status and revisions come from
 
 ## Use cases, workflows, and business transactions
 
-Review in that order.
+Review in that order. A use case maps to one or more business transactions; each business
+transaction is made up of one or more workflows, and each workflow belongs to exactly one
+business transaction.
 
 A use-case summary states why it matters, the question answered, what is created, its
 workflows, business transactions, full span and event design, bounded metrics, dashboards,
@@ -283,7 +286,8 @@ After an analysis PR merges, the final response has this exact shape:
 
 Next steps:
 1. Review Architecture, Findings, Strategy, Use Cases, and Work Orders.
-2. Use `/ob-add-inputs` or `/ob-edit-inputs` if evidence should change.
+2. If evidence should change, edit `obconfig.yaml` or `artifacts/` and rerun
+   `/ob-start`.
 3. Reply `yes` to accept this version.
 ```
 

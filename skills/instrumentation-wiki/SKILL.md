@@ -129,7 +129,9 @@ orders and every non-foundation order are `blocked` while any foundation order e
 Acceptance changes eligible foundation orders to `ready`. Live status and revisions R2,
 R3, ... live in `wiki/apps/<app>/implementation/V<N>/`, outside the acceptance digest, and
 are managed by `scripts/work_order_state.py` (`init`, `gate`, `set-status`, `revise`,
-`verify`). A later version compares the prior queue and marks orders retained, changed,
+`show`, `verify`), each run as
+`python3 <obengineer-root>/skills/instrumentation-wiki/scripts/work_order_state.py <subcommand> --repo . --app <app> --version V<N>`
+with the resolved accepted application and version. A later version compares the prior queue and marks orders retained, changed,
 superseded, implemented, or verified.
 
 The first order establishes schema agreement, single initialization, workflow registry,

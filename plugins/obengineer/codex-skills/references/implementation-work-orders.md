@@ -11,13 +11,17 @@ Work orders are implementation contracts. Each has one `kind`:
 |---|---|
 | `foundation` | Prerequisite for everything else. A finding and recommendation, never a use case. No parents, no subordinates; depends only on other foundation orders. Expect at most about 10. |
 | `use-case` | A complete unit for exactly one use case. Lists its subordinate work orders; has no `dependsOn`. |
-| `workflow` | One workflow. May cross business-transaction boundaries. |
+| `workflow` | One workflow. Belongs to exactly one business transaction. |
 | `business-transaction` | One `<org>.bt` value. A shared business transaction may be listed under more than one use case. |
 | `detector`, `alert-condition` | Detector IDs. |
 | `dashboard` | Dashboard IDs. |
 | `custom-code` | Custom instrumentation. May be atomic: one span or one attribute. |
 
-A use case can map to several business transactions. Every subordinate names at least one
+A use case maps to one or more business transactions. Each business transaction is made
+up of one or more workflows, and each workflow belongs to exactly one business
+transaction; a business transaction may be shared by more than one use case. In schema
+v4 the contract validator rejects a workflow listed by two business transactions or by
+none. Every subordinate names at least one
 use-case parent, and each parent lists it in `subordinateIds` (reciprocal).
 
 ### Release rule
@@ -59,10 +63,11 @@ matches stop with the missing mapping. Multiple matches stop and list candidates
 omitted, the first Ready order in display order is selected. `use-case:<id>` runs that use
 case's next unimplemented subordinate. One invocation executes one work order.
 
-Before execution, run the foundation gate:
+Before execution, run the foundation gate, where `<app>` and `V<N>` are the resolved
+accepted application and version:
 
 ```bash
-python3 skills/instrumentation-wiki/scripts/work_order_state.py gate --work-order <id> [--reimplement]
+python3 skills/instrumentation-wiki/scripts/work_order_state.py gate --repo . --app <app> --version V<N> --work-order <id> [--reimplement]
 ```
 
 An `implemented`, `verified`, or `changed` order runs again only with the explicit
@@ -83,7 +88,8 @@ backend spans. Never derive it from a raw URL.
 
 `workflow.name` remains the finer-grained intent. One `<org>.bt` value may contain several
 workflows, and a workflow or end-to-end use case may cross several services and
-repositories. The contract registers valid `<org>.bt` / `workflow.name` pairs.
+repositories. The contract registers valid `<org>.bt` / `workflow.name` pairs; each
+`workflow.name` pairs with exactly one `<org>.bt`.
 
 ## Implementation map
 
@@ -159,9 +165,27 @@ wiki/apps/<app>/implementation/V<N>/state.yaml
 wiki/apps/<app>/implementation/V<N>/revisions/<WO-id>/R<k>.md
 ```
 
-`skills/instrumentation-wiki/scripts/work_order_state.py` owns it: `init`, `gate`,
-`set-status --work-order ID --status S [--pr URL]`, `revise --work-order ID --file
-change.yaml`, and `verify`.
+`skills/instrumentation-wiki/scripts/work_order_state.py` owns it. Every subcommand takes
+`--repo . --app <app> --version V<N>`, the resolved accepted application and version:
+`init`, `gate --work-order ID [--reimplement]`, `set-status --work-order ID --status S
+[--pr URL]`, `revise --work-order ID --file change.yaml`, `show --work-order ID`, and
+`verify`.
+
+`gate` reports `revision_paths` (R2 ... Rn). `show` applies them in order and prints the
+cumulative `effective_changes` (attribute and span add, remove, rename; name renames;
+notes). Implementation loads the accepted note plus every revision and implements the
+cumulative changes. An order counts as complete only when it is `implemented` or
+`verified` at its current revision; `verified` requires the current revision to be
+implemented, and `verify` flags a ledger that disagrees.
+
+A version accepted before work-order kinds existed (contract v3, notes without `kind`)
+gets a `mode: legacy` ledger. Its `ready` or `in-progress` orders run once every
+`depends_on` order is `implemented`, `verified`, or `retired`. As on the v3 platform, a
+`blocked` order with dependencies runs once they are all complete, unless its
+`repository_mapping` is `unresolved`; a `blocked` order without dependencies stays
+blocked. There is no foundation gate,
+`reimplement` is still required for `implemented`, `verified`, or `changed` orders, and
+`revise` refuses legacy orders. Notes that mix `kind` and no `kind` are an error.
 
 Subordinate orders are not frozen inside an accepted version. SREs and engineers may change
 naming conventions, add, remove, or rename attributes, or add spans with

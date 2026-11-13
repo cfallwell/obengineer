@@ -751,3 +751,55 @@ def test_schema_v4_incorrect_rum_load_order_requires_foundation_order():
         "incorrect RUM load order requires a foundation work order" in item
         for item in validate_contract(value)
     )
+
+
+def _second_transaction(value, workflow_ids):
+    cart = copy.deepcopy(value["businessTransactions"][0])
+    cart["id"] = "cart"
+    cart["name"] = "Cart"
+    cart["groupingValue"] = "cart"
+    cart["workflowIds"] = list(workflow_ids)
+    value["businessTransactions"].append(cart)
+    return cart
+
+
+def test_schema_v4_workflow_in_two_business_transactions_fails():
+    value = contract_v4()
+    _second_transaction(value, ["checkout-order-submit"])
+    failures = validate_contract(value)
+    assert any(
+        "workflow checkout-order-submit belongs to more than one business transaction" in item
+        for item in failures
+    )
+
+
+def test_schema_v4_workflow_declaring_two_business_transactions_fails():
+    value = contract_v4()
+    _second_transaction(value, [])["catalogStatus"] = "none-by-design"
+    value["businessTransactions"][1]["workflowCatalog"] = []
+    value["workflows"][0]["businessTransactionIds"] = ["checkout", "cart"]
+    assert any(
+        "businessTransactionIds: expected exactly one business transaction, found 2" in item
+        for item in validate_contract(value)
+    )
+
+
+def test_schema_v4_workflow_without_business_transaction_fails():
+    value = contract_v4()
+    value["businessTransactions"][0]["workflowIds"].remove("checkout-order-submit")
+    value["workflows"][1]["businessTransactionIds"] = []
+    assert any(
+        "workflow checkout-order-submit belongs to no business transaction" in item
+        for item in validate_contract(value)
+    )
+
+
+def test_schema_v3_keeps_workflow_ownership_rules_unchanged():
+    value = contract()
+    assert value["schemaVersion"] == 3
+    _second_transaction(value, ["checkout-order-submit"])
+    value["workflows"][1]["businessTransactionIds"] = ["checkout", "cart"]
+    assert not any(
+        "belongs to" in item or "exactly one business transaction" in item
+        for item in validate_contract(value)
+    )
