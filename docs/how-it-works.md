@@ -22,7 +22,8 @@ outputs, changes, and verification.
   → Ready work-order implementation / Terraform plan / read-only verification
 ```
 
-`/ob-add-inputs` and `/ob-edit-inputs` repeat the same run as the next immutable version.
+Rerunning `/ob-start` after editing `obconfig.yaml` or the artifacts repeats the same run
+as the next immutable version.
 
 ## Evidence
 

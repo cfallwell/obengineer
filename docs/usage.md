@@ -61,16 +61,13 @@ the host side panel; no browser or localhost server is used.
 Reply `yes` only when asked whether to accept the finished version and merge its PR.
 That acceptance is separate from the pre-analysis proceed gate.
 
-## Add or edit inputs
+## Update inputs
 
-Edit local `obconfig.yaml`, then run `/ob-add-inputs` or `/ob-edit-inputs`. Both are
-compatibility entry points with identical behavior:
+Edit local `obconfig.yaml` or the artifact directory, then run `/ob-start` again. It
+validates the config, rehashes the artifacts, shows the redacted summary, and uses the
+same proceed gate to create the next immutable version.
 
-- unchanged config prints `Edit obconfig.yaml, then rerun this command.` and stops;
-- changed config validates, rehashes artifacts, shows the common redacted summary, and
-  uses the common proceed gate for the next immutable version.
-
-Neither command edits YAML, asks field questions, or displays current values.
+## Implement, plan, and verify
 
 After acceptance, use `/ob-implement work-order:<id>`, `/ob-terraform`, and `/ob-verify`.
 Implementation requires a Ready work order, Terraform remains plan-only, and
