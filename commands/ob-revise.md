@@ -15,8 +15,8 @@ Revise one subordinate work order without creating a new analysis version.
 Accept one selector: `work-order:<id>`, `workflow:<name>`, `business-transaction:<id>`,
 `detector:<id>`, `alert-condition:<id>`, `dashboard:<id>`, or `custom-code:<id>`.
 Resolve it to exactly one subordinate work order. Refuse foundation and use-case orders:
-foundation changes need a new analysis version through `/ob-edit-inputs`, and a use case
-is revised through its subordinate orders.
+foundation changes need a new analysis version (edit `obconfig.yaml` or `artifacts/`, then
+rerun `/ob-start`), and a use case is revised through its subordinate orders.
 
 Collect the requested changes: naming conventions, attributes to add, remove, or rename,
 additional spans, and detector or alert-condition changes. Record the reason and the
@@ -30,8 +30,8 @@ application and version:
 `python3 "{{OBENGINEER_ROOT}}/skills/instrumentation-wiki/scripts/work_order_state.py" verify --repo . --app <app> --version V<N>`
 
 A version accepted before work-order kinds existed has a `legacy` ledger and cannot be
-revised; `revise` refuses it, and the change needs a new analysis version through
-`/ob-edit-inputs`.
+revised; `revise` refuses it, and the change needs a new analysis version: edit
+`obconfig.yaml` or `artifacts/`, then rerun `/ob-start`.
 
 Create a branch in the memory repository, commit the revision and ledger change, push, and
 open one PR. Never create a new analysis version or edit digest-bound wiki notes. Merge

@@ -15,7 +15,8 @@ page carries a breadcrumb and all navigation remains in the host document panel.
 
 1. Review Architecture, Technology, Current telemetry, and Findings.
 2. Review the Instrumentation strategy, Use cases, Workflows, and Work orders.
-3. Run `/ob-add-inputs` or `/ob-edit-inputs` if evidence should change.
+3. If evidence should change, edit `obconfig.yaml` or `artifacts/` and rerun
+   `/ob-start` to produce the next version.
 4. Reply `yes` in chat to accept V3. The agent will mark eligible work orders Ready
    and explain how to start the first order.
 

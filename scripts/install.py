@@ -116,7 +116,10 @@ LEGACY_COMMAND_DIGESTS = {
         "29db4f6eca1942fe114a12e07c7d3124614ed9bfe10e4b8ce2f10ad067b26fe3",
         "a15f685ec2efeb373226b4dfb7d7635b35638bb00f7e04c43e2e3c3daff293c8",
     },
-    "ob-revise.md": {"d87789399c665ce29dab86b89c3d5f3f720d346d1516f94c8ee0c4a59e0fea44"},
+    "ob-revise.md": {
+        "c2b28a037d84efec4e85b57e5ebe359578d1ce9a3c5fbb2eec12333e220d099c",
+        "d87789399c665ce29dab86b89c3d5f3f720d346d1516f94c8ee0c4a59e0fea44",
+    },
     "ob-review.md": {
         "b84f975270e292ffd677e8a40447d54dc5f104c40635222172f796e9d9252e8a",
         "c14cca38f954a8c53bec01b6c58e6278383f75e2326d9e7da11d0d96dd2e8770",

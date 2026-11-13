@@ -524,8 +524,13 @@ def cmd_revise(args) -> int:
     if ledger_mode(ledger) == LEGACY:
         raise StateError(
             f"{args.work_order} belongs to a legacy (contract v3) analysis version; revisions "
-            "need the v4 work-order hierarchy. Create a new analysis version with "
-            "/ob-edit-inputs to change it."
+            "need the v4 work-order hierarchy. To change it, edit obconfig.yaml or artifacts/ "
+            "and rerun /ob-start to produce the next analysis version."
+        )
+    if entry["kind"] == "foundation":
+        raise StateError(
+            f"{args.work_order} is a foundation work order; foundation changes require a new "
+            "analysis version. Edit obconfig.yaml or artifacts/ and rerun /ob-start."
         )
     if entry["kind"] not in SUBORDINATE_KINDS:
         raise StateError(
