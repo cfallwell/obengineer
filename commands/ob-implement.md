@@ -26,8 +26,9 @@ Before any work, gate the order with the state ledger
 
 - If `wiki/apps/<app>/implementation/V<N>/state.yaml` is missing, run
   `python3 "$S" init --repo . --app <app> --version V<N>`. A version accepted before work-order
-  kinds existed gets a `legacy` ledger: its Ready or In progress orders run once their
-  `depends_on` orders are implemented, verified, or retired, with no foundation gate.
+  kinds existed gets a `legacy` ledger: its Ready, In progress, or dependency-Blocked
+  orders run once their `depends_on` orders are implemented, verified, or retired, with
+  no foundation gate.
 - Run `python3 "$S" gate --repo . --app <app> --version V<N> --work-order <id>`.
   Non-foundation orders run only when every foundation order is complete (implemented or
   verified at its current revision).

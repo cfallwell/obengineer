@@ -100,6 +100,7 @@ LEGACY_COMMAND_DIGESTS = {
         "b9aedb4cbf08bcfd28b47ead3a6e3305b2216c56dbe4f4cfd118f1b738b79d71",
     },
     "ob-implement.md": {
+        "0c1409d2715b3fe44e065649f1d94c58241a5185faa06be0cd24d616b6fcc9ca",
         "46d6eda31ded85b76ea12fdd07560ebfbe0fefda933709d74191582dd1be4b0c",
         "83d4479d66d138fc040cbbaf07a63a9923894859e21f115051cafda992dd79ca",
         "90dc449746f4ec93bf43812af12ed0c65e7216f2cc9ebcb841410938e5f080fa",

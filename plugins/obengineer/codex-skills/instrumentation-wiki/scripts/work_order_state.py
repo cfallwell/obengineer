@@ -8,6 +8,8 @@ R1 is the accepted wiki note under wiki/apps/<app>/versions/V<N>/implementation/
 
 A version whose notes carry no `kind` (accepted under contract v3) gets a `mode: legacy`
 ledger: no foundation gate, readiness from note status and depends_on, and no revisions.
+As on the v3 platform, a `blocked` legacy order with dependencies becomes runnable once
+every dependency is complete, unless its repository mapping is unresolved.
 """
 
 from __future__ import annotations
@@ -139,6 +141,7 @@ def read_notes(repo: Path, app: str, version: str) -> tuple[str, dict[str, dict]
                 "parents": id_list(fm.get("parents")),
                 "subordinates": id_list(fm.get("subordinates")),
                 "status": fm.get("status"),
+                "repository_mapping": fm.get("repository_mapping"),
             }
         except StateError as exc:
             raise StateError(f"{path}: {exc}") from exc
@@ -280,6 +283,7 @@ def legacy_entry(note: dict) -> dict:
         "pull_requests": [],
         "depends_on": note["depends_on"],
         "subordinates": [],
+        "repository_mapping": note["repository_mapping"],
     }
 
 
@@ -365,11 +369,19 @@ def gate(args, ledger: dict) -> dict:
 
 def legacy_gate(args, orders: dict, entry: dict, result: dict) -> dict:
     status = entry["status"]
-    if status not in LEGACY_RUNNABLE | REIMPLEMENT_REQUIRED:
+    depends = entry.get("depends_on") or []
+    if status == "blocked":
+        if entry.get("repository_mapping") == "unresolved":
+            result["reason"] = "legacy work order is blocked; its repository mapping is unresolved"
+            return result
+        if not depends:
+            result["reason"] = "legacy work order is blocked and has no dependencies to complete"
+            return result
+    elif status not in LEGACY_RUNNABLE | REIMPLEMENT_REQUIRED:
         result["reason"] = f"legacy work order is {status}; only ready or in-progress orders run"
         return result
     pending = [
-        dep for dep in entry.get("depends_on") or []
+        dep for dep in depends
         if orders.get(dep, {}).get("status") not in LEGACY_DEPENDENCY_DONE
     ]
     if pending:

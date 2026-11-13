@@ -180,7 +180,10 @@ implemented, and `verify` flags a ledger that disagrees.
 
 A version accepted before work-order kinds existed (contract v3, notes without `kind`)
 gets a `mode: legacy` ledger. Its `ready` or `in-progress` orders run once every
-`depends_on` order is `implemented`, `verified`, or `retired`; there is no foundation gate,
+`depends_on` order is `implemented`, `verified`, or `retired`. As on the v3 platform, a
+`blocked` order with dependencies runs once they are all complete, unless its
+`repository_mapping` is `unresolved`; a `blocked` order without dependencies stays
+blocked. There is no foundation gate,
 `reimplement` is still required for `implemented`, `verified`, or `changed` orders, and
 `revise` refuses legacy orders. Notes that mix `kind` and no `kind` are an error.
 

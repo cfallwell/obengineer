@@ -245,6 +245,9 @@ LEGACY_ORDERS = {
     "WO-002": {"status": "ready", "depends_on": ["WO-001"]},
     "WO-003": {"status": "ready", "depends_on": ["WO-002"]},
     "WO-004": {"status": "blocked", "depends_on": []},
+    "WO-005": {"status": "blocked", "depends_on": ["WO-001", "WO-002", "WO-006"]},
+    "WO-006": {"status": "retired", "depends_on": []},
+    "WO-007": {"status": "blocked", "depends_on": ["WO-001"], "repository_mapping": "unresolved"},
 }
 
 
@@ -392,3 +395,21 @@ def test_show_applies_revision_chain_cumulatively(tmp_path, capsys):
     r2_path = state.revision_path(root, APP, VERSION, "WO-013", 2)
     r2_path.write_text(r2_path.read_text() + "\nedited\n")
     assert run(root, "show", "--work-order", "WO-013") == 1
+
+
+def test_legacy_blocked_order_releases_when_dependencies_complete(tmp_path, capsys):
+    root = write_legacy_wiki(tmp_path)
+    assert run(root, "init") == 0
+    code, result = gate(root, "WO-005", capsys)
+    assert code == 1 and result["reason"] == "dependencies incomplete: ['WO-002']"
+    code, result = gate(root, "WO-007", capsys)
+    assert code == 1 and "repository mapping is unresolved" in result["reason"]
+
+    assert run(root, "set-status", "--work-order", "WO-002", "--status", "implemented") == 0
+    code, result = gate(root, "WO-005", capsys)
+    assert code == 0 and result["runnable"]
+    assert result["reason"] == "all legacy dependencies complete"
+    code, result = gate(root, "WO-004", capsys)
+    assert code == 1 and "no dependencies" in result["reason"]
+    code, _ = gate(root, "WO-007", capsys)
+    assert code == 1
