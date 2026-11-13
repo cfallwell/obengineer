@@ -3,6 +3,40 @@
 This reference owns how versioned analysis subjects map to code, repositories, pull
 requests, and optional engineering tickets.
 
+## Work-order hierarchy
+
+Work orders are implementation contracts. Each has one `kind`:
+
+| Kind | Role |
+|---|---|
+| `foundation` | Prerequisite for everything else. A finding and recommendation, never a use case. No parents, no subordinates; depends only on other foundation orders. Expect at most about 10. |
+| `use-case` | A complete unit for exactly one use case. Lists its subordinate work orders; has no `dependsOn`. |
+| `workflow` | One workflow. May cross business-transaction boundaries. |
+| `business-transaction` | One `<org>.bt` value. A shared business transaction may be listed under more than one use case. |
+| `detector`, `alert-condition` | Detector IDs. |
+| `dashboard` | Dashboard IDs. |
+| `custom-code` | Custom instrumentation. May be atomic: one span or one attribute. |
+
+A use case can map to several business transactions. Every subordinate names at least one
+use-case parent, and each parent lists it in `subordinateIds` (reciprocal).
+
+### Release rule
+
+Implementation asks one question: **Are all foundation work orders complete?** Complete
+means status `implemented` or `verified`. Until the answer is yes, every non-foundation
+order stays blocked. Once it is yes, any non-foundation order may be implemented in any
+order. An application with no foundation orders releases everything at acceptance.
+
+Foundation orders include the RUM load-order check and the CDN delivery recommendation in
+[rum-delivery.md](rum-delivery.md). An `incorrect` `rumLoadOrder` requires at least one
+foundation order.
+
+### Display order
+
+Foundation orders come first. Then, per use case: the use-case order, followed by its
+subordinates grouped workflow, business-transaction, detector, alert-condition, dashboard,
+custom-code.
+
 ## Bounded target selectors
 
 `/ob-implement` accepts one selector:
@@ -13,14 +47,26 @@ business-transaction:<id>
 workflow:<name>
 use-case:<id>
 detector:<id>
+alert-condition:<id>
+dashboard:<id>
+custom-code:<id>
 objective:<id>
 config:<id>
 ```
 
 The selector must resolve to exactly one Ready work order in the accepted version. Zero
 matches stop with the missing mapping. Multiple matches stop and list candidates. If
-omitted, the first Ready dependency-ordered work order is selected. One invocation executes
-one unified work order.
+omitted, the first Ready order in display order is selected. `use-case:<id>` runs that use
+case's next unimplemented subordinate. One invocation executes one work order.
+
+Before execution, run the foundation gate:
+
+```bash
+python3 skills/instrumentation-wiki/scripts/work_order_state.py gate --work-order <id> [--reimplement]
+```
+
+An `implemented`, `verified`, or `changed` order runs again only with the explicit
+`reimplement` override (`--reimplement`).
 
 ## Business transactions in Splunk APM
 
@@ -99,6 +145,47 @@ Their status is one of `proposed`, `ready`, `in-progress`, `blocked`, `retained`
 `in-progress` orders in the accepted version execute.
 This status is work authorization, not analysis acceptance and not finding risk acceptance.
 
+Before acceptance, foundation orders are `proposed` (`blocked` when they have `dependsOn`
+or an unresolved mapping); non-foundation orders are `blocked` when any foundation order
+exists, otherwise `proposed`. Acceptance makes eligible foundation orders `ready`.
+
+## State ledger and revisions
+
+The accepted wiki note is revision R1 and stays digest-bound. Live state lives outside the
+acceptance digest:
+
+```text
+wiki/apps/<app>/implementation/V<N>/state.yaml
+wiki/apps/<app>/implementation/V<N>/revisions/<WO-id>/R<k>.md
+```
+
+`skills/instrumentation-wiki/scripts/work_order_state.py` owns it: `init`, `gate`,
+`set-status --work-order ID --status S [--pr URL]`, `revise --work-order ID --file
+change.yaml`, and `verify`.
+
+Subordinate orders are not frozen inside an accepted version. SREs and engineers may change
+naming conventions, add, remove, or rename attributes, or add spans with
+`/ob-revise work-order:<id>`. That writes revision R2, R3, ... in a commit and PR; it never
+creates a new analysis version. Each revision chains to the SHA-256 of the previous one.
+Revising an `implemented` or `verified` order sets it to `changed`. Foundation and
+use-case orders cannot be revised; change them with a new analysis version.
+
+## Contract schema v4
+
+New analyses write `analysis-contract-v4.schema.json`; v3 stays frozen for historical
+versions. Each `workOrders[]` entry adds:
+
+| Field | Rule |
+|---|---|
+| `kind` | One of the kinds above. |
+| `parentIds` | Use-case order IDs; empty for foundation and use-case orders. |
+| `subordinateIds` | Non-empty for use-case orders; empty otherwise. |
+| `subjectIds` | Contract objects implemented: one use case, one workflow, one business transaction, detector or dashboard IDs; may be empty for custom code. |
+| `findingIds` | Non-empty for foundation orders. |
+| `revision` | Always `1` in the contract; later revisions live in the state ledger. |
+
+All foundation orders precede every other order in `workOrders`.
+
 Service notes link to app-level work orders. Each work order contains:
 
 - target selectors, accepted version, and content digest;
@@ -113,8 +200,12 @@ The executable fields are canonical YAML frontmatter parsed with `safe_load`:
 
 ```yaml
 work_order_id: WO-014
-selectors: [use-case:account-update]
-depends_on: [WO-013]
+kind: workflow
+parents: [WO-012]
+subordinates: []
+revision: 1
+selectors: [workflow:account-update-submit]
+depends_on: []
 repository_mapping: mapped
 repository_mapping_evidence: The accepted implementation map authorizes this repository and parent path.
 repository_legs:

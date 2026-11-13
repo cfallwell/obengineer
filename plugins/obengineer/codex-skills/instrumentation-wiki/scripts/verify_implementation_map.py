@@ -10,7 +10,8 @@ import sys
 from pathlib import Path
 
 SELECTOR = re.compile(
-    r"^(work-order|business-transaction|workflow|use-case|detector|objective|config):[^:]+$"
+    r"^(work-order|business-transaction|workflow|use-case|detector|alert-condition|"
+    r"dashboard|custom-code|objective|config):[^:]+$"
 )
 MAPPING_STATUS = {"complete", "incomplete"}
 LEDGER_ID = re.compile(r"^(?:SRC|FACT|CHECK|DEC|UNRES)-[A-Za-z0-9._-]+$")

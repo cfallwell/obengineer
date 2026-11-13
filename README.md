@@ -23,6 +23,8 @@ Each analysis includes:
 - **Critical findings.** Gaps such as broken trace propagation, missing signals,
   high-cardinality risks, and exposed credentials, each with its severity, evidence, and
   fix.
+- **RUM delivery.** A check that the RUM agent initializes before the front-end
+  framework bootstraps, and a recommendation to inject RUM at the CDN instead of in code.
 - **Security assessment.** Checks for exposed credentials and APIs, plus versioned OWASP
   Web and API coverage, within the boundary you authorize.
 - **Use cases, workflows, and business transactions.** Use cases are derived from the
@@ -46,20 +48,26 @@ on request.
 
 After you reply `yes` to accept a version, obengineer carries it out:
 
-- **`/ob-implement`** delivers the strategy one work order at a time. A work order
-  covers an entire use case, a single custom workflow, or a single business
-  transaction, and never anything smaller, so the queue stays manageable. A use case
-  can map to more than one business transaction, and a workflow can cross
-  business-transaction boundaries. Either one can also span multiple repositories.
-  obengineer delivers each work order as one unified change, with one pull request per
-  repository and a coordination pull request that links them. You can limit the work to
+- **`/ob-implement`** delivers the strategy one work order at a time. Work orders are
+  implementation contracts for a use case, workflow, business transaction, detector,
+  alert condition, dashboard, or atomic custom-code instrumentation such as one span or
+  attribute. Foundation work orders, the prerequisites drawn from findings, come first;
+  once they are all complete, every other order can run in any order. A use case can map
+  to more than one business transaction, and a workflow can cross business-transaction
+  boundaries. Either one can also span multiple repositories. obengineer delivers each
+  work order as one unified change, with one pull request per repository and a
+  coordination pull request that links them. You can limit the work to
   one repository or to specific folders within a repository. Typical changes include the
   shared OTel library, provider initialization, baggage propagation, message-bus inject
   and extract, workflow spans, custom meters, Collector configuration, and CI checks
   that keep the contract enforced.
+- **`/ob-revise`** changes a work order inside the accepted version, such as naming,
+  attributes, or added spans, as a reviewed revision without a new analysis version.
+  `/ob-implement <target> reimplement` re-runs an order that was already implemented.
 - **`/ob-terraform`** generates Terraform for dashboards, detectors, SLOs, metric
-  rulesets, Synthetics checks, and Splunk Platform indexes. It imports resources that
-  already exist instead of duplicating them, and it stops at a plan that you apply.
+  rulesets, Synthetics checks, and Splunk Platform indexes, plus a leadership portfolio
+  dashboard showing the status of every application. It imports resources that already
+  exist instead of duplicating them, and it stops at a plan that you apply.
 - **`/ob-verify`** checks the tenant against the accepted strategy and reports each
   unmet criterion with the exact steps to fix it and recheck.
 
@@ -96,7 +104,8 @@ everything obengineer generates.
 
 ```text
 /ob-start                     Validate obconfig.yaml and run the next analysis version
-/ob-implement <target>        Deliver a use case, workflow, or business transaction
+/ob-implement <target>        Deliver one work order; foundation work orders come first
+/ob-revise work-order:<id>    Revise a work order without a new analysis version
 /ob-terraform                 Plan Splunk resources
 /ob-verify                    Verify the deployed result
 ```

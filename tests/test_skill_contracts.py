@@ -401,6 +401,28 @@ def test_implementation_requires_ready_order_in_accepted_version():
     assert "Proposed, Blocked, Superseded" in command
 
 
+def test_implement_gates_foundation_and_records_state_in_ledger():
+    command = (COMMANDS / "ob-implement.md").read_text()
+    for selector in ("alert-condition:<id>", "dashboard:<id>", "custom-code:<id>"):
+        assert selector in command
+    for term in ("work_order_state.py", "init", "gate", "set-status",
+                 "--reimplement", "next_subordinate", "foundation"):
+        assert term in command
+
+
+def test_revise_changes_subordinate_orders_without_new_version():
+    command = (COMMANDS / "ob-revise.md").read_text()
+    assert "work_order_state.py\" revise" in command
+    assert "work_order_state.py\" verify" in command
+    assert "verify_analysis_acceptance.py" in command
+    assert "Refuse foundation and use-case orders" in command
+    assert "Never create a new analysis version" in command
+    assert "explicit human `yes`" in command
+    assert "/ob-implement work-order:<id> reimplement" in command
+    assert "person's name" in command
+    assert WORKFLOW_ORDER.index("ob-revise") == WORKFLOW_ORDER.index("ob-implement") + 1
+
+
 def test_verification_remains_read_only():
     for path in (
         COMMANDS / "ob-verify.md",

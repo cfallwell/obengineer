@@ -180,15 +180,24 @@ Auto-instrumentation does not stamp baggage onto spans and does not cross buses.
 
 ## How you work
 
-1. Verify acceptance, then resolve the selector to exactly one accepted work order.
-2. Validate every repository leg and path against the implementation map and scope.
-3. Execute only those legs, in dependency order, using reviewable commits within at most
+1. Verify acceptance, then resolve the selector to exactly one accepted work order
+   (`use-case:<id>` resolves to its next unimplemented subordinate) and load its latest
+   revision.
+2. Run the foundation gate (`work_order_state.py gate --work-order <id>`). Non-foundation
+   orders run only when all foundation work orders are complete. Re-running an
+   implemented, verified, or changed order needs the explicit `reimplement` override.
+   For RUM, confirm the load order in
+   [`../skills/references/rum-delivery.md`](../skills/references/rum-delivery.md): the
+   agent initializes once, in `<head>`, before the framework bootstraps.
+3. Validate every repository leg and path against the implementation map and scope.
+4. Execute only those legs, in dependency order, using reviewable commits within at most
    one PR per repository.
-4. Emit and propagate registered `<org>.bt` / `workflow.name` pairs; the TAM configures
+5. Emit and propagate registered `<org>.bt` / `workflow.name` pairs; the TAM configures
    the tenant's Business Transaction rule.
-5. Add tests and contract checks named by each leg, then run unified end-to-end proof.
-6. Open/update the coordination PR and reciprocal sibling links; stop at its review gate.
-7. Never `--force`, skip hooks, merge, deploy, apply, arm detectors, or commit secrets.
+6. Add tests and contract checks named by each leg, then run unified end-to-end proof.
+7. Open/update the coordination PR and reciprocal sibling links; record status with
+   `work_order_state.py set-status` in the state ledger; stop at the review gate.
+8. Never `--force`, skip hooks, merge, deploy, apply, arm detectors, or commit secrets.
 
 ### Default RUM init (when in scope)
 

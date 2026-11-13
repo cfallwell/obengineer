@@ -51,6 +51,23 @@ repository leg against `implementation-map.json` and repository-qualified `initi
 One invocation may produce one linked PR per repository plus a coordination PR. This is
 still one concern: the unified accepted work order.
 
+Work orders are implementation contracts in a hierarchy: foundation orders, then use-case
+orders and their workflow, business-transaction, detector, alert-condition, dashboard, and
+custom-code subordinates. `use-case:<id>` runs that use case's next unimplemented
+subordinate. Before any edit, run the foundation gate:
+
+```bash
+python3 <obengineer-root>/skills/instrumentation-wiki/scripts/work_order_state.py gate --work-order <id>
+```
+
+A non-foundation order runs only when all foundation work orders are complete. An
+`implemented`, `verified`, or `changed` order runs again only with the explicit
+`reimplement` override (`--reimplement`). Implement the latest revision (R1 is the
+accepted note; R2, R3, ... come from `/ob-revise`). Record status with `work_order_state.py
+set-status` in `wiki/apps/<app>/implementation/V<N>/state.yaml`, never in digest-bound
+wiki notes. RUM work follows the load-order check in
+[`../references/rum-delivery.md`](../references/rum-delivery.md).
+
 Validate [`../references/provenance-ledger.md`](../references/provenance-ledger.md), load
 only ledger IDs cited by the work order, and append repository-leg proof without mutating
 sealed analysis entries.

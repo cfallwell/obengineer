@@ -502,22 +502,100 @@ class Renderer:
             )
             for w in self.c["workOrders"]
         )
-        index = (
-            f"{breadcrumb(current='Work orders')}\n\n# Work orders\n\n"
-            f"{self.c['summaries']['workOrders']}\n\n"
-            + table(
+        if any("kind" in w for w in self.c["workOrders"]):
+            body = self.hierarchical_work_orders(wiki_root)
+        else:
+            body = table(
                 (
                     "ID", "Outcome", "Depends on", "Status", "Repository mapping",
                     "Mapping evidence", "Unlocks", "Detail",
                 ),
                 rows,
             )
+        index = (
+            f"{breadcrumb(current='Work orders')}\n\n# Work orders\n\n"
+            f"{self.c['summaries']['workOrders']}\n\n"
+            + body
             + finish(
                 (("Implementation path", "../implementation/index.md"), ("Use cases", "../use-cases/index.md")),
                 ("Continue to Use cases", "../use-cases/index.md"),
             )
         )
         self.write("work-orders/index.md", index)
+
+    SUBORDINATE_GROUPS = (
+        ("workflow", "Workflows"),
+        ("business-transaction", "Business transactions"),
+        ("detector", "Detectors"),
+        ("alert-condition", "Alert conditions"),
+        ("dashboard", "Dashboards"),
+        ("custom-code", "Custom code instrumentation"),
+    )
+
+    def hierarchical_work_orders(self, wiki_root: str) -> str:
+        orders = self.c["workOrders"]
+        by_id = {w["id"]: w for w in orders}
+        use_case_titles = {u["id"]: u["title"] for u in self.c["useCases"]}
+
+        def detail(w: dict[str, Any]) -> str:
+            return f"[Open canonical work order]({wiki_root}/{w['id']}.md)"
+
+        def order_rows(items: Iterable[dict[str, Any]]) -> Iterable[tuple[Any, ...]]:
+            return (
+                (w["id"], w["title"], w["outcome"], w["status"], detail(w))
+                for w in items
+            )
+
+        foundation = [w for w in orders if w.get("kind") == "foundation"]
+        sections = ["## Foundation work orders\n\n"]
+        if foundation:
+            sections.append(
+                "Every other work order is released once all foundation work "
+                "orders are complete (implemented or verified).\n\n"
+                + table(
+                    ("ID", "Title", "Outcome", "Findings", "Status", "Detail"),
+                    (
+                        (
+                            w["id"], w["title"], w["outcome"],
+                            ", ".join(w.get("findingIds", [])) or "None",
+                            w["status"], detail(w),
+                        )
+                        for w in foundation
+                    ),
+                )
+            )
+        else:
+            sections.append(
+                "This version has no foundation work orders, so every work order "
+                "is released for implementation in any order."
+            )
+        headers = ("ID", "Title", "Outcome", "Status", "Detail")
+        for use_case in (w for w in orders if w.get("kind") == "use-case"):
+            subject = (use_case.get("subjectIds") or [None])[0]
+            title = use_case_titles.get(subject, use_case["title"])
+            subordinate_ids = set(use_case.get("subordinateIds", []))
+            subordinates = [w for w in orders if w["id"] in subordinate_ids]
+            missing = [
+                x for x in use_case.get("subordinateIds", []) if x not in by_id
+            ]
+            if missing:
+                raise ValueError(
+                    f"{use_case['id']}: unknown subordinate work orders "
+                    + ", ".join(missing)
+                )
+            parts = [
+                f"\n\n## Use case: {esc(title)}\n\n",
+                f"{use_case['id']} completes this use case through "
+                f"{len(subordinates)} subordinate work orders.\n\n",
+                "### Use-case work order\n\n",
+                table(headers, order_rows([use_case])),
+            ]
+            for kind, label in self.SUBORDINATE_GROUPS:
+                group = [w for w in subordinates if w.get("kind") == kind]
+                if group:
+                    parts.append(f"\n\n### {label}\n\n" + table(headers, order_rows(group)))
+            sections.append("".join(parts))
+        return "".join(sections)
 
     def render_use_cases(self) -> None:
         workflow_labels = {x["id"]: x["name"] for x in self.c["workflows"]}

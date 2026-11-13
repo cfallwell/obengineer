@@ -175,7 +175,7 @@ HOSTS: dict[str, Host] = {
         label="Cursor",
         user_dir=".cursor",
         project_dir=".cursor",
-        notes=("Type /ob to list /ob-start, /ob-add-inputs, /ob-edit-inputs, /ob-analyze, /ob-implement, /ob-terraform, /ob-verify, /ob-review, and /ob-render.",),
+        notes=("Type /ob to list /ob-start, /ob-add-inputs, /ob-edit-inputs, /ob-analyze, /ob-implement, /ob-revise, /ob-terraform, /ob-verify, /ob-review, and /ob-render.",),
     ),
     "claude": Host(
         key="claude",

@@ -1,0 +1,1534 @@
+{
+  "schemaVersion": 4,
+  "application": {
+    "id": "sample-storefront",
+    "name": "Sample Storefront",
+    "version": "V1",
+    "status": "awaiting-acceptance",
+    "scope": "This representative contract covers an observed single-page storefront, its API and message-driven order backend, the current telemetry footprint, and the implementation and verification work needed for trustworthy journey observability.",
+    "changes": [
+      "Initial evidence from production behavior, source, architecture diagrams, read-only telemetry queries, and authorized security checks was reconciled into one canonical contract.",
+      "The first version defines bounded transactions, exhaustive observed workflows, cross-account propagation, operational detectors, objectives, and an executable work-order queue."
+    ],
+    "nextSteps": [
+      "Review architecture and current telemetry before evaluating the recommendations.",
+      "Review findings, use cases, workflows, business transactions, and their linked work orders.",
+      "Confirm unresolved evidence questions or supply additional source and tenant exports.",
+      "Accept this immutable version only after all linked detail and QA evidence is satisfactory."
+    ]
+  },
+  "summaries": {
+    "architecture": "The observed React storefront performs client-side routing from one host bootstrap, calls a Node API in the web account, and publishes accepted requests across a managed event bus to a worker in an integration account before fulfillment.",
+    "technology": "Source and response evidence identify React, a client router, Node services, managed cloud messaging, an OpenTelemetry Collector, and a hosted payment dependency, with each technology mapped to its instrumentation consequence.",
+    "currentTelemetry": "Browser and service telemetry are present but only partially trusted: automatic spans arrive without stable workflow identity, route values are unbounded, message context breaks at the queue, and logs do not consistently carry trace identifiers.",
+    "findings": "The priority finding is a correctness and privacy defect in which raw route and cookie fields reach telemetry before bounded classification and redaction, creating misleading dimensions and avoidable sensitive-data retention.",
+    "strategy": "Establish signal trust first, then ship one initialization owner, bounded route and business-transaction classifiers, write-once baggage propagation, explicit message carriers, ordered Collector controls, and operational metrics.",
+    "implementationPath": "The dependency path begins with deterministic schema and privacy guardrails, adds browser and backend propagation, instruments the observed order workflows, then creates dashboards, detectors, objectives, release overlays, and portfolio verification.",
+    "workOrders": "Three bounded work orders separate the shared contract, end-to-end workflow instrumentation, and operational activation so each repository leg has explicit paths, tests, dependencies, acceptance criteria, and verification.",
+    "useCases": "The primary use case follows order submission from the checkout interaction through the API, message producer, cross-account consumer, and fulfillment acknowledgement, exposing errors, p90 latency, silence, and trace-log joins.",
+    "workflows": "Two evidence-derived workflows cover payment authorization and order submission rather than generic clicks; each defines its span tree, events, bounded meters, join types, dashboard, detectors, objective, and verification.",
+    "businessTransactions": "The checkout business transaction is a bounded global grouping set by the host route classifier and propagated in baggage; its catalogue includes every observed payment and submission intent from source and analytics evidence.",
+    "contracts": "Shared contracts specify exactly one provider initialization, host-owned SPA route spans, allowlisted baggage stamping, identity propagation, first-touch attribution, honest join types, Collector ordering, redaction, and cardinality arithmetic.",
+    "operations": "The operating model combines a workflow dashboard with p90 latency and release overlays, thresholded error and silent-outage detectors, a rolling success objective with an explicit error budget, Synthetics, path tests, and verification.",
+    "reference": "The reference register preserves measured, stated, public, and derived evidence without customer identifiers, records the prior diagram and guide roles, and names unresolved queue-volume and payment-path placement questions."
+  },
+  "architecture": {
+    "narrative": "A React single-page storefront owns the only browser provider initialization and classifies client routes before starting navigation spans. The browser calls an order API in the web account; accepted requests publish through a managed event bus and queue to a worker in an integration account, which invokes fulfillment and records an acknowledgement or DLQ failure.",
+    "frontend": {
+      "applicable": true,
+      "evidence": "Production route capture and source identify an interactive browser single-page application.",
+      "runtimeModel": "React single-page application",
+      "router": "React Router",
+      "initOwner": "src/bootstrap/observability.ts",
+      "singleInit": true,
+      "routes": [
+        {
+          "pathClass": "/catalog and item routes",
+          "pageType": "catalog",
+          "navigation": "client",
+          "evidenceIds": [
+            "EV-PROD-ROUTES",
+            "EV-SRC-CONTRACT"
+          ]
+        },
+        {
+          "pathClass": "/checkout and confirmation routes",
+          "pageType": "checkout",
+          "navigation": "client",
+          "evidenceIds": [
+            "EV-PROD-ROUTES",
+            "EV-SRC-CONTRACT"
+          ]
+        }
+      ],
+      "evidenceIds": [
+        "EV-PROD-ROUTES",
+        "EV-SRC-CONTRACT"
+      ],
+      "rumLoadOrder": {
+        "status": "correct",
+        "agentLoad": "Synchronous RUM agent script in the document head before the application bundle",
+        "frameworkBootstrap": "React root render in src/main.tsx after the RUM agent initializes",
+        "evidence": "Production page capture shows the RUM agent script tag and its init call executing in the document head before the React bundle loads, so the first route and resource timings are captured.",
+        "evidenceIds": [
+          "EV-PROD-ROUTES",
+          "EV-SRC-CONTRACT"
+        ]
+      },
+      "cdnDelivery": {
+        "cdn": "unknown",
+        "recommendation": "Inject the RUM agent snippet at the CDN edge instead of in application code so every page gets one consistent agent version and load position before framework bootstrap.",
+        "guidance": "skills/references/rum-delivery.md"
+      }
+    },
+    "backends": [
+      {
+        "id": "order-api",
+        "name": "Order API",
+        "runtime": "Node.js",
+        "accountId": "web-account",
+        "role": "Validates order requests, authorizes payment, and publishes accepted orders.",
+        "failurePoints": [
+          "Payment authorization can time out before the order is published.",
+          "A successful response can be returned while message publication later fails."
+        ],
+        "evidenceIds": [
+          "EV-SRC-CONTRACT",
+          "EV-DIAG-FLOW"
+        ]
+      },
+      {
+        "id": "order-worker",
+        "name": "Order Worker",
+        "runtime": "Node.js",
+        "accountId": "integration-account",
+        "role": "Consumes accepted orders, invokes fulfillment, records acknowledgement, and routes terminal failures.",
+        "failurePoints": [
+          "Missing message context creates a disconnected trace at the account boundary.",
+          "Repeated fulfillment failure sends the message to a dead-letter queue."
+        ],
+        "evidenceIds": [
+          "EV-DIAG-FLOW",
+          "EV-PLATFORM-LOGS"
+        ]
+      }
+    ],
+    "accounts": [
+      {
+        "id": "web-account",
+        "provider": "public cloud",
+        "boundary": "Hosts the storefront edge and synchronous order API with public ingress.",
+        "evidenceIds": [
+          "EV-DIAG-FLOW"
+        ]
+      },
+      {
+        "id": "integration-account",
+        "provider": "public cloud",
+        "boundary": "Hosts message consumers and controlled egress to fulfillment systems.",
+        "evidenceIds": [
+          "EV-DIAG-FLOW"
+        ]
+      }
+    ],
+    "buses": [
+      {
+        "id": "order-events",
+        "technology": "managed event bus and queue",
+        "crossesAccounts": true,
+        "contextCarrier": "Message attributes carry traceparent, tracestate, and the bounded baggage allowlist.",
+        "failurePoints": [
+          "Publish acknowledgement can be absent after the API commits the request.",
+          "Consumer retries can exhaust and move the message to the dead-letter queue."
+        ],
+        "evidenceIds": [
+          "EV-DIAG-FLOW",
+          "EV-PLATFORM-LOGS"
+        ]
+      }
+    ],
+    "downstreams": [
+      {
+        "id": "fulfillment",
+        "role": "Reserves inventory and creates the fulfillment request.",
+        "protocol": "HTTPS",
+        "consequence": "Latency or rejection prevents accepted storefront orders from reaching physical fulfillment.",
+        "evidenceIds": [
+          "EV-DIAG-FLOW"
+        ]
+      }
+    ],
+    "thirdParties": [
+      {
+        "name": "Hosted payment gateway",
+        "category": "payment",
+        "consequence": "Its synchronous authorization sits on the submission path and must be separated from internal API latency and failures.",
+        "controls": [
+          "Record only the bounded processor result and never payment credentials.",
+          "Use Synthetics for application behavior and path testing for off-box network isolation."
+        ],
+        "evidenceIds": [
+          "EV-SRC-CONTRACT",
+          "EV-DIAG-FLOW"
+        ]
+      }
+    ],
+    "failurePoints": [
+      {
+        "id": "payment-timeout",
+        "surface": "Order API to hosted payment gateway",
+        "effect": "The shopper cannot submit the order and may retry an operation whose final state is uncertain.",
+        "detection": "Payment authorization error ratio and p90 duration are grouped by bounded result and deployment environment.",
+        "evidenceIds": [
+          "EV-SRC-CONTRACT",
+          "EV-DIAG-FLOW"
+        ]
+      },
+      {
+        "id": "message-context-break",
+        "surface": "Cross-account queue boundary",
+        "effect": "One business journey appears as two healthy traces and Related Content cannot traverse the boundary.",
+        "detection": "A controlled message verifies a shared trace id and stamped business context on the consumer span.",
+        "evidenceIds": [
+          "EV-PLATFORM-LOGS",
+          "EV-O11Y-APM"
+        ]
+      }
+    ],
+    "diagrams": [
+      {
+        "id": "EV-DIAG-FLOW",
+        "label": "Generic storefront order sequence diagram",
+        "provenance": "stated"
+      }
+    ]
+  },
+  "technology": [
+    {
+      "name": "React",
+      "category": "browser framework",
+      "versionEvidence": "package lock and production chunk signatures",
+      "observabilityConsequence": "Client transitions need a host-owned listener because document-load spans cover only the initial route.",
+      "evidenceIds": [
+        "EV-PROD-ROUTES",
+        "EV-SRC-CONTRACT"
+      ]
+    },
+    {
+      "name": "Node.js",
+      "category": "backend runtime",
+      "versionEvidence": "runtime manifest and deployment configuration",
+      "observabilityConsequence": "The shared SDK bootstrap must install trace context plus baggage before application modules load.",
+      "evidenceIds": [
+        "EV-SRC-CONTRACT"
+      ]
+    },
+    {
+      "name": "Managed messaging",
+      "category": "event transport",
+      "versionEvidence": "architecture diagram and infrastructure configuration",
+      "observabilityConsequence": "Producers inject and consumers extract message attributes; DLQ redrive links back rather than claiming one parent.",
+      "evidenceIds": [
+        "EV-DIAG-FLOW",
+        "EV-PLATFORM-LOGS"
+      ]
+    },
+    {
+      "name": "OpenTelemetry Collector",
+      "category": "telemetry pipeline",
+      "versionEvidence": "collector deployment values and active pipeline export",
+      "observabilityConsequence": "Derivation and redaction must precede spanmetrics, while batch remains the final processor before export.",
+      "evidenceIds": [
+        "EV-PLATFORM-LOGS",
+        "EV-SEC-HEADERS"
+      ]
+    }
+  ],
+  "currentTelemetry": [
+    {
+      "component": "Browser RUM",
+      "status": "partial",
+      "trust": "untrusted",
+      "applicationScope": "Production Sample Storefront browser sessions on the public route families.",
+      "observedFrom": "2026-11-10T19:00:00Z",
+      "observedTo": "2026-11-10T20:00:00Z",
+      "readAt": "2026-11-10T20:10:00Z",
+      "source": "Read-only Observability Cloud RUM API",
+      "provenance": "measured",
+      "portfolioEvidence": {
+        "disposition": "available",
+        "volume": "The query returned 12500 browser spans during the bounded production window.",
+        "metricSets": "No browser route MetricSet was found for a bounded page classification.",
+        "mts": "Current browser MTS usage includes raw route values and cannot be trusted.",
+        "signalFlow": "A bounded route-volume SignalFlow query returned traffic for the selected application."
+      },
+      "observed": "Initial document data arrives, but client-route identity is not refreshed and raw route values enter telemetry.",
+      "gaps": [
+        "No bounded page classifier runs on every client transition.",
+        "The current route attribute is unsuitable for a long-term metric dimension."
+      ],
+      "evidenceIds": [
+        "EV-PROD-ROUTES",
+        "EV-SEC-HEADERS"
+      ]
+    },
+    {
+      "component": "Application performance monitoring",
+      "status": "present",
+      "trust": "unverified",
+      "applicationScope": "Production Order API and Order Worker services participating in the storefront.",
+      "observedFrom": "2026-11-10T19:00:00Z",
+      "observedTo": "2026-11-10T20:00:00Z",
+      "readAt": "2026-11-10T20:11:00Z",
+      "source": "Read-only Observability Cloud APM API",
+      "provenance": "measured",
+      "portfolioEvidence": {
+        "disposition": "available",
+        "volume": "The query returned 8400 service spans across both application services.",
+        "metricSets": "Service RED MetricSets exist, but workflow and transaction tags are not indexed.",
+        "mts": "MTS inspection found service and environment dimensions without workflow identity.",
+        "signalFlow": "Service request and error SignalFlow queries returned data for the selected window."
+      },
+      "observed": "Automatic HTTP spans identify services but sampled traces lack stable transaction and workflow attributes.",
+      "gaps": [
+        "No evidence-derived workflow registry is stamped on root and child spans.",
+        "The queue consumer begins a disconnected trace after the account crossing."
+      ],
+      "evidenceIds": [
+        "EV-O11Y-APM",
+        "EV-PLATFORM-LOGS"
+      ]
+    },
+    {
+      "component": "Splunk platform logs and Log Observer Connect",
+      "status": "partial",
+      "trust": "unverified",
+      "applicationScope": "Production application indexes for the Order API and Order Worker services.",
+      "observedFrom": "2026-11-10T19:00:00Z",
+      "observedTo": "2026-11-10T20:00:00Z",
+      "readAt": "2026-11-10T20:12:00Z",
+      "source": "Read-only Splunk Platform search API",
+      "provenance": "measured",
+      "portfolioEvidence": {
+        "disposition": "unavailable",
+        "reason": "MetricSet, MTS, and SignalFlow concepts do not apply to the log-platform inventory."
+      },
+      "observed": "Application logs are retained in approved indexes, while trace and span identifiers are inconsistent.",
+      "gaps": [
+        "Error rows cannot reliably deep-link into the corresponding APM trace.",
+        "Cookie headers require deletion before any log or trace export."
+      ],
+      "evidenceIds": [
+        "EV-PLATFORM-LOGS",
+        "EV-SEC-HEADERS"
+      ]
+    },
+    {
+      "component": "Synthetics and path monitoring",
+      "status": "absent",
+      "trust": "unverified",
+      "applicationScope": "Public production checkout route and hosted payment dependency path.",
+      "observedFrom": "2026-11-10T19:00:00Z",
+      "observedTo": "2026-11-10T20:00:00Z",
+      "readAt": "2026-11-10T20:13:00Z",
+      "source": "Read-only Observability Cloud Synthetics API",
+      "provenance": "measured",
+      "portfolioEvidence": {
+        "disposition": "unavailable",
+        "reason": "No matching synthetic checks or path tests existed, so no volume or metric evidence was available."
+      },
+      "observed": "No independent checkout canary or public-path test was present in the supplied telemetry inventory.",
+      "gaps": [
+        "A silent route failure has no independent transaction probe.",
+        "Payment-provider path failure cannot be separated from application execution."
+      ],
+      "evidenceIds": [
+        "EV-O11Y-APM",
+        "EV-DIAG-FLOW"
+      ]
+    }
+  ],
+  "findings": [
+    {
+      "id": "F-01",
+      "title": "Unbounded route and cookie fields reach telemetry",
+      "severity": "high",
+      "confidence": "confirmed",
+      "priority": "P0",
+      "class": "privacy and misleading signal",
+      "observed": "Authorized payload inspection showed a raw client route used as an attribute and a cookie header present before the current Collector export. The route creates unbounded metric identity, while the cookie field can retain session material that has no observability purpose.",
+      "evidenceIds": [
+        "EV-SEC-HEADERS",
+        "EV-PROD-ROUTES"
+      ],
+      "surfaces": [
+        "Browser route instrumentation in src/bootstrap/observability.ts",
+        "Collector trace and log processor configuration"
+      ],
+      "exposure": "Telemetry readers and downstream retention systems can receive unnecessary request context from every affected browser session.",
+      "risk": "Cardinality growth can hide useful workflow series while retained cookie data expands privacy exposure and incident scope.",
+      "remediation": [
+        "Stop exporting the cookie header and remove existing raw-route promotion before adding any new metric dimensions.",
+        "Classify routes into the bounded page.type and sample.bt enums in the host listener.",
+        "Enforce the deny list and processor ordering in deterministic CI validation."
+      ],
+      "verification": "A controlled route suite must emit only registered page and transaction values, and a search over exported trace and log attributes must return zero cookie headers.",
+      "useCaseIds": [
+        "order-submission"
+      ],
+      "workflowIds": [
+        "checkout-payment-authorize",
+        "checkout-order-submit"
+      ],
+      "businessTransactionIds": [
+        "checkout"
+      ],
+      "contractIds": [
+        "single-init-spa-routes",
+        "collector",
+        "cardinality"
+      ],
+      "workOrderIds": [
+        "WO-001"
+      ]
+    }
+  ],
+  "strategy": [
+    {
+      "id": "signal-trust",
+      "title": "Restore signal trust",
+      "question": "Can route, privacy, and service identity be trusted before journey detectors are armed?",
+      "productSurface": "RUM, APM, and Collector",
+      "retentionClass": "bounded MetricSets and trace attributes",
+      "recommendation": "Remove forbidden fields, classify every client transition, stabilize service and deployment resources, and validate the exported attribute set before treating error rates or route dimensions as operational truth.",
+      "evidenceIds": [
+        "EV-SEC-HEADERS",
+        "EV-PROD-ROUTES",
+        "EV-O11Y-APM"
+      ]
+    },
+    {
+      "id": "journey-contract",
+      "title": "Emit journey identity in code",
+      "question": "Which shopper intent and business transaction produced each browser and backend span?",
+      "productSurface": "Observability Cloud RUM and APM",
+      "retentionClass": "Monitoring MetricSets plus troubleshooting attributes",
+      "recommendation": "Use a bounded global transaction tag and evidence-derived workflow names, then stamp them from W3C Baggage onto every span so Business Transactions, Tag Spotlight, dashboards, and detectors share one identity.",
+      "evidenceIds": [
+        "EV-SRC-CONTRACT",
+        "EV-O11Y-APM"
+      ]
+    },
+    {
+      "id": "message-propagation",
+      "title": "Continue causal message traces",
+      "question": "Did an accepted order cross the account boundary and reach fulfillment without retry or DLQ failure?",
+      "productSurface": "APM and cloud messaging",
+      "retentionClass": "trace context plus bounded custom metrics",
+      "recommendation": "Inject traceparent, tracestate, and the baggage allowlist into message attributes, extract before consumer spans, use links for DLQ redrive, and record bounded publish, consume, acknowledgement, and failure meters.",
+      "evidenceIds": [
+        "EV-DIAG-FLOW",
+        "EV-PLATFORM-LOGS"
+      ]
+    },
+    {
+      "id": "portfolio-joins",
+      "title": "Join traces, logs, releases, and path evidence",
+      "question": "Can an engineer distinguish application, deployment, log, and off-box path causes from one workflow view?",
+      "productSurface": "Log Observer Connect, Events API, Synthetics, and ThousandEyes",
+      "retentionClass": "long-retention logs, release events, and probe results",
+      "recommendation": "Write trace and span identifiers into approved logs, overlay deployments, add a checkout transaction canary, and place path tests across the public payment dependency without duplicating application workflow spans.",
+      "evidenceIds": [
+        "EV-PLATFORM-LOGS",
+        "EV-DIAG-FLOW"
+      ]
+    }
+  ],
+  "implementationPhases": [
+    {
+      "id": "phase-0",
+      "title": "Trust and deterministic contracts",
+      "outcome": "Telemetry is privacy-safe, route and transaction values are bounded, and CI rejects schema drift before journey code ships.",
+      "dependsOn": [],
+      "workOrderIds": [
+        "WO-001"
+      ],
+      "exitCriteria": [
+        "No exported trace or log contains a cookie header.",
+        "Every tested client transition emits a registered page and transaction value."
+      ]
+    },
+    {
+      "id": "phase-1",
+      "title": "End-to-end order instrumentation",
+      "outcome": "Browser, API, producer, consumer, and fulfillment spans form an honest trace with workflow events and bounded meters.",
+      "dependsOn": [
+        "phase-0"
+      ],
+      "workOrderIds": [
+        "WO-002",
+        "WO-003",
+        "WO-004",
+        "WO-005"
+      ],
+      "exitCriteria": [
+        "A controlled order trace crosses the account boundary with stamped baggage.",
+        "Payment and submission metrics expose bounded dimensions and no identity ids."
+      ]
+    },
+    {
+      "id": "phase-2",
+      "title": "Operational activation and proof",
+      "outcome": "Dashboards, detectors, objectives, releases, logs, Synthetics, and path evidence answer the use-case question.",
+      "dependsOn": [
+        "phase-1"
+      ],
+      "workOrderIds": [
+        "WO-006"
+      ],
+      "exitCriteria": [
+        "Threshold and zero-activity detector inputs are queryable under controlled tests.",
+        "Trace-to-log, release overlay, transaction canary, and path isolation checks pass."
+      ]
+    }
+  ],
+  "workOrders": [
+    {
+      "id": "WO-001",
+      "title": "Install deterministic signal contracts",
+      "outcome": "The shared library, route registry, baggage allowlist, redaction order, deny list, and CI gates establish one privacy-safe contract.",
+      "status": "proposed",
+      "dependsOn": [],
+      "unlocks": [
+        "WO-002",
+        "WO-003",
+        "WO-004",
+        "WO-005",
+        "WO-006"
+      ],
+      "repositoryMapping": {
+        "status": "mapped",
+        "evidence": "The supplied web and platform repositories authorize the bootstrap, shared observability, Collector, and test paths required by this work order."
+      },
+      "repositoryLegs": [
+        {
+          "repository": "sample-web",
+          "paths": [
+            "src/bootstrap/",
+            "src/observability/",
+            "test/observability/"
+          ],
+          "changes": [
+            "Own one provider initialization and install bounded route plus baggage contracts."
+          ],
+          "tests": [
+            "Run route classifier, one-init, baggage allowlist, and deny-list tests."
+          ]
+        },
+        {
+          "repository": "sample-platform",
+          "paths": [
+            "collector/",
+            "test/collector/"
+          ],
+          "changes": [
+            "Order derivation and redaction before spanmetrics and batch export."
+          ],
+          "tests": [
+            "Validate Collector configuration and assert forbidden attributes are absent."
+          ]
+        }
+      ],
+      "acceptanceCriteria": [
+        "Only the host bootstrap initializes the browser provider.",
+        "Every schema key has cardinality and propagation metadata.",
+        "Raw route and cookie fields fail deterministic validation."
+      ],
+      "verification": [
+        "Exercise each registered route and inspect bounded page and transaction tags.",
+        "Query exported spans and logs for the deny list and require zero matches."
+      ],
+      "kind": "foundation",
+      "subjectIds": [],
+      "parentIds": [],
+      "subordinateIds": [],
+      "findingIds": [
+        "F-01"
+      ],
+      "revision": 1
+    },
+    {
+      "id": "WO-002",
+      "title": "Deliver the order submission use case",
+      "outcome": "The API, message producer, consumer, and fulfillment call emit the registered workflows, events, metrics, and honest joins.",
+      "status": "blocked",
+      "dependsOn": [],
+      "unlocks": [],
+      "repositoryMapping": {
+        "status": "mapped",
+        "evidence": "The supplied services repository authorizes the Order API, Order Worker, shared telemetry package, and their propagation and metric test paths."
+      },
+      "repositoryLegs": [
+        {
+          "repository": "sample-services",
+          "paths": [
+            "services/order-api/",
+            "services/order-worker/",
+            "packages/otel-common/"
+          ],
+          "changes": [
+            "Add workflow helpers, payment events, message inject and extract, DLQ links, and bounded meters."
+          ],
+          "tests": [
+            "Run HTTP propagation, message continuation, DLQ link, event, and metric dimension tests."
+          ]
+        }
+      ],
+      "acceptanceCriteria": [
+        "The controlled order has one trace through the normal message path.",
+        "DLQ redrive creates a new trace linked to the original rather than changing its parent."
+      ],
+      "verification": [
+        "Inspect the trace tree, event attributes, and baggage stamp on the consumer.",
+        "Query all proposed metric dimensions and verify bounded values."
+      ],
+      "kind": "use-case",
+      "subjectIds": [
+        "order-submission"
+      ],
+      "parentIds": [],
+      "subordinateIds": [
+        "WO-003",
+        "WO-004",
+        "WO-005",
+        "WO-006"
+      ],
+      "findingIds": [],
+      "revision": 1
+    },
+    {
+      "id": "WO-003",
+      "title": "Instrument the payment authorization workflow",
+      "outcome": "The API, message producer, consumer, and fulfillment call emit the registered workflows, events, metrics, and honest joins.",
+      "status": "blocked",
+      "dependsOn": [],
+      "unlocks": [],
+      "repositoryMapping": {
+        "status": "mapped",
+        "evidence": "The supplied services repository authorizes the Order API, Order Worker, shared telemetry package, and their propagation and metric test paths."
+      },
+      "repositoryLegs": [
+        {
+          "repository": "sample-services",
+          "paths": [
+            "services/order-api/",
+            "services/order-worker/",
+            "packages/otel-common/"
+          ],
+          "changes": [
+            "Add workflow helpers, payment events, message inject and extract, DLQ links, and bounded meters."
+          ],
+          "tests": [
+            "Run HTTP propagation, message continuation, DLQ link, event, and metric dimension tests."
+          ]
+        }
+      ],
+      "acceptanceCriteria": [
+        "The controlled order has one trace through the normal message path.",
+        "DLQ redrive creates a new trace linked to the original rather than changing its parent."
+      ],
+      "verification": [
+        "Inspect the trace tree, event attributes, and baggage stamp on the consumer.",
+        "Query all proposed metric dimensions and verify bounded values."
+      ],
+      "kind": "workflow",
+      "subjectIds": [
+        "checkout-payment-authorize"
+      ],
+      "parentIds": [
+        "WO-002"
+      ],
+      "subordinateIds": [],
+      "findingIds": [],
+      "revision": 1
+    },
+    {
+      "id": "WO-004",
+      "title": "Instrument the order submit workflow",
+      "outcome": "The API, message producer, consumer, and fulfillment call emit the registered workflows, events, metrics, and honest joins.",
+      "status": "blocked",
+      "dependsOn": [],
+      "unlocks": [],
+      "repositoryMapping": {
+        "status": "mapped",
+        "evidence": "The supplied services repository authorizes the Order API, Order Worker, shared telemetry package, and their propagation and metric test paths."
+      },
+      "repositoryLegs": [
+        {
+          "repository": "sample-services",
+          "paths": [
+            "services/order-api/",
+            "services/order-worker/",
+            "packages/otel-common/"
+          ],
+          "changes": [
+            "Add workflow helpers, payment events, message inject and extract, DLQ links, and bounded meters."
+          ],
+          "tests": [
+            "Run HTTP propagation, message continuation, DLQ link, event, and metric dimension tests."
+          ]
+        }
+      ],
+      "acceptanceCriteria": [
+        "The controlled order has one trace through the normal message path.",
+        "DLQ redrive creates a new trace linked to the original rather than changing its parent."
+      ],
+      "verification": [
+        "Inspect the trace tree, event attributes, and baggage stamp on the consumer.",
+        "Query all proposed metric dimensions and verify bounded values."
+      ],
+      "kind": "workflow",
+      "subjectIds": [
+        "checkout-order-submit"
+      ],
+      "parentIds": [
+        "WO-002"
+      ],
+      "subordinateIds": [],
+      "findingIds": [],
+      "revision": 1
+    },
+    {
+      "id": "WO-005",
+      "title": "Stamp the checkout business transaction",
+      "outcome": "The API, message producer, consumer, and fulfillment call emit the registered workflows, events, metrics, and honest joins.",
+      "status": "blocked",
+      "dependsOn": [],
+      "unlocks": [],
+      "repositoryMapping": {
+        "status": "mapped",
+        "evidence": "The supplied services repository authorizes the Order API, Order Worker, shared telemetry package, and their propagation and metric test paths."
+      },
+      "repositoryLegs": [
+        {
+          "repository": "sample-services",
+          "paths": [
+            "services/order-api/",
+            "services/order-worker/",
+            "packages/otel-common/"
+          ],
+          "changes": [
+            "Add workflow helpers, payment events, message inject and extract, DLQ links, and bounded meters."
+          ],
+          "tests": [
+            "Run HTTP propagation, message continuation, DLQ link, event, and metric dimension tests."
+          ]
+        }
+      ],
+      "acceptanceCriteria": [
+        "The controlled order has one trace through the normal message path.",
+        "DLQ redrive creates a new trace linked to the original rather than changing its parent."
+      ],
+      "verification": [
+        "Inspect the trace tree, event attributes, and baggage stamp on the consumer.",
+        "Query all proposed metric dimensions and verify bounded values."
+      ],
+      "kind": "business-transaction",
+      "subjectIds": [
+        "checkout"
+      ],
+      "parentIds": [
+        "WO-002"
+      ],
+      "subordinateIds": [],
+      "findingIds": [],
+      "revision": 1
+    },
+    {
+      "id": "WO-006",
+      "title": "Activate operational views and proof",
+      "outcome": "The workflow dashboard, detectors, objective, release events, logs, transaction canary, and public-path test are reviewable.",
+      "status": "blocked",
+      "dependsOn": [],
+      "unlocks": [],
+      "repositoryMapping": {
+        "status": "mapped",
+        "evidence": "The supplied observability repository authorizes reviewable configuration and verification paths for dashboards, detectors, objectives, and portfolio proof."
+      },
+      "repositoryLegs": [
+        {
+          "repository": "sample-observability",
+          "paths": [
+            "terraform/observability/",
+            "verification/"
+          ],
+          "changes": [
+            "Create reviewable configuration and read-only verification for every operational object."
+          ],
+          "tests": [
+            "Validate configuration, run fixture queries, and execute controlled detector input tests."
+          ]
+        }
+      ],
+      "acceptanceCriteria": [
+        "Every dashboard panel and detector uses an eligible metric dimension.",
+        "The objective calculates its target and explicit rolling error budget.",
+        "Release, log, Synthetics, and path evidence link from the workflow view."
+      ],
+      "verification": [
+        "Run each verification criterion and preserve query provenance.",
+        "Keep all tenant mutations subject to independent human review and apply."
+      ],
+      "kind": "custom-code",
+      "subjectIds": [],
+      "parentIds": [
+        "WO-002"
+      ],
+      "subordinateIds": [],
+      "findingIds": [],
+      "revision": 1
+    }
+  ],
+  "useCases": [
+    {
+      "id": "order-submission",
+      "title": "Order submission",
+      "narrative": "A shopper authorizes payment and submits an order from the checkout route. The API publishes the accepted request across an account boundary, the worker invokes fulfillment, and operations must distinguish payment, publish, consume, fulfillment, and silent-market failures.",
+      "question": "Did the shopper's accepted order reach fulfillment within the objective, and where did a failure or latency regression occur?",
+      "workflowIds": [
+        "checkout-payment-authorize",
+        "checkout-order-submit"
+      ],
+      "businessTransactionIds": [
+        "checkout"
+      ],
+      "spanIds": [
+        "payment-root",
+        "payment-client",
+        "submit-root",
+        "publish",
+        "consume",
+        "fulfillment-client"
+      ],
+      "eventNames": [
+        "checkout.payment.started",
+        "checkout.payment.completed",
+        "checkout.order.accepted",
+        "checkout.order.fulfilled"
+      ],
+      "metricNames": [
+        "sample.checkout.payment",
+        "sample.checkout.payment.duration",
+        "sample.order.submission",
+        "sample.order.end-to-end.duration"
+      ],
+      "dashboardId": "order-submission",
+      "detectorIds": [
+        "order-error-rate",
+        "order-silent-outage"
+      ],
+      "objectiveIds": [
+        "order-success"
+      ],
+      "joins": [
+        {
+          "from": "browser checkout span",
+          "to": "Order API server span",
+          "type": "continue-trace",
+          "carrier": "trace headers and baggage",
+          "reason": "The synchronous request is one causal operation and must remain in the same trace tree."
+        },
+        {
+          "from": "Order API producer span",
+          "to": "Order Worker consumer span",
+          "type": "continue-trace",
+          "carrier": "message attributes",
+          "reason": "One accepted order message causes one consumer operation on the normal processing path."
+        },
+        {
+          "from": "DLQ redrive span",
+          "to": "original consumer trace",
+          "type": "span-link",
+          "carrier": "stored original trace context",
+          "reason": "Redrive starts later in a new execution, so claiming the old consumer as its parent would be false."
+        },
+        {
+          "from": "order support query",
+          "to": "workflow trace",
+          "type": "attribute-pivot",
+          "carrier": "sample.order.id",
+          "reason": "The order identifier is a high-cardinality troubleshooting key and never a metric dimension."
+        }
+      ],
+      "verification": [
+        "Submit a controlled order and confirm the browser, API, producer, consumer, and fulfillment spans are queryable together.",
+        "Force payment rejection, publish failure, and a held message to prove the error and silent-outage signals."
+      ],
+      "workOrderIds": [
+        "WO-001",
+        "WO-002",
+        "WO-003",
+        "WO-004",
+        "WO-005",
+        "WO-006"
+      ],
+      "evidenceIds": [
+        "EV-SRC-CONTRACT",
+        "EV-DIAG-FLOW",
+        "EV-O11Y-APM",
+        "EV-PLATFORM-LOGS"
+      ]
+    }
+  ],
+  "workflows": [
+    {
+      "id": "checkout-payment-authorize",
+      "name": "checkout.payment.authorize",
+      "narrative": "The shopper submits payment details to the hosted payment flow, and the Order API records only the bounded authorization outcome and duration.",
+      "businessTransactionIds": [
+        "checkout"
+      ],
+      "spans": [
+        {
+          "id": "payment-root",
+          "name": "checkout.payment.authorize",
+          "kind": "client",
+          "parentId": null,
+          "joinType": "root",
+          "service": "sample-storefront",
+          "attributes": [
+            "sample.bt",
+            "workflow.name",
+            "page.type",
+            "sample.market"
+          ]
+        },
+        {
+          "id": "payment-client",
+          "name": "payment.authorize",
+          "kind": "client",
+          "parentId": "payment-root",
+          "joinType": "continue-trace",
+          "service": "order-api",
+          "attributes": [
+            "payment.result",
+            "payment.provider",
+            "sample.market",
+            "deployment.environment"
+          ]
+        }
+      ],
+      "events": [
+        {
+          "name": "checkout.payment.started",
+          "when": "Immediately before authorization begins",
+          "attributes": [
+            "payment.provider",
+            "sample.market"
+          ]
+        },
+        {
+          "name": "checkout.payment.completed",
+          "when": "When the bounded authorization result is known",
+          "attributes": [
+            "payment.provider",
+            "payment.result",
+            "error.type"
+          ]
+        }
+      ],
+      "metrics": [
+        {
+          "name": "sample.checkout.payment",
+          "type": "counter",
+          "unit": "{attempt}",
+          "purpose": "Count payment attempts and bounded outcomes.",
+          "dimensions": [
+            "deployment.environment",
+            "sample.market",
+            "payment.provider",
+            "payment.result"
+          ]
+        },
+        {
+          "name": "sample.checkout.payment.duration",
+          "type": "histogram",
+          "unit": "ms",
+          "purpose": "Measure authorization latency independently from order processing.",
+          "dimensions": [
+            "deployment.environment",
+            "sample.market",
+            "payment.provider"
+          ]
+        }
+      ],
+      "joins": [
+        {
+          "from": "browser payment span",
+          "to": "Order API authorization span",
+          "type": "continue-trace",
+          "carrier": "trace headers and baggage",
+          "reason": "The browser request and authorization are one synchronous causal request."
+        }
+      ],
+      "dashboardId": "order-submission",
+      "detectorIds": [
+        "order-error-rate"
+      ],
+      "objectiveIds": [
+        "order-success"
+      ],
+      "codeMapping": {
+        "status": "mapped",
+        "evidence": "Application source and the dependency lock identify the authorized checkout route and Order API payment implementation used by this workflow."
+      },
+      "codeLocations": [
+        "src/routes/checkout/payment.tsx:24-118",
+        "services/order-api/src/payment.ts:40-136"
+      ],
+      "verification": [
+        "A controlled authorization exposes started and completed events with no payment credential fields.",
+        "The p90 duration query groups only by the approved environment, market, and provider dimensions."
+      ],
+      "workOrderIds": [
+        "WO-002",
+        "WO-003"
+      ],
+      "evidenceIds": [
+        "EV-SRC-CONTRACT",
+        "EV-DIAG-FLOW"
+      ]
+    },
+    {
+      "id": "checkout-order-submit",
+      "name": "checkout.order.submit",
+      "narrative": "The accepted browser request publishes one order message, continues through the worker, invokes fulfillment, and records acknowledgement or a linked DLQ redrive.",
+      "businessTransactionIds": [
+        "checkout"
+      ],
+      "spans": [
+        {
+          "id": "submit-root",
+          "name": "checkout.order.submit",
+          "kind": "server",
+          "parentId": null,
+          "joinType": "root",
+          "service": "order-api",
+          "attributes": [
+            "sample.bt",
+            "workflow.name",
+            "sample.market",
+            "deployment.environment"
+          ]
+        },
+        {
+          "id": "publish",
+          "name": "order.publish",
+          "kind": "producer",
+          "parentId": "submit-root",
+          "joinType": "continue-trace",
+          "service": "order-api",
+          "attributes": [
+            "messaging.destination.template",
+            "sample.market",
+            "workflow.name"
+          ]
+        },
+        {
+          "id": "consume",
+          "name": "order.consume",
+          "kind": "consumer",
+          "parentId": "publish",
+          "joinType": "continue-trace",
+          "service": "order-worker",
+          "attributes": [
+            "messaging.destination.template",
+            "sample.market",
+            "workflow.name"
+          ]
+        },
+        {
+          "id": "fulfillment-client",
+          "name": "fulfillment.create",
+          "kind": "client",
+          "parentId": "consume",
+          "joinType": "continue-trace",
+          "service": "order-worker",
+          "attributes": [
+            "fulfillment.result",
+            "sample.market",
+            "deployment.environment"
+          ]
+        }
+      ],
+      "events": [
+        {
+          "name": "checkout.order.accepted",
+          "when": "After validation and before message publication",
+          "attributes": [
+            "sample.market",
+            "order.line-count"
+          ]
+        },
+        {
+          "name": "checkout.order.fulfilled",
+          "when": "After the downstream acknowledges the fulfillment request",
+          "attributes": [
+            "fulfillment.result",
+            "messaging.destination.template"
+          ]
+        }
+      ],
+      "metrics": [
+        {
+          "name": "sample.order.submission",
+          "type": "counter",
+          "unit": "{order}",
+          "purpose": "Count accepted, failed, and fulfilled orders without identity dimensions.",
+          "dimensions": [
+            "deployment.environment",
+            "sample.market",
+            "order.status",
+            "fulfillment.result"
+          ]
+        },
+        {
+          "name": "sample.order.end-to-end.duration",
+          "type": "histogram",
+          "unit": "ms",
+          "purpose": "Measure accepted-to-fulfillment duration across the message boundary.",
+          "dimensions": [
+            "deployment.environment",
+            "sample.market",
+            "fulfillment.result"
+          ]
+        }
+      ],
+      "joins": [
+        {
+          "from": "Order API producer span",
+          "to": "Order Worker consumer span",
+          "type": "continue-trace",
+          "carrier": "message attributes",
+          "reason": "One message causes one consumer operation and the extracted parent is truthful."
+        },
+        {
+          "from": "DLQ redrive",
+          "to": "original order trace",
+          "type": "span-link",
+          "carrier": "stored trace context",
+          "reason": "The delayed redrive is a new execution that points backward without changing parentage."
+        }
+      ],
+      "dashboardId": "order-submission",
+      "detectorIds": [
+        "order-error-rate",
+        "order-silent-outage"
+      ],
+      "objectiveIds": [
+        "order-success"
+      ],
+      "codeMapping": {
+        "status": "mapped",
+        "evidence": "Application source and message-contract tests identify the authorized Order API producer and Order Worker consumer implementations used by this workflow."
+      },
+      "codeLocations": [
+        "services/order-api/src/orders.ts:52-184",
+        "services/order-worker/src/consume.ts:31-172"
+      ],
+      "verification": [
+        "A controlled message keeps one trace id from producer through fulfillment and carries the allowlisted baggage keys.",
+        "A DLQ redrive starts a new trace with a link to the original and increments only bounded failure dimensions."
+      ],
+      "workOrderIds": [
+        "WO-002",
+        "WO-004"
+      ],
+      "evidenceIds": [
+        "EV-DIAG-FLOW",
+        "EV-PLATFORM-LOGS"
+      ]
+    }
+  ],
+  "businessTransactions": [
+    {
+      "id": "checkout",
+      "name": "Checkout",
+      "groupingValue": "checkout",
+      "artifact": "src/routes/checkout/",
+      "summary": "The checkout surface owns payment authorization and order submission intents discovered in route components, analytics events, API clients, and the order sequence diagram.",
+      "catalogStatus": "observed",
+      "catalogEvidence": "Source route components, analytics events, API clients, and the order sequence diagram identify the complete checkout intent catalogue represented in this version.",
+      "workflowCatalog": [
+        "checkout.payment.authorize",
+        "checkout.order.submit"
+      ],
+      "workflowIds": [
+        "checkout-payment-authorize",
+        "checkout-order-submit"
+      ],
+      "whereSet": "The host route classifier sets sample.bt when navigation enters any registered checkout route.",
+      "propagation": "The value becomes a global browser attribute and bounded baggage entry stamped onto backend and consumer spans.",
+      "tenantRule": "APM groups traces using the bounded global tag sample.bt after its approved MetricSet indexing check.",
+      "verification": "Navigate every checkout route and query Tag Spotlight for only the registered checkout value on browser and backend spans.",
+      "workOrderIds": [
+        "WO-001",
+        "WO-005"
+      ],
+      "evidenceIds": [
+        "EV-PROD-ROUTES",
+        "EV-SRC-CONTRACT",
+        "EV-DIAG-FLOW"
+      ]
+    }
+  ],
+  "contracts": {
+    "singleInit": "The host bootstrap is the only artifact that initializes browser telemetry, installs the allowlisted stamp processor, captures attribution, and subscribes to route changes. Route modules consume the shared API and never initialize another provider or application name.",
+    "spaRoutes": {
+      "applicable": true,
+      "evidence": "Observed client-side route transitions require bounded page classification and navigation spans.",
+      "owner": "src/bootstrap/observability.ts",
+      "classifier": "The pure classifier maps known route families to catalog, checkout, confirmation, or unknown-safe enums; raw paths remain trace-only and never become dimensions.",
+      "navigationSpan": "route.change",
+      "code": "const PAGE_TYPES = new Map([['catalog', 'catalog'], ['checkout', 'checkout']]);\nexport function onRoute(pathname) {\n  const key = pathname.split('/').filter(Boolean)[0] || 'catalog';\n  const pageType = PAGE_TYPES.get(key) || 'other';\n  rum.setGlobalAttributes({ 'page.type': pageType, 'sample.bt': pageType });\n  tracer.startSpan('route.change', { attributes: { 'page.type': pageType } }).end();\n}"
+    },
+    "crossCutting": {
+      "attributes": [
+        {
+          "name": "sample.bt",
+          "type": "enum",
+          "source": "route classifier",
+          "setAt": "initial route and every client navigation",
+          "cardinalityClass": "bounded",
+          "dimensionEligible": true,
+          "propagation": "baggage",
+          "consumers": [
+            "APM Business Transactions",
+            "workflow dashboards",
+            "detector grouping"
+          ]
+        },
+        {
+          "name": "workflow.name",
+          "type": "enum",
+          "source": "workflow registry",
+          "setAt": "workflow root creation",
+          "cardinalityClass": "bounded",
+          "dimensionEligible": true,
+          "propagation": "baggage",
+          "consumers": [
+            "APM workflow views",
+            "RED dashboards",
+            "objectives"
+          ]
+        },
+        {
+          "name": "sample.market",
+          "type": "enum",
+          "source": "Collector derivation",
+          "setAt": "Collector transform before spanmetrics",
+          "cardinalityClass": "bounded",
+          "dimensionEligible": true,
+          "propagation": "collector",
+          "consumers": [
+            "market dashboards",
+            "silent-outage detector",
+            "order objective"
+          ]
+        },
+        {
+          "name": "sample.account-id",
+          "type": "string",
+          "source": "identity success",
+          "setAt": "authenticated session establishment",
+          "cardinalityClass": "high",
+          "dimensionEligible": false,
+          "propagation": "baggage",
+          "consumers": [
+            "Tag Spotlight",
+            "trace troubleshooting",
+            "log correlation"
+          ]
+        },
+        {
+          "name": "session.id",
+          "type": "string",
+          "source": "RUM SDK",
+          "setAt": "browser session creation",
+          "cardinalityClass": "high",
+          "dimensionEligible": false,
+          "propagation": "local",
+          "consumers": [
+            "RUM session troubleshooting",
+            "Related Content"
+          ]
+        }
+      ],
+      "providerBootstrap": "rum.init({ accessToken: window.__SAMPLE_RUM_TOKEN__, applicationName: 'sample-storefront' });\nrum.provider.addSpanProcessor(new BaggageStampProcessor());\ncaptureAdAttribution();\ninstallCompositePropagation();\ninstallRouteListener();",
+      "spanProcessor": "const KEYS = ['sample.bt', 'workflow.name', 'sample.market', 'sample.account-id'];\nexport class BaggageStampProcessor {\n  onStart(span, context) {\n    const baggage = propagation.getBaggage(context);\n    for (const key of KEYS) {\n      const entry = baggage?.getEntry(key);\n      if (entry) span.setAttribute(key, entry.value.slice(0, 64));\n    }\n  }\n}",
+      "identityWrite": "export function onIdentitySuccess(accountId) {\n  const safeId = String(accountId).slice(0, 64);\n  rum.setGlobalAttributes({ 'sample.account-id': safeId, 'enduser.id': safeId });\n  setAllowedBaggageEntry('sample.account-id', safeId);\n}",
+      "backendPropagator": "const sdk = new NodeSDK({\n  textMapPropagator: new CompositePropagator({\n    propagators: [new W3CTraceContextPropagator(), new W3CBaggagePropagator()]\n  }),\n  spanProcessors: [new BaggageStampProcessor(), batchProcessor]\n});\nsdk.start();",
+      "messagePropagation": {
+        "applicable": true,
+        "evidence": "The architecture inventory contains a cross-account event bus and queue boundary.",
+        "code": "export function publish(message) {\n  propagation.inject(context.active(), message.attributes, messageSetter);\n  return bus.send(message);\n}\nexport function consume(record) {\n  const extracted = propagation.extract(context.active(), record.attributes, messageGetter);\n  return context.with(extracted, () => processOrder(record));\n}\nexport function redrive(record) {\n  const original = propagation.extract(context.active(), record.originalTrace, messageGetter);\n  const link = { context: trace.getSpanContext(original), attributes: { 'messaging.operation': 'redrive' } };\n  return tracer.startActiveSpan('order.dlq.redrive', { links: [link] }, span => processRedrive(record).finally(() => span.end()));\n}"
+      }
+    },
+    "attribution": {
+      "applicable": true,
+      "evidence": "The browser route accepts campaign parameters and the engagement requires attribution continuity.",
+      "trigger": "The host captures attribution exactly once per browser session after consent and before the first workflow request.",
+      "event": "session.ad-attribution",
+      "firstTouch": "Persist the first bounded source and medium in local storage for cross-session comparison.",
+      "lastTouch": "Persist the current bounded source and medium in session storage for the active order journey.",
+      "baggageKeys": [
+        "sample.attribution.source",
+        "sample.attribution.medium",
+        "sample.ads-attributed"
+      ],
+      "code": "export function captureAttribution(url, referrer) {\n  const medium = url.searchParams.get('utm_medium') || '';\n  const source = medium === 'cpc' ? 'paid-search' : referrer ? 'referral' : 'direct';\n  const value = { source, medium: medium || 'none', attributed: source !== 'direct' };\n  const firstKey = 'sample.attribution.first';\n  if (!localStorage.getItem(firstKey)) localStorage.setItem(firstKey, JSON.stringify(value));\n  sessionStorage.setItem('sample.attribution.last', JSON.stringify(value));\n  addActiveSpanEvent('session.ad-attribution', value);\n  setBoundedAttributionBaggage(value);\n}"
+    },
+    "joins": [
+      {
+        "from": "browser fetch",
+        "to": "Order API",
+        "type": "continue-trace",
+        "carrier": "trace headers and baggage",
+        "reason": "The browser request and server handler are the same causal operation."
+      },
+      {
+        "from": "message producer",
+        "to": "single-message consumer",
+        "type": "continue-trace",
+        "carrier": "message attributes",
+        "reason": "The normal consumer work is caused by exactly one accepted order message."
+      },
+      {
+        "from": "DLQ redrive",
+        "to": "original consumer trace",
+        "type": "span-link",
+        "carrier": "stored original trace context",
+        "reason": "The delayed retry begins a new execution and must not claim the original parent."
+      },
+      {
+        "from": "support search",
+        "to": "order trace",
+        "type": "attribute-pivot",
+        "carrier": "sample.order.id",
+        "reason": "The identity key supports troubleshooting but is too high-cardinality for a metric dimension."
+      }
+    ],
+    "collector": {
+      "applicable": true,
+      "evidence": "Deployment values and active pipeline exports identify an OpenTelemetry Collector gateway.",
+      "placement": "A gateway Collector receives browser and service OTLP before the Observability Cloud and approved log exporters.",
+      "processorOrder": [
+        "memory_limiter",
+        "transform/derive",
+        "attributes/redact",
+        "spanmetrics",
+        "batch"
+      ],
+      "ottl": "processors:\n  transform/derive:\n    error_mode: ignore\n    trace_statements:\n      - context: span\n        statements:\n          - set(attributes[\"sample.market\"], \"DEFAULT\") where attributes[\"sample.market\"] == nil\n          - set(attributes[\"page.type\"], \"other\") where attributes[\"page.type\"] == nil\nservice:\n  pipelines:\n    traces:\n      processors: [memory_limiter, transform/derive, attributes/redact, spanmetrics, batch]",
+      "redactions": [
+        {
+          "field": "http.request.header.cookie",
+          "action": "delete",
+          "reason": "Cookie material has no approved observability purpose."
+        },
+        {
+          "field": "enduser.email",
+          "action": "hash",
+          "reason": "Troubleshooting requires stable comparison without retaining raw email."
+        },
+        {
+          "field": "client.address",
+          "action": "truncate",
+          "reason": "Network grouping needs only the approved coarse prefix."
+        }
+      ]
+    },
+    "cardinality": {
+      "budgetStatus": "measured",
+      "basis": "Read-only organization metrics supplied current custom MTS usage and the enforced system limit; contractual entitlement remains unavailable and the proposed cost is the bounded product of values, metrics, and reporting services.",
+      "contractualEntitlement": null,
+      "usage": 30000,
+      "enforcedSystemLimit": 50000,
+      "reserved": 5000,
+      "proposedCost": 2400,
+      "systemHeadroomAfter": 12600,
+      "dimensionEligible": [
+        "sample.bt",
+        "workflow.name",
+        "sample.market",
+        "deployment.environment",
+        "payment.provider",
+        "payment.result",
+        "order.status",
+        "fulfillment.result"
+      ],
+      "attributeOnly": [
+        "sample.account-id",
+        "sample.order.id",
+        "session.id",
+        "trace.id",
+        "messaging.message.id"
+      ]
+    }
+  },
+  "operations": {
+    "dashboards": [
+      {
+        "id": "order-submission",
+        "title": "Order submission",
+        "variables": [
+          "deployment.environment",
+          "sample.market",
+          "service.version",
+          "payment.provider"
+        ],
+        "panels": [
+          "Submission rate, error percentage, and explicit p90 end-to-end duration.",
+          "Payment authorization result and p90 duration by bounded provider.",
+          "Producer, consumer, fulfillment, retry, and dead-letter counts.",
+          "Trace deep link, Log Observer Connect results, and release-event overlay."
+        ],
+        "signalFlow": "total = data('sample.order.submission', filter=filter('deployment.environment', 'prod')).sum(by=['sample.market'])\nfailed = data('sample.order.submission', filter=filter('deployment.environment', 'prod') and filter('status', 'failed')).sum(by=['sample.market'])\n(failed / total * 100).publish(label='order error percent by market')",
+        "releaseOverlay": true
+      }
+    ],
+    "detectors": [
+      {
+        "id": "order-error-rate",
+        "name": "Order error rate",
+        "signal": "sample.order.submission",
+        "threshold": "failed divided by total greater than 2 percent",
+        "window": "5m",
+        "groupBy": [
+          "sample.market"
+        ],
+        "severity": "high",
+        "runbook": "Compare payment, publish, consume, and fulfillment panels before selecting the owning response path.",
+        "verification": "Inject one bounded failure outcome in a controlled environment and verify the detector input crosses its threshold."
+      },
+      {
+        "id": "order-silent-outage",
+        "name": "Order silent outage",
+        "signal": "sample.order.submission",
+        "threshold": "zero accepted orders after a nonzero historical baseline",
+        "window": "15m",
+        "groupBy": [
+          "sample.market"
+        ],
+        "severity": "critical",
+        "runbook": "Check the transaction canary, RUM route traffic, public path, and API health before treating silence as demand.",
+        "verification": "Hold controlled messages for one market fixture and verify zero activity triggers without grouping by an identity key."
+      }
+    ],
+    "objectives": [
+      {
+        "id": "order-success",
+        "name": "Successful order fulfillment",
+        "sli": "Fulfilled orders divided by accepted order submissions with controlled retries counted once.",
+        "target": "99.5 percent",
+        "window": "rolling 30 days",
+        "errorBudget": "0.5 percent, equal to 216 minutes of equivalent unavailability in 30 days",
+        "verification": "Recompute numerator and denominator from the same bounded metric and compare a controlled success and failure fixture."
+      }
+    ],
+    "releaseCorrelation": "The deployment job posts one event after a healthy release with service.name, service.version, and deployment.environment; every RED panel overlays matching events.",
+    "synthetics": {
+      "applicable": true,
+      "evidence": "The public checkout route and order API create an application-level canary question independent of real-user traffic.",
+      "design": "Run a non-destructive checkout transaction using fixture inventory and stop before any irreversible fulfillment side effect."
+    },
+    "thousandEyes": {
+      "applicable": true,
+      "evidence": "The shopper, CDN, public origin, and hosted payment gateway create off-box DNS, ISP, CDN, and SaaS path questions.",
+      "design": "Use HTTP and transaction path tests from representative cloud regions to distinguish path degradation from application execution."
+    },
+    "logCorrelation": "Approved application logs carry trace_id, span_id, service.name, service.version, deployment.environment, workflow.name, and sample.market after redaction, enabling Log Observer Connect in both directions.",
+    "verificationCriteria": [
+      {
+        "id": "VC-001",
+        "criterion": "Every client transition has bounded page and transaction identity.",
+        "method": "Exercise the registered route fixture and query RUM spans by page.type and sample.bt.",
+        "expected": "Only catalog, checkout, confirmation, and other values appear; no raw route is a dimension."
+      },
+      {
+        "id": "VC-002",
+        "criterion": "The normal order message continues one trace across accounts.",
+        "method": "Submit a controlled order and inspect producer and consumer parentage plus stamped baggage.",
+        "expected": "Producer and consumer share one trace id and the consumer contains the allowlisted context."
+      },
+      {
+        "id": "VC-003",
+        "criterion": "Trace and log records join without retaining forbidden fields.",
+        "method": "Open an error trace, follow Related Content to logs, and search both products for the deny list.",
+        "expected": "The log opens by trace id and cookie-header searches return zero results."
+      },
+      {
+        "id": "VC-004",
+        "criterion": "Operational signals detect errors, silence, releases, and public-path failures.",
+        "method": "Run controlled error and hold tests, publish a release event, and execute the canary plus path probe.",
+        "expected": "Each signal appears in its intended product and links back to the workflow dashboard."
+      }
+    ],
+    "performanceBudgets": {
+      "validationSeconds": 2.0,
+      "renderSeconds": 2.0,
+      "maxOutputFiles": 60,
+      "maxOutputBytes": 500000
+    }
+  },
+  "reference": {
+    "evidence": [
+      {
+        "id": "EV-PROD-ROUTES",
+        "label": "Production route and bootstrap capture",
+        "provenance": "measured"
+      },
+      {
+        "id": "EV-SRC-CONTRACT",
+        "label": "Source routes, events, API, and message contracts",
+        "provenance": "measured"
+      },
+      {
+        "id": "EV-DIAG-FLOW",
+        "label": "Generic storefront order sequence diagram",
+        "provenance": "stated"
+      },
+      {
+        "id": "EV-O11Y-APM",
+        "label": "Read-only APM trace and MetricSet inventory",
+        "provenance": "measured"
+      },
+      {
+        "id": "EV-PLATFORM-LOGS",
+        "label": "Approved log and cloud messaging inventory",
+        "provenance": "measured"
+      },
+      {
+        "id": "EV-SEC-HEADERS",
+        "label": "Authorized telemetry privacy and header review",
+        "provenance": "measured"
+      }
+    ],
+    "sources": [
+      "Authorized production response and route behavior capture.",
+      "Application source, dependency lock, configuration, analytics events, and tests.",
+      "Architecture sequence diagram and deployment boundary description.",
+      "Read-only Observability Cloud and approved log-platform queries.",
+      "Authorized OWASP-aligned response and telemetry-payload checks."
+    ],
+    "priorArtifacts": [
+      "The prior architecture diagram supplied account, bus, downstream, and failure-boundary evidence.",
+      "The prior observability guide supplied a depth and section-shape quality bar without contributing names."
+    ],
+    "unknowns": [
+      "Peak and quiet-window order volume must be measured before the silent-outage detector is armed in production.",
+      "Representative user regions and the hosted payment ingress locations must be confirmed before path agents are placed.",
+      "The exact high-cardinality troubleshooting retention window requires tenant MetricSet policy confirmation."
+    ]
+  }
+}

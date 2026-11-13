@@ -61,7 +61,23 @@ SCHEMA_DIRECTORY = Path(__file__).resolve().parent.parent / "schemas"
 CONTRACT_SCHEMAS = {
     2: SCHEMA_DIRECTORY / "analysis-contract-v2.schema.json",
     3: SCHEMA_DIRECTORY / "analysis-contract-v3.schema.json",
+    4: SCHEMA_DIRECTORY / "analysis-contract-v4.schema.json",
 }
+WORK_ORDER_KINDS = (
+    "foundation",
+    "use-case",
+    "workflow",
+    "business-transaction",
+    "detector",
+    "alert-condition",
+    "dashboard",
+    "custom-code",
+)
+SUBORDINATE_KINDS = WORK_ORDER_KINDS[2:]
+SELECTOR = re.compile(
+    r"(?:work-order|business-transaction|workflow|use-case|detector|"
+    r"alert-condition|dashboard|custom-code|objective|config):[^:]+"
+)
 
 
 @lru_cache(maxsize=len(CONTRACT_SCHEMAS))
@@ -195,7 +211,7 @@ def validate_contract_schema(contract: Any) -> list[str]:
     version = contract.get("schemaVersion") if isinstance(contract, dict) else None
     if version not in CONTRACT_SCHEMAS:
         return [
-            "contract.schemaVersion: expected a supported integer version (2 or 3)"
+            "contract.schemaVersion: expected a supported integer version (2, 3, or 4)"
         ]
     schema = _contract_schema(version)
     _validate_schema_node(contract, schema, schema, "contract", failures)
@@ -854,10 +870,7 @@ def validate_implementation_mapping(
         status = target.get("mapping_status")
         target_repositories = target.get("repositories")
         evidence = target.get("evidence")
-        if not isinstance(selector, str) or not re.fullmatch(
-            r"(?:work-order|business-transaction|workflow|use-case|detector|objective|config):[^:]+",
-            selector,
-        ):
+        if not isinstance(selector, str) or not SELECTOR.fullmatch(selector):
             failures.append(f"{path}.selector: invalid selector")
         elif selector in selectors:
             failures.append(f"{path}.selector: duplicate selector")
@@ -963,8 +976,8 @@ def validate_contract(contract: Any) -> list[str]:
         return failures
     if not _require(contract, TOP_LEVEL_KEYS, "contract", failures):
         return failures
-    if contract.get("schemaVersion") != 3:
-        failures.append("contract.schemaVersion: expected 3")
+    if contract.get("schemaVersion") not in {3, 4}:
+        failures.append("contract.schemaVersion: expected 3 or 4")
     app = contract.get("application")
     _require(app, ("id", "name", "version", "status", "scope", "changes", "nextSteps"), "contract.application", failures)
     _substantive(app.get("scope") if isinstance(app, dict) else None, "contract.application.scope", failures)
@@ -1815,6 +1828,172 @@ def validate_contract(contract: Any) -> list[str]:
                 f"contract: evidenceIds missing from reference register {sorted(unknown_evidence)}"
             )
 
+    if contract.get("schemaVersion") == 4:
+        _validate_v4_work_orders(
+            contract,
+            work_orders,
+            {
+                "use-case": use_case_ids,
+                "workflow": workflow_ids,
+                "business-transaction": transaction_ids,
+                "detector": detector_ids,
+                "alert-condition": detector_ids,
+                "dashboard": dashboard_ids,
+            },
+            {item.get("id") for item in findings if isinstance(item, dict)},
+            failures,
+        )
+
     _scan_join_types(contract, "contract", failures)
     _scan_placeholders(contract, "contract", failures)
     return sorted(set(failures))
+
+
+def _validate_v4_work_orders(
+    contract: dict[str, Any],
+    work_orders: list[Any],
+    subjects: dict[str, set[Any]],
+    finding_ids: set[Any],
+    failures: list[str],
+) -> None:
+    orders = [item for item in work_orders if isinstance(item, dict)]
+    by_id = {item.get("id"): item for item in orders}
+    kinds = {item.get("id"): item.get("kind") for item in orders}
+    foundation_ids = {
+        identifier for identifier, kind in kinds.items() if kind == "foundation"
+    }
+    seen_non_foundation = False
+    for index, order in enumerate(work_orders):
+        if not isinstance(order, dict):
+            continue
+        path = f"contract.workOrders[{index}]"
+        order_id = order.get("id")
+        kind = order.get("kind")
+        parents = order.get("parentIds") or []
+        subordinates = order.get("subordinateIds") or []
+        subject_ids = order.get("subjectIds") or []
+        depends = order.get("dependsOn") or []
+        status = order.get("status")
+        unresolved = (order.get("repositoryMapping") or {}).get("status") == "unresolved"
+        if kind not in WORK_ORDER_KINDS:
+            failures.append(f"{path}.kind: expected one of {list(WORK_ORDER_KINDS)}")
+            continue
+        if order.get("revision") != 1:
+            failures.append(f"{path}.revision: contract work orders are revision 1")
+        unknown_findings = set(order.get("findingIds") or []) - finding_ids
+        if unknown_findings:
+            failures.append(f"{path}.findingIds: unknown ids {sorted(unknown_findings)}")
+        if kind == "foundation":
+            if seen_non_foundation:
+                failures.append(
+                    f"{path}: foundation work orders must precede every other work order"
+                )
+            if parents or subordinates:
+                failures.append(
+                    f"{path}: foundation work order cannot have parents or subordinates"
+                )
+            if not order.get("findingIds"):
+                failures.append(f"{path}.findingIds: foundation work order requires findings")
+            if set(depends) - foundation_ids:
+                failures.append(
+                    f"{path}.dependsOn: foundation work order may depend only on "
+                    "foundation work orders"
+                )
+            expected_status = "blocked" if depends or unresolved else "proposed"
+            if status != expected_status:
+                failures.append(
+                    f"{path}.status: foundation work order before acceptance "
+                    f"must be {expected_status}"
+                )
+            continue
+        seen_non_foundation = True
+        if depends:
+            failures.append(
+                f"{path}.dependsOn: only foundation work orders declare dependencies"
+            )
+        expected_status = "blocked" if foundation_ids or unresolved else "proposed"
+        if status != expected_status:
+            failures.append(
+                f"{path}.status: non-foundation work order before acceptance "
+                f"must be {expected_status}"
+            )
+        if kind == "use-case":
+            if parents:
+                failures.append(f"{path}.parentIds: use-case work order has no parents")
+            if not subordinates:
+                failures.append(
+                    f"{path}.subordinateIds: use-case work order requires subordinates"
+                )
+            if len(subject_ids) != 1 or subject_ids[0] not in subjects["use-case"]:
+                failures.append(
+                    f"{path}.subjectIds: use-case work order names exactly one use case"
+                )
+            for subordinate in subordinates:
+                child = by_id.get(subordinate)
+                if child is None:
+                    failures.append(
+                        f"{path}.subordinateIds: unknown work order {subordinate}"
+                    )
+                elif child.get("kind") not in SUBORDINATE_KINDS:
+                    failures.append(
+                        f"{path}.subordinateIds: {subordinate} is not a subordinate kind"
+                    )
+                elif order_id not in (child.get("parentIds") or []):
+                    failures.append(
+                        f"{path}.subordinateIds: {subordinate} does not name "
+                        f"{order_id} as a parent"
+                    )
+            continue
+        if subordinates:
+            failures.append(
+                f"{path}.subordinateIds: subordinate work order cannot have subordinates"
+            )
+        if not parents:
+            failures.append(f"{path}.parentIds: subordinate work order requires a parent")
+        for parent in parents:
+            owner = by_id.get(parent)
+            if owner is None or owner.get("kind") != "use-case":
+                failures.append(
+                    f"{path}.parentIds: {parent} is not a use-case work order"
+                )
+            elif order_id not in (owner.get("subordinateIds") or []):
+                failures.append(
+                    f"{path}.parentIds: {parent} does not list {order_id} as a subordinate"
+                )
+        if kind in {"workflow", "business-transaction"}:
+            if len(subject_ids) != 1 or subject_ids[0] not in subjects[kind]:
+                failures.append(f"{path}.subjectIds: {kind} work order names exactly one {kind}")
+        elif kind in subjects:
+            if not subject_ids or set(subject_ids) - subjects[kind]:
+                failures.append(f"{path}.subjectIds: {kind} work order requires known ids")
+
+    frontend = (contract.get("architecture") or {}).get("frontend")
+    if isinstance(frontend, dict) and frontend.get("applicable") is True:
+        path = "contract.architecture.frontend"
+        _require(frontend, ("rumLoadOrder", "cdnDelivery"), path, failures)
+        load_order = frontend.get("rumLoadOrder")
+        if _require(
+            load_order,
+            ("status", "agentLoad", "frameworkBootstrap", "evidence", "evidenceIds"),
+            f"{path}.rumLoadOrder",
+            failures,
+        ):
+            _substantive(load_order.get("evidence"), f"{path}.rumLoadOrder.evidence", failures)
+            if load_order.get("status") == "incorrect" and not foundation_ids:
+                failures.append(
+                    f"{path}.rumLoadOrder: incorrect RUM load order requires a "
+                    "foundation work order"
+                )
+        delivery = frontend.get("cdnDelivery")
+        if _require(
+            delivery, ("cdn", "recommendation", "guidance"), f"{path}.cdnDelivery", failures
+        ):
+            _substantive(
+                delivery.get("recommendation"), f"{path}.cdnDelivery.recommendation", failures
+            )
+            if not str(delivery.get("guidance", "")).startswith(
+                "skills/references/rum-delivery.md"
+            ):
+                failures.append(
+                    f"{path}.cdnDelivery.guidance: must cite skills/references/rum-delivery.md"
+                )

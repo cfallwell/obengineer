@@ -99,6 +99,7 @@ terraform/
       environments/
         prod/             # one workspace per environment, backend configured
         stage/
+  portfolio/              # leadership rollup across every application
 ```
 
 One directory per application, one module per persona, one workspace per environment.
@@ -106,6 +107,18 @@ Run `terraform apply` from `terraform/apps/<app>/environments/<env>` so the plan
 contains that application only. No `count` on a persona and no environment name
 interpolated from a variable nobody sets — this is code a customer inherits, and
 explicitness beats cleverness in inherited code.
+
+**Application rollup.** The per-app `executive` module is the application rollup: one
+dashboard group that rolls up the app's use-case dashboards and links its detector
+collection, so a leader reads one app without opening each use case.
+
+**Leadership portfolio.** `terraform/portfolio/` is a separate root module with one
+dashboard showing the status of every application: SLO attainment, error-budget burn,
+detector state, and use-case verification status. Build each app's tiles only from that
+app's accepted analysis version and its verification results; show an app without an
+accepted version as *not yet analyzed* rather than inventing tiles. It reads and charts;
+it owns no detectors or SLOs. Like every root here, it is plan-only: hand over the plan,
+never apply.
 
 ### Step 4 — Generate, with the decisions visible in the code
 

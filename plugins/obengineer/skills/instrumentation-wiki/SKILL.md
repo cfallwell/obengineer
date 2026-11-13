@@ -117,9 +117,20 @@ Create the complete queue during analysis. Each work order contains:
 - verification criteria; and
 - copy-ready issue text when an external tracker was explicitly requested.
 
-Before acceptance, dependency-free work orders are `proposed`; dependent orders are
-`blocked`. Acceptance changes eligible orders to `ready`. A later version compares the
-prior queue and marks orders retained, changed, superseded, implemented, or verified.
+Order the queue by the hierarchy in
+[`implementation-work-orders.md`](../references/implementation-work-orders.md#work-order-hierarchy):
+foundation orders first, then each use-case order followed by its subordinates grouped
+workflow, business transaction, detector, alert condition, dashboard, and custom code.
+v4 frontmatter adds `kind`, `parents`, `subordinates`, and `revision: 1`; a use-case note
+lists each subordinate under `## subordinate work orders`.
+
+Before acceptance, dependency-free foundation orders are `proposed`; dependent foundation
+orders and every non-foundation order are `blocked` while any foundation order exists.
+Acceptance changes eligible foundation orders to `ready`. Live status and revisions R2,
+R3, ... live in `wiki/apps/<app>/implementation/V<N>/`, outside the acceptance digest, and
+are managed by `scripts/work_order_state.py` (`init`, `gate`, `set-status`, `revise`,
+`verify`). A later version compares the prior queue and marks orders retained, changed,
+superseded, implemented, or verified.
 
 The first order establishes schema agreement, single initialization, workflow registry,
 baggage allowlist, and deny-list checks.
