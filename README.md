@@ -8,8 +8,8 @@ Claude Code, Codex CLI, and ChatGPT Desktop.
 
 ## Analysis
 
-One command, `/ob-start`, produces a complete strategy in a single pull request for you
-to review. The analysis draws on several sources at once: the application's source code,
+One command, `/ob-start`, produces the first complete strategy in a single pull request
+for you to review; `/ob-analyze` produces each later version. The analysis draws on several sources at once: the application's source code,
 the running application, read-only Splunk Observability and Splunk Platform APIs,
 connected MCP tools, and any documents you supply. Each fact is labeled as measured,
 stated, public, or derived, and a measured fact always overrides a stated one.
@@ -25,6 +25,8 @@ Each analysis includes:
   fix.
 - **RUM delivery.** A check that the RUM agent initializes before the front-end
   framework bootstraps, and a recommendation to inject RUM at the CDN instead of in code.
+  For a web front-end, the foundation section links the injection reference for the CDN
+  in front of the site; Fastly is available now and other CDNs are pending.
 - **Security assessment.** Checks for exposed credentials and APIs, plus versioned OWASP
   Web and API coverage, within the boundary you authorize.
 - **Use cases, workflows, and business transactions.** Use cases are derived from the
@@ -104,14 +106,19 @@ everything obengineer generates.
 ## Usage
 
 ```text
-/ob-start                     Validate obconfig.yaml and run the next analysis version
+/ob-start                     First run: create obconfig.yaml and run analysis V1
+/ob-analyze                   Every later run: confirm the edited inputs and run the next version
 /ob-implement <target>        Deliver one work order; foundation work orders come first
 /ob-revise work-order:<id>    Revise a work order without a new analysis version
 /ob-terraform                 Plan Splunk resources
 /ob-verify                    Verify the deployed result
 ```
 
-To update an analysis, edit `obconfig.yaml` or `artifacts/`, then run `/ob-start` again.
+To update an analysis, edit `obconfig.yaml` or `artifacts/`, then run `/ob-analyze`. It
+shows the redacted configuration summary and asks
+`Proceed with analysis using this configuration? (yes/no)` before producing the next
+version. To run that loop for every feature release, see
+[Continuous integration](docs/ci.md).
 
 Use the `/` prefix in Cursor and Claude Code, `$` in Codex CLI, and `@` in ChatGPT
 Desktop. ChatGPT Desktop needs its local executor enabled.
@@ -122,6 +129,7 @@ Desktop. ChatGPT Desktop needs its local executor enabled.
 - [Configuration and behavior controls](docs/configuration.md)
 - [End-to-end usage and command reference](docs/usage.md)
 - [How obengineer operates](docs/how-it-works.md)
+- [Continuous integration for feature releases](docs/ci.md)
 - [Design rationale](docs/design.md)
 
 ## Development

@@ -1,7 +1,7 @@
 # Architecture review — 9 Nov 2026
 
 Current architecture review of obengineer. This review supersedes the
-[18 Sep 2026 review](2026-09-18-architecture-review.md) without rewriting it. The
+[18 Sep 2026 review](09-18-26-architecture-review.md) without rewriting it. The
 September document remains the point-in-time record; links below identify every conclusion
 that has materially changed.
 
@@ -61,7 +61,7 @@ closed by a first-class read-only verification run.
 
 ## Section-count decision
 
-Revises [The defect worth dwelling on](2026-09-18-architecture-review.md#the-defect-worth-dwelling-on).
+Revises [The defect worth dwelling on](09-18-26-architecture-review.md#the-defect-worth-dwelling-on).
 
 The September defect was not that 23 was inherently correct and 16 inherently wrong. The
 defect was that both counts claimed authority. That conflict is gone:
@@ -97,7 +97,7 @@ the canonical template, with render/review tests and an explicit architecture re
 
 ### One authority per fact
 
-Revises [The defect worth dwelling on](2026-09-18-architecture-review.md#the-defect-worth-dwelling-on).
+Revises [The defect worth dwelling on](09-18-26-architecture-review.md#the-defect-worth-dwelling-on).
 
 **Resolved.** The section list, OWASP coverage, analysis lifecycle, implementation mapping,
 persona behavior, Terraform resources, and Word format each have named authorities.
@@ -107,7 +107,7 @@ and `AGENTS.md` review rules are the correct control.
 
 ### Baggage and cardinality
 
-Revises [Baggage: how to decide what to carry](2026-09-18-architecture-review.md#baggage-how-to-decide-what-to-carry).
+Revises [Baggage: how to decide what to carry](09-18-26-architecture-review.md#baggage-how-to-decide-what-to-carry).
 
 **Resolved as a design contract.** The budget remains six keys, 512 bytes total, and
 64 bytes per value. Carrying, stamping, and metric-dimension promotion remain separate
@@ -120,7 +120,7 @@ named consumer. That belongs in the future verification run, not another design 
 
 ### Multi-agent operation and handoffs
 
-Revises [Multi-agent: what to parallelize, and what must stay serial](2026-09-18-architecture-review.md#multi-agent-what-to-parallelize-and-what-must-stay-serial).
+Revises [Multi-agent: what to parallelize, and what must stay serial](09-18-26-architecture-review.md#multi-agent-what-to-parallelize-and-what-must-stay-serial).
 
 **Substantially resolved.** Naming remains serialized through the accepted schema.
 Implementation can fan out by repository under one unified work order, with one linked PR
@@ -134,7 +134,7 @@ is necessary but does not authorize engineering work.
 
 ### Context engineering
 
-Revises [Context engineering](2026-09-18-architecture-review.md#context-engineering).
+Revises [Context engineering](09-18-26-architecture-review.md#context-engineering).
 
 **Most high-value work is resolved.**
 
@@ -151,7 +151,7 @@ proposed `evidence.json` and `run-state.json` names are retired.
 
 ### Outcome learning
 
-Revises [Reinforcement learning: build the grader first](2026-09-18-architecture-review.md#reinforcement-learning-build-the-grader-first).
+Revises [Reinforcement learning: build the grader first](09-18-26-architecture-review.md#reinforcement-learning-build-the-grader-first).
 
 **Closed.** Reviews report defects by rubric row; verification appends deduplicated
 opportunities and calculates schema miss, dimension miss, detector disarm, and
@@ -169,7 +169,7 @@ deduplication markers, existing-`gh` authentication reuse, and a web-login hando
 
 ### Closing the loop
 
-Revises [Closing the loop: analysis → recommendation → implementation → verification](2026-09-18-architecture-review.md#closing-the-loop-analysis--recommendation--implementation--verification).
+Revises [Closing the loop: analysis → recommendation → implementation → verification](09-18-26-architecture-review.md#closing-the-loop-analysis--recommendation--implementation--verification).
 
 **Closed.** `/ob-verify` executes accepted actionable criteria read-only and records met,
 unmet, or unmeasurable. It notifies humans with remediation/recheck instructions and honors
@@ -177,7 +177,7 @@ only human-approved unremediable exclusions.
 
 ## Resolutions to the September open questions
 
-Revises [Open questions for the humans](2026-09-18-architecture-review.md#open-questions-for-the-humans).
+Revises [Open questions for the humans](09-18-26-architecture-review.md#open-questions-for-the-humans).
 
 ### 1. Entitlement: read before asking
 
