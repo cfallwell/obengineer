@@ -110,7 +110,8 @@ Collector, and configuration work orders are valid without inventing runtime cod
 - **Attribute names come from the guide.** If a name is wrong, change the guide and the schema first, then the code. Renaming in code alone breaks the dashboards the TAM already built.
 - **Business Transaction grouping is `<org>.bt`.** Set the bounded global tag at the
   earliest known surface, propagate and stamp it across repository boundaries, and validate
-  its registered pair with `workflow.name`. One BT can contain many workflows.
+  its registered pair with `workflow.name`. One BT can contain many workflows; each
+  workflow belongs to exactly one BT.
 - **Placeholders for every secret.** Tokens arrive from the environment, the edge, or a secret store. No credential value in a repository, ever.
 - **Money in minor units** with an ISO 4217 currency code in a sibling attribute.
 - **Never emit a deny-list key.** The list in the guide and the `deny` block in `attribute-schema.json` are the same list.

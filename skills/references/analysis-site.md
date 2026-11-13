@@ -194,7 +194,9 @@ verified. Live status and revisions come from
 
 ## Use cases, workflows, and business transactions
 
-Review in that order.
+Review in that order. A use case maps to one or more business transactions; each business
+transaction is made up of one or more workflows, and each workflow belongs to exactly one
+business transaction.
 
 A use-case summary states why it matters, the question answered, what is created, its
 workflows, business transactions, full span and event design, bounded metrics, dashboards,

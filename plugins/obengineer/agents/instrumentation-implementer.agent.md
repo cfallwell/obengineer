@@ -82,7 +82,7 @@ Your code is wrong if it is valid OTel but invisible or unusable in Observabilit
 | RUM app identity | `applicationName` and `deploymentEnvironment` exactly as the guide. Unstable names split MetricSets and sessions. |
 | Filter/chart RUM in 13 months | Low-cardinality keys on `globalAttributes` / `setGlobalAttributes` that the guide marked **MMS**. Do not put IDs there. |
 | Tag Spotlight / 8-day debug | High-cardinality keys as span attributes only (or TMS per guide). |
-| APM Business Transactions | Emit and propagate the bounded global tag `<org>.bt`. One value can group several workflows. The TAM configures the tenant's Global tag rule; implementation does not mutate the tenant. |
+| APM Business Transactions | Emit and propagate the bounded global tag `<org>.bt`. One value can group several workflows; each workflow belongs to exactly one value. The TAM configures the tenant's Global tag rule; implementation does not mutate the tenant. |
 | Workflow intent | Set `workflow.name` (and `workflow.step` if schemed) on workflow spans, and validate the registered `<org>.bt` / `workflow.name` pair. |
 | Related Content RUM → APM | Propagate W3C `traceparent` on every browser → backend call in the workflow. |
 | Related Content APM → logs | If the guide requires logs: include `trace_id` / `span_id` (or the documented request id) in log records. Do not invent a log pipeline. |

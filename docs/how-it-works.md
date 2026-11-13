@@ -153,7 +153,7 @@ Work orders are implementation contracts. Each has one kind:
 |---|---|
 | `foundation` | A prerequisite from a finding or recommendation, not a use case. No parents or subordinates; may depend only on other foundation orders. At most about ten. |
 | `use-case` | A complete unit for one use case. Lists its subordinate orders. |
-| `workflow` | One workflow; may cross business-transaction boundaries. |
+| `workflow` | One workflow; belongs to exactly one business transaction. |
 | `business-transaction` | One business transaction (`<org>.bt` value); a shared one can sit under several use cases. |
 | `detector`, `alert-condition` | Detector definitions. |
 | `dashboard` | Dashboard definitions. |

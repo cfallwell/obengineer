@@ -121,7 +121,8 @@ Unit-test: processor copies baggage to attributes; inject writes `traceparent` +
 2. `workflow.name` and `workflow.step` from schema enums (subordinate intent within the
    APM Business Transaction).
    Set and propagate the registered `<org>.bt` global tag and validate the
-   `<org>.bt` / `workflow.name` pair from the contract.
+   `<org>.bt` / `workflow.name` pair from the contract; each `workflow.name` pairs with
+   exactly one `<org>.bt`.
 3. Span events at documented boundaries.
 4. Allowlisted attributes only; money in minor units + currency when amounts exist.
 5. On error: `recordException`; span status ERROR.

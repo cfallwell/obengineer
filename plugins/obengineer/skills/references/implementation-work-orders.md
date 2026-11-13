@@ -11,13 +11,17 @@ Work orders are implementation contracts. Each has one `kind`:
 |---|---|
 | `foundation` | Prerequisite for everything else. A finding and recommendation, never a use case. No parents, no subordinates; depends only on other foundation orders. Expect at most about 10. |
 | `use-case` | A complete unit for exactly one use case. Lists its subordinate work orders; has no `dependsOn`. |
-| `workflow` | One workflow. May cross business-transaction boundaries. |
+| `workflow` | One workflow. Belongs to exactly one business transaction. |
 | `business-transaction` | One `<org>.bt` value. A shared business transaction may be listed under more than one use case. |
 | `detector`, `alert-condition` | Detector IDs. |
 | `dashboard` | Dashboard IDs. |
 | `custom-code` | Custom instrumentation. May be atomic: one span or one attribute. |
 
-A use case can map to several business transactions. Every subordinate names at least one
+A use case maps to one or more business transactions. Each business transaction is made
+up of one or more workflows, and each workflow belongs to exactly one business
+transaction; a business transaction may be shared by more than one use case. In schema
+v4 the contract validator rejects a workflow listed by two business transactions or by
+none. Every subordinate names at least one
 use-case parent, and each parent lists it in `subordinateIds` (reciprocal).
 
 ### Release rule
@@ -84,7 +88,8 @@ backend spans. Never derive it from a raw URL.
 
 `workflow.name` remains the finer-grained intent. One `<org>.bt` value may contain several
 workflows, and a workflow or end-to-end use case may cross several services and
-repositories. The contract registers valid `<org>.bt` / `workflow.name` pairs.
+repositories. The contract registers valid `<org>.bt` / `workflow.name` pairs; each
+`workflow.name` pairs with exactly one `<org>.bt`.
 
 ## Implementation map
 
