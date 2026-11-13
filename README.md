@@ -46,15 +46,17 @@ on request.
 
 After you reply `yes` to accept a version, obengineer carries it out:
 
-- **`/ob-implement`** delivers the strategy in reviewable slices. You can target a
-  single work order, a use case, a workflow, a business transaction, a detector, an
-  objective, or a configuration change. A use case can span several workflows and
-  business transactions across multiple repositories. obengineer delivers it as one
-  unified change, with one pull request per repository and a coordination pull request
-  that links them. You can limit the work to one repository or to specific folders
-  within a repository. Typical changes include the shared OTel library, provider
-  initialization, baggage propagation, message-bus inject and extract, workflow spans,
-  custom meters, Collector configuration, and CI checks that keep the contract enforced.
+- **`/ob-implement`** delivers the strategy one work order at a time. A work order
+  covers an entire use case, a single custom workflow, or a single business
+  transaction, and never anything smaller, so the queue stays manageable. A use case
+  can map to more than one business transaction, and a workflow can cross
+  business-transaction boundaries. Either one can also span multiple repositories.
+  obengineer delivers each work order as one unified change, with one pull request per
+  repository and a coordination pull request that links them. You can limit the work to
+  one repository or to specific folders within a repository. Typical changes include the
+  shared OTel library, provider initialization, baggage propagation, message-bus inject
+  and extract, workflow spans, custom meters, Collector configuration, and CI checks
+  that keep the contract enforced.
 - **`/ob-terraform`** generates Terraform for dashboards, detectors, SLOs, metric
   rulesets, Synthetics checks, and Splunk Platform indexes. It imports resources that
   already exist instead of duplicating them, and it stops at a plan that you apply.
@@ -92,7 +94,7 @@ generates.
 
 ```text
 /ob-start                     Validate obconfig.yaml and run the next analysis version
-/ob-implement <target>        Deliver a work order, use case, workflow, or transaction
+/ob-implement <target>        Deliver a use case, workflow, or business transaction
 /ob-terraform                 Plan Splunk resources
 /ob-verify                    Verify the deployed result
 ```
