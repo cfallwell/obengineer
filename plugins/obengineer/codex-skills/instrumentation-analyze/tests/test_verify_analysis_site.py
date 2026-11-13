@@ -212,6 +212,55 @@ def test_v4_work_orders_render_foundation_then_use_case_groups(site):
     assert verify.check(version, root) == []
 
 
+FIXTURE_V4 = Path(__file__).resolve().parent / "fixtures" / "representative-v4"
+
+
+def render_v4_work_orders(site, frontend: dict) -> str:
+    version, root = site
+    contract = v4_contract()
+    contract["architecture"]["frontend"] = frontend
+    site_renderer = renderer.Renderer(
+        json.loads((FIXTURE / "analysis-contract.json").read_text()), version
+    )
+    site_renderer.c = contract
+    site_renderer.render_work_orders()
+    notes = root / "wiki" / "apps" / "app" / "versions" / "V1" / "implementation" / "work-orders"
+    for item in contract["workOrders"]:
+        (notes / f"{item['id']}.md").write_text(f"# {item['id']}\n\n{item['outcome']}\n")
+    assert verify.check(version, root) == []
+    return (version / "work-orders" / "index.md").read_text()
+
+
+def test_v4_foundation_shows_rum_delivery_for_web_front_end(site):
+    frontend = json.loads((FIXTURE_V4 / "analysis-contract.json").read_text())[
+        "architecture"
+    ]["frontend"]
+    text = render_v4_work_orders(site, frontend)
+
+    foundation = text.index("## Foundation work orders")
+    note = text.index("### RUM delivery")
+    assert foundation < note < text.index("## Use case:")
+    assert "**RUM load order:** `correct`" in text
+    assert frontend["rumLoadOrder"]["agentLoad"] in text
+    assert "**CDN delivery (`fastly`):**" in text
+    assert frontend["cdnDelivery"]["recommendation"] in text
+    assert (
+        "[`skills/references/cdn/fastly.md`]"
+        f"({renderer.TOOLKIT_SOURCE_URL}/skills/references/cdn/fastly.md)"
+    ) in text
+    assert (SKILL.parent / "references" / "cdn" / "fastly.md").is_file()
+
+
+def test_v4_foundation_omits_rum_delivery_for_api_only_target(site):
+    text = render_v4_work_orders(site, {
+        "applicable": False,
+        "evidence": "Source and production scans show an API-only service with no browser client.",
+    })
+    assert "## Foundation work orders" in text
+    for absent in ("RUM", "CDN", "rum-delivery", "references/cdn"):
+        assert absent not in text
+
+
 def test_v3_work_orders_keep_flat_table(site):
     version, _ = site
     text = (version / "work-orders" / "index.md").read_text()

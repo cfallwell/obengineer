@@ -452,7 +452,7 @@
             },
             "guidance": {
               "type": "string",
-              "pattern": "^skills/references/rum-delivery\\.md"
+              "pattern": "^skills/references/(?:cdn/|rum-delivery\\.md)(?!.*\\.\\.)"
             }
           }
         }

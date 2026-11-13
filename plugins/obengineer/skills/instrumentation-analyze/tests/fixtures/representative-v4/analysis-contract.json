@@ -76,9 +76,9 @@
         ]
       },
       "cdnDelivery": {
-        "cdn": "unknown",
-        "recommendation": "Inject the RUM agent snippet at the CDN edge instead of in application code so every page gets one consistent agent version and load position before framework bootstrap.",
-        "guidance": "skills/references/rum-delivery.md"
+        "cdn": "fastly",
+        "recommendation": "Inject the RUM agent snippet at the Fastly edge through an ESI include instead of in application code so every page gets one consistent agent version and load position before framework bootstrap.",
+        "guidance": "skills/references/cdn/fastly.md"
       }
     },
     "backends": [

@@ -27,6 +27,9 @@ SECTIONS = (
     ("Operations and verification", "operations", "operations/index.md"),
     ("Reference", "reference", "reference/index.md"),
 )
+# Toolkit references are not in the artifact repository, where relative links
+# would fail site verification, so they link to the canonical source.
+TOOLKIT_SOURCE_URL = "https://github.com/cfallwell/obengineer/blob/main"
 
 
 def esc(value: Any) -> str:
@@ -569,6 +572,7 @@ class Renderer:
                 "This version has no foundation work orders, so every work order "
                 "is released for implementation in any order."
             )
+        sections.append(self.rum_delivery_note())
         headers = ("ID", "Title", "Outcome", "Status", "Detail")
         for use_case in (w for w in orders if w.get("kind") == "use-case"):
             subject = (use_case.get("subjectIds") or [None])[0]
@@ -596,6 +600,22 @@ class Renderer:
                     parts.append(f"\n\n### {label}\n\n" + table(headers, order_rows(group)))
             sections.append("".join(parts))
         return "".join(sections)
+
+    def rum_delivery_note(self) -> str:
+        frontend = self.c["architecture"].get("frontend") or {}
+        load_order = frontend.get("rumLoadOrder")
+        delivery = frontend.get("cdnDelivery")
+        if frontend.get("applicable") is not True or not load_order or not delivery:
+            return ""
+        guidance = delivery["guidance"]
+        return (
+            "\n\n### RUM delivery\n\n"
+            f"- **RUM load order:** `{esc(load_order['status'])}`. "
+            f"{esc(load_order['agentLoad']).rstrip('.')}. "
+            f"{esc(load_order['frameworkBootstrap']).rstrip('.')}.\n"
+            f"- **CDN delivery (`{esc(delivery['cdn'])}`):** {esc(delivery['recommendation'])} "
+            f"Guidance: [`{esc(guidance)}`]({TOOLKIT_SOURCE_URL}/{guidance})."
+        )
 
     def render_use_cases(self) -> None:
         workflow_labels = {x["id"]: x["name"] for x in self.c["workflows"]}
