@@ -1,98 +1,117 @@
 # Design rationale
 
+This page explains why obengineer works the way it does. It is for maintainers and for
+reviewers deciding whether to trust its output. For mechanics, see
+[How it works](how-it-works.md).
+
 ## The problem
 
-Instrumentation engagements fail when:
+Observability engagements usually fail in one of five ways:
 
-1. the design assumes an architecture the target does not have;
-2. findings and recommendations are buried in a long document;
-3. use cases, workflows, transactions, and code disagree;
-4. implementation starts without a bounded dependency graph; or
-5. nobody verifies the tenant after deployment.
+1. the design assumes an architecture the application does not have;
+2. findings and recommendations are buried in a long document nobody navigates;
+3. use cases, workflows, business transactions, and code disagree about names;
+4. implementation starts without a dependency order, so shared plumbing is built late
+   or several times; or
+5. nobody checks the tenant after deployment to see whether the signals arrived.
 
-obengineer therefore measures first, publishes one linked strategy, creates every work
-order before acceptance, and verifies accepted outcomes read-only.
+obengineer answers each one: it measures before it designs, publishes one linked and
+versioned strategy, creates every work order before anyone approves it, releases those
+orders in dependency order, and verifies outcomes against the tenant read-only.
 
-## Why linked Markdown
+## Measure first, label every fact
 
-A 40–150 page Word document is a poor navigation surface and an expensive context load.
-The analysis is a versioned Markdown site whose landing page represents the full strategy
-and links the detail. Review starts with findings and the recommended path, then use cases,
-workflows, and business transactions.
+Each fact carries one of four labels: **measured** (source, production scan, tenant API,
+connected tool), **stated** (from `obconfig.yaml` or the human), **public** (cited
+research), or **derived** (visible arithmetic over the others). Measured evidence wins
+when sources disagree, and the disagreement is recorded rather than hidden. A missing
+source limits only the conclusions that depend on it; analysis never fills a gap with an
+industry benchmark.
 
-The same content opens in the host's native side panel. Relative links and breadcrumbs
-require no browser, localhost server, or live process.
+Direct Splunk APIs and MCP integrations coexist because neither is complete. When a
+tenant block is configured, the direct API calls are mandatory; MCP tools add evidence
+but cannot replace or relabel those results.
 
-Word remains available when explicitly requested. It is a generated summary under 20
-pages rather than the complete technical contract.
+## Linked Markdown instead of a long document
 
-## Why versions
+A 40–150 page Word document is hard to navigate and expensive for an agent to load. The
+analysis is a set of linked Markdown pages under
+`docs/observability/analysis/<app>/V<N>/`. The landing page summarizes every area
+(architecture, findings, strategy, work orders, use cases) and links its detail, and
+every page has a breadcrumb back. It opens in the host's side panel with relative links,
+so no browser, local web server, or port is involved. Word is available through
+`/ob-render` as a summary under 20 pages, never as the contract.
 
-Adding or editing inputs reruns analysis. `[V1] [V2] [V3]` keeps each result reviewable.
-The top of each version states the input changes and resulting contract changes. An old
-version never resolves to newer mutable wiki detail.
+## Immutable versions
 
-Git still records diffs. Immutable version directories make comparison available from the
-review surface without asking a human to inspect commits.
+Every run of `/ob-start` creates the next version, `V1`, `V2`, and so on, in its own
+directory with a matching wiki snapshot. A version never changes after it is published,
+and an older version never links to newer content. Each version opens with what changed
+in the inputs and what changed in the results, so reviewers compare versions without
+reading Git history.
 
-## Why analysis creates the wiki and work orders
+## Analysis creates the wiki and every work order
 
-The old handoff required a separate generation run after document acceptance. It added a
-manual SHA step and delayed the artifact implementation actually consumes.
+Reviewers approve the implementation plan, not just the recommendations. The same run
+that writes the strategy also writes the agent-facing wiki, the attribute schema, the
+repository mapping, the verification plan, and the complete work-order queue. Acceptance
+then activates that queue; it does not generate anything new.
 
-The analysis now creates:
-
-- the human-facing linked strategy;
-- the agent-facing versioned wiki;
-- schema and implementation mapping;
-- verification criteria; and
-- the complete proposed work-order queue.
-
-Acceptance activates the queue; it does not generate it. This lets reviewers assess not
-only what is recommended, but exactly how it will be implemented.
-
-## Why use cases lead
+## Use cases lead
 
 Attributes and platform features are mechanisms. A use case states the question the
-instrumentation must answer. It links the workflows that emit evidence and the business
-transactions that group those workflows. Shared attributes, metrics, propagation,
-collector, and operations pages support them.
-
-This order keeps the strategy legible:
+instrumentation must answer, so it organizes everything else:
 
 ```text
 finding → use case → workflow → business transaction → work order → verification
 ```
 
-Every direction is linked.
+Every link in that chain is navigable in both directions.
 
-## Why acceptance is content-bound
+## Foundation first, then any order
 
-The human should not copy a commit SHA. They review one PR and explicitly reply `yes`.
-obengineer hashes the accepted analysis, schema, map, ledger seal, verification plan, and
-wiki, writes the acceptance record, marks eligible work orders Ready, and merges only with
-that authorization.
+Shared prerequisites, such as deterministic contract checks in CI or a RUM agent that
+initializes before the front-end framework bootstraps, undermine every later change if
+they are fixed late. obengineer separates them into
+at most about ten **foundation** work orders. They come from findings, not use cases,
+and have no subordinates.
 
-A content digest survives merge, squash, and rebase. Any accepted-file change produces a
-new version.
+Implementation asks one question: *are all foundation work orders implemented or
+verified?* Until the answer is yes, everything else is blocked. Once it is yes, any use
+case, workflow, business transaction, detector, alert condition, dashboard, or
+custom-code order can be implemented in any order. This avoids a long serial phase plan
+while still guaranteeing the plumbing exists first.
 
-## Why APIs and MCP coexist
+RUM delivery is a foundation concern for the same reason. Injecting the RUM snippet at
+the CDN edge places it first on every HTML response and lets the token or version change
+without an application release, so analysis recommends it over in-code injection.
 
-MCP servers expose useful host-integrated tools but may not cover every product endpoint.
-Direct Observability Cloud and Splunk Platform APIs are first-class evidence sources.
-Connected MCP tools supplement them. Missing one source limits only the conclusions that
-depend on it.
+## Acceptance is bound to content, not to a commit
 
-Credentials remain only in ignored mode-0600 local `obconfig.yaml`, are sent only in
-validated HTTPS request headers, and never enter chat or committed/generated files.
+A reviewer should not copy a commit SHA. They review one pull request and reply `yes`.
+obengineer computes a SHA-256 digest over the accepted analysis pages, contract, schema,
+implementation map, sealed ledger, verification plan, and wiki snapshot, and writes it to
+`acceptance.yaml`. A digest survives merge, squash, and rebase; any later change to those
+files is detectable and requires a new version.
+
+## Revisions without new versions
+
+Engineers and SREs legitimately refine an accepted plan: a span name, an extra
+attribute, a renamed tag. Rerunning analysis for that would be slow and would discard
+review history. So subordinate work orders can be revised with `/ob-revise`, which
+records revision R2, R3, and so on in a separate state ledger outside the digest, chains
+each revision to the previous one by hash, and opens a PR. Foundation and use-case
+orders cannot be revised this way, because changing them changes the plan; that needs a
+new analysis version.
 
 ## Safety boundaries
 
-- no production mutation during analysis;
-- no credential values in context or artifacts;
-- no application change before accepted Ready work order and path authorization;
-- no schema widening during implementation;
-- no Terraform apply;
-- no detector arming before signal validation;
-- no automatic remediation during verification; and
-- no inferred named engineer, owner, or accepter.
+- Analysis never mutates production; the only active security checks are two fixed
+  `HEAD` requests, and only when explicitly authorized.
+- Credential values never enter chat, command arguments, logs, or generated files.
+- No application code changes before a work order is Ready and its paths are authorized.
+- Implementation never widens the accepted attribute schema.
+- Terraform is planned, never applied; detectors ship disabled until signals are
+  verified.
+- Verification reads and reports; it never remediates.
+- No step asks for or infers a named engineer, owner, or approver.
