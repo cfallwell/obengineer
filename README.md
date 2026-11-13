@@ -83,12 +83,14 @@ Requires Git and Python 3.10 or later. Terraform CLI is needed only for `/ob-ter
 python3 -m pip install PyYAML==6.0.3
 git clone https://github.com/cfallwell/obengineer.git
 cd obengineer
+mkdir -p /path/to/memory-repo
+git -C /path/to/memory-repo init
 ./install.sh --cursor --project /path/to/memory-repo
 ```
 
 Use `--claude`, `--codex`, or `--all` to install for other hosts, then restart the host.
-The memory repository is a separate Git repository that holds everything obengineer
-generates.
+The memory repository must be a Git repository, separate from this toolkit, and holds
+everything obengineer generates.
 
 ## Usage
 
