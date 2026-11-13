@@ -29,8 +29,8 @@ belong in the artifact repository, not this toolkit.
   → Ready work orders / Terraform plan / read-only verification
 ```
 
-`/ob-add-inputs` and `/ob-edit-inputs` validate a user-edited local `obconfig.yaml` and
-automatically create the next version after the common proceed gate. There is no separate
+Rerunning `/ob-start` after the user edits local `obconfig.yaml` creates the next
+version after the common proceed gate. There is no separate
 generate command and no manual acceptance SHA.
 
 The analysis is linked Markdown opened in the host's side panel. Never require a browser,
